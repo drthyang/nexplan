@@ -1,4 +1,4 @@
-/** Adapter: a ScatterPlan calculation result → MATERIA's StructureModel, for the copied viewer code. */
+/** Adapter: a NEXPLAN calculation result → MATERIA's StructureModel, for the copied viewer code. */
 import type { StructureModel } from "@materia/core/crystal/types";
 import type { Mat3, Vec3 } from "@materia/core/math/types";
 import type { CalcSuccess } from "../app/compute.ts";

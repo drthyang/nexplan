@@ -368,7 +368,7 @@ export async function runCalculation(input: CalcInput): Promise<CalcResult> {
     tiers: [...tiers].map(([source, tier]) => ({ source, tier })),
     diagnostics,
     provenance: {
-      app: `ScatterPlan ${APP_VERSION}`,
+      app: `NEXPLAN ${APP_VERSION}`,
       inputFile: input.fileName,
       inputSha256: await sha256Hex(cifText),
       block: cif.blockName,

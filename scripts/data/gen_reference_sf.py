@@ -5,7 +5,7 @@ gemmi's small-structure calculator expects crystallographic occupancies
 change_occupancies_to_crystallographic() is called first; without it, atoms on
 special positions are over-counted (NaCl F(200) comes out 48x too large).
 gemmi's Neutron92 b values equal the Sears (1992) natural-element values used by
-ScatterPlan for every element in these fixtures (checked in the test).
+NEXPLAN for every element in these fixtures (checked in the test).
 
 Run:  uv run --no-project --with gemmi==0.7.3 python scripts/data/gen_reference_sf.py
 """

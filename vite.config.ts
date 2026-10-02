@@ -4,7 +4,7 @@ import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
 
 // GitHub Pages serves from a repo subpath; override with VITE_BASE if needed.
-const base = process.env.VITE_BASE ?? "/scatterplan/";
+const base = process.env.VITE_BASE ?? "/nexplan/";
 
 export default defineConfig({
   base,

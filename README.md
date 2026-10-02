@@ -1,13 +1,15 @@
-# ScatterPlan Workbench
+# NEXPLAN · Neutron Experiment Planner
 
-**X-ray and neutron diffraction calculations that run in your browser, with scattering tables you can audit.**
+**Plan neutron diffraction experiments in your browser, from a CIF file to the detectors, with scattering tables
+you can audit.**
 
-Load a CIF file. ScatterPlan lists every reflection with its d, Q and complex structure factor, flags systematic
-and accidental absences, and draws the powder pattern. Nothing is uploaded and there is nothing to install.
+Load a CIF file. NEXPLAN lists every reflection with its d, Q and complex structure factor, flags systematic and
+accidental absences, and draws neutron (or X-ray) powder patterns. It also orients the crystal from a UB matrix and,
+in experimental builds, simulates the measurement on SNS instruments. Nothing is uploaded and there is nothing to
+install.
 
-Status: **public beta (M1–M2 of [the plan](docs/PLAN.md)).** The scattering tables are cross-checked against
-independent sources but are not yet certified against the printed literature. UB-matrix tools (M3) and experiment
-planning (M4) come next.
+Status: **public beta.** The scattering tables are cross-checked against independent sources but are not yet
+certified against the printed literature. The SNS instrument simulations are in testing (see below).
 
 ## What it does now
 
@@ -28,9 +30,12 @@ planning (M4) come next.
   - Results match gemmi to 1e-8, phases included.
 - **Powder patterns.**
   - Intensity is an explicit sum over signed reflections.
-  - CW Lorentz and named polarization models.
-  - Unit-area pseudo-Voigt peaks on 2θ, d or Q.
+  - Constant wavelength (CW Lorentz and named X-ray polarization models) or neutron time-of-flight at one bank.
+  - Unit-area peaks on 2θ, TOF, d or Q.
   - Full-precision CSV export with provenance.
+- **UB matrix.**
+  - ISAW/Mantid UB files in and out; lattice and orientation from the UB, matched to the CIF setting.
+  - Change of basis; a 3D reciprocal-space view with the Ewald spheres for a wavelength band.
 
 ## Experimental features
 
@@ -76,7 +81,7 @@ Every table is generated from pinned upstream files (URL, commit and SHA-256 in
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173/scatterplan/
+npm run dev        # http://localhost:5173/nexplan/
 npm test           # unit, gemmi-reference and analytic tests
 npm run typecheck
 ```
@@ -101,7 +106,7 @@ edit them there: fix MATERIA, bump the commit in `src/materia/UPSTREAM.json`, th
 
 ## Family
 
-ScatterPlan shares its design system with [MATERIA](https://drthyang.github.io/web-refinement/), NEBULA3D and the
+NEXPLAN shares its design system with [MATERIA](https://drthyang.github.io/web-refinement/), NEBULA3D and the
 RMCProfile Workbench.
 
 ## License

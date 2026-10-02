@@ -2,7 +2,7 @@
  * Detector geometry checked against Mantid's own output for TOPAZ run 3007:
  * TOPAZ_3007.peaks carries the panel geometry Mantid used (DetCal lines) and,
  * for every peak, its detector, column and row. The IDF valid for that run
- * (TOPAZ_Definition_2011-10-21.xml) is read with ScatterPlan's IDF reader.
+ * (TOPAZ_Definition_2011-10-21.xml) is read with NEXPLAN's IDF reader.
  * Data are fetched and hash-checked by `npm run data:fetch`; skipped if absent.
  */
 import { existsSync, readFileSync } from "node:fs";

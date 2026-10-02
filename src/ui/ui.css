@@ -1,5 +1,5 @@
 /* UI kit: the RMCProfile Workbench classes (rmc-toolkits web_app/frontend/
-   src/ui/ui.css) that ScatterPlan uses, with MATERIA's beta pill and
+   src/ui/ui.css) that NEXPLAN uses, with MATERIA's beta pill and
    disclaimer bar. Colours, radii and sizes come only from tokens.css. */
 
 /* ---------------------------------------------------------------- shell */
@@ -302,7 +302,7 @@
 /* Side-by-side layouts: both columns stretch to the same height so the outer
    card edges line up top and bottom; the last card of each column takes up the
    slack and scrolls inside itself when its content is taller. */
-@media (min-width: 1121px) {
+@media (min-width: 961px) {
   .ui-grid--split {
     grid-template-columns: minmax(0, 1.55fr) minmax(22rem, 1fr);
     align-items: stretch;
@@ -556,6 +556,11 @@ input.ui-unit-field__input::-webkit-inner-spin-button {
   max-height: 34rem;
 }
 
+/* A page whose main content is one table: let it use the window. */
+.ui-table-wrap--tall {
+  max-height: max(24rem, calc(100dvh - 17rem));
+}
+
 .ui-table {
   width: 100%;
   border-collapse: collapse;
@@ -680,8 +685,59 @@ input.ui-unit-field__input::-webkit-inner-spin-button {
 
 .ui-dropzone p {
   margin: 0;
-  max-width: 38rem;
+  max-width: 40rem;
   font-size: var(--fs-84);
+}
+
+/* Landing page: the workflow, one card per page. */
+.workflow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.workflow li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.2rem 0.6rem;
+  align-items: baseline;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--panel-bg);
+  box-shadow: var(--shadow-xs);
+  font-size: var(--fs-80);
+  color: var(--muted);
+}
+
+.workflow li b {
+  color: var(--text-strong);
+  font-size: var(--fs-88);
+}
+
+.workflow li > span:last-child {
+  grid-column: 2;
+  line-height: 1.45;
+}
+
+.workflow__step {
+  display: inline-grid;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: var(--fs-74);
+}
+
+/* Keep the header on one row on laptops: the demo picker is a compact control. */
+.header-actions select.ui-select {
+  max-width: 12.5rem;
 }
 
 /* ---------------------------------------------------------------- banners & issues */
@@ -934,7 +990,8 @@ details.ui-fold > .ui-fold__body {
 }
 
 /* ---------------------------------------------------------------- responsive */
-@media (max-width: 1040px) {
+/* Up to laptop widths the header has two rows: brand and actions, then the page tabs. */
+@media (max-width: 1240px) {
   .app-header {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;

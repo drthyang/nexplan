@@ -1,5 +1,5 @@
 /* Design tokens, copied from the RMCProfile Workbench (rmc-toolkits
-   web_app/frontend/src/index.css, 2026-09-30) so ScatterPlan, MATERIA, NEBULA3D
+   web_app/frontend/src/index.css, 2026-09-30) so NEXPLAN, MATERIA, NEBULA3D
    and RMCProfile read as one family. Light is the default theme here; dark is
    opt-in through the header toggle (data-theme on <html>). */
 :root {

@@ -1,6 +1,6 @@
 # Scientific conventions
 
-Frozen for ScatterPlan 0.1. Changing anything here is a breaking change and needs a changelog entry and the full
+Frozen for NEXPLAN 0.1. Changing anything here is a breaking change and needs a changelog entry and the full
 regression suite. Each item names the code that implements it and the test that holds it.
 
 ## 1. Units
@@ -13,7 +13,7 @@ regression suite. Each item names the code that implements it and the test that 
 ## 2. Lattice
 
 - The direct basis A has the lattice vectors a, b, c as columns, and r = A·x for fractional coordinates x.
-- The metric is G = AᵀA. G is computed in MATERIA's `metricTensor`; ScatterPlan uses its copy in `src/materia/`.
+- The metric is G = AᵀA. G is computed in MATERIA's `metricTensor`; NEXPLAN uses its copy in `src/materia/`.
 - The reciprocal basis is C = A⁻ᵀ, without 2π. Then g = C·h, 1/d² = hᵀG⁻¹h and Q = 2π/d.
 - s = sinθ/λ = 1/(2d). The scattering tables use this variable.
 - Basis change, with ITA's convention (a′, b′, c′) = (a, b, c)·P, i.e. A_new = A_old·P:
@@ -142,7 +142,7 @@ F(h) = Σⱼ oⱼ · aⱼ(s) · exp(−Bⱼ s²) · exp(+2πi h·xⱼ)
   - The indexer keeps det UB > 0 (`IndexingUtils.cpp:1846-1850`), so a convention change flips the hkl labels, not
     UB.
   - ISAW peaks I/O flips hkl accordingly (`LoadIsawPeaks.cpp:427-432`).
-  - For crystallographic indices, which ScatterPlan uses, q_cryst = k_f − k_i = UB·h. Mantid's default labels the same
+  - For crystallographic indices, which NEXPLAN uses, q_cryst = k_f − k_i = UB·h. Mantid's default labels the same
     reflection (−h −k −l).
   - Verified on Mantid's TOPAZ_3007 data: all 43 peaks index to +hkl. Predicted λ, 2θ and azimuth agree within
     0.73 %, 0.43° and 0.38° (`src/core/ub/topaz.test.ts`).

@@ -253,7 +253,7 @@ export function ReflectionsPage({ result, wavelength, radiation }: { result: Cal
 
   const exportCsv = () => {
     const pos = bank ? "tof_us,lambda_A" : "two_theta_deg";
-    const lines = [`# ScatterPlan reflections; ${result.provenance.radiation}; ${bank ? `TOF bank 2theta=${bank.twoThetaDeg} DIFC=${bank.difc}` : `lambda=${wavelength} A`}; input sha256 ${result.provenance.inputSha256}`, `h,k,l,family_h,family_k,family_l,d_A,${pos},Q_invA,ReF_${unit},ImF_${unit},F2_${unit}2,class`];
+    const lines = [`# NEXPLAN reflections; ${result.provenance.radiation}; ${bank ? `TOF bank 2theta=${bank.twoThetaDeg} DIFC=${bank.difc}` : `lambda=${wavelength} A`}; input sha256 ${result.provenance.inputSha256}`, `h,k,l,family_h,family_k,family_l,d_A,${pos},Q_invA,ReF_${unit},ImF_${unit},F2_${unit}2,class`];
     for (let i = 0; i < r.h.length; i++) {
       const d = r.d[i]!;
       const f = r.family[i]!;
@@ -348,7 +348,7 @@ export function ReflectionsPage({ result, wavelength, radiation }: { result: Cal
       }
       flush
     >
-      <div className="ui-table-wrap">
+      <div className="ui-table-wrap ui-table-wrap--tall">
         <table className="ui-table">
           <thead>
             <tr>
@@ -435,8 +435,8 @@ export function PowderPage({
 
   const exportPeaks = () => {
     const header = tof
-      ? `# ScatterPlan TOF powder peaks; ${result.provenance.radiation}; bank 2theta=${result.bank!.twoThetaDeg} deg, DIFC=${result.bank!.difc} us/A, DIFA=${result.bank!.difa}, ZERO=${result.bank!.zero}; Lorentz sin(th)*d^4`
-      : `# ScatterPlan powder peaks; ${result.provenance.radiation}; lambda=${settings.wavelength} A; Lorentz 1/(sin^2 th cos th); polarization ${settings.radiation === "xray" ? JSON.stringify(settings.polarization) : "none"}`;
+      ? `# NEXPLAN TOF powder peaks; ${result.provenance.radiation}; bank 2theta=${result.bank!.twoThetaDeg} deg, DIFC=${result.bank!.difc} us/A, DIFA=${result.bank!.difa}, ZERO=${result.bank!.zero}; Lorentz sin(th)*d^4`
+      : `# NEXPLAN powder peaks; ${result.provenance.radiation}; lambda=${settings.wavelength} A; Lorentz 1/(sin^2 th cos th); polarization ${settings.radiation === "xray" ? JSON.stringify(settings.polarization) : "none"}`;
     const lines = [
       header,
       `d_A,${tof ? "tof_us,lambda_A" : "two_theta_deg"},Q_invA,sumF2,lorentz_pol,intensity,families`,
@@ -450,7 +450,7 @@ export function PowderPage({
     const xs = result.profile.x;
     const ys = result.profile.y;
     const shape = tof ? JSON.stringify(tofShape) : `pseudo-Voigt FWHM ${cwProfile.fwhm} ${fwhmUnit}, eta ${cwProfile.eta}`;
-    const lines = [`# ScatterPlan profile; axis ${shownAxis}; ${shape}; area-normalized peaks x integrated intensity`, `${shownAxis},intensity`];
+    const lines = [`# NEXPLAN profile; axis ${shownAxis}; ${shape}; area-normalized peaks x integrated intensity`, `${shownAxis},intensity`];
     for (let i = 0; i < xs.length; i++) lines.push(`${exact(xs[i]!)},${exact(ys[i]!)}`);
     downloadText(`${result.blockName}-powder-profile.csv`, lines.join("\n") + "\n", "text/csv");
   };

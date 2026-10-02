@@ -33,20 +33,21 @@ const DEFAULT_TOF: TofInput = { twoThetaDeg: 90, flightPathM: 20, difa: 0, zero:
 
 function readTheme(): Theme {
   try {
-    return localStorage.getItem("scatterplan-theme") === "dark" ? "dark" : "light";
+    // "scatterplan-theme" is the key used before the rename to NEXPLAN.
+    return (localStorage.getItem("nexplan-theme") ?? localStorage.getItem("scatterplan-theme")) === "dark" ? "dark" : "light";
   } catch {
     return "light";
   }
 }
 
-const README = "https://github.com/drthyang/scatterplan#readme";
+const README = "https://github.com/drthyang/nexplan#readme";
 
 export function App() {
   const [theme, setTheme] = useState<Theme>(readTheme);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     try {
-      localStorage.setItem("scatterplan-theme", theme);
+      localStorage.setItem("nexplan-theme", theme);
     } catch {
       /* storage unavailable: theme still applies for this session */
     }
@@ -58,9 +59,9 @@ export function App() {
   const [chosenSetting, setChosenSetting] = useState<string | undefined>();
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [xrayIons, setXrayIons] = useState<Record<string, string>>({});
-  const [radiation, setRadiation] = useState<Radiation>("xray");
+  const [radiation, setRadiation] = useState<Radiation>("neutron");
   const [neutronMode, setNeutronMode] = useState<"cw" | "tof">("cw");
-  const [wavelength, setWavelength] = useState(1.540593);
+  const [wavelength, setWavelength] = useState(1.5);
   const [tof, setTof] = useState<TofInput>(DEFAULT_TOF);
   const [dMin, setDMin] = useState(0.8);
   const [polarization, setPolarization] = useState<Polarization>({ kind: "unpolarized" });
@@ -176,7 +177,9 @@ export function App() {
                 </svg>
               </div>
               <div className="brand-copy">
-                <h1>ScatterPlan</h1>
+                <h1>
+                  NEXPLAN<span>Neutron Experiment Planner</span>
+                </h1>
               </div>
               <span className="beta-pill">
                 beta<span className="ver">v{APP_VERSION}</span>
@@ -351,7 +354,7 @@ export function App() {
                   <circle cx="70" cy="30" r="8" fill="var(--accent)" />
                 </svg>
                 <h2>Drop a CIF file here</h2>
-                <p>ScatterPlan reads CIF 1.1 structures and calculates X-ray and neutron reflections, structure factors and powder patterns (constant wavelength and neutron time-of-flight). Everything runs in this browser tab; nothing is uploaded.</p>
+                <p>Start from a crystal structure (CIF 1.1). NEXPLAN calculates neutron and X-ray reflections, structure factors and powder patterns, orients the crystal from a UB matrix, and simulates the measurement on SNS instruments. Everything runs in this browser tab; nothing is uploaded.</p>
                 <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", justifyContent: "center" }}>
                   <button type="button" className="ui-btn-primary" onClick={() => fileInput.current?.click()}>
                     Choose a CIF file
@@ -363,6 +366,24 @@ export function App() {
                   ))}
                 </div>
               </div>
+            )}
+            {!file && (
+              <ol className="workflow" aria-label="How NEXPLAN works">
+                {(
+                  [
+                    ["Structure", "Load a CIF: cell, symmetry, sites and the scattering lengths used, each with its source."],
+                    ["Reflections & powder", "Every reflection with d, Q and complex F; absences; CW or time-of-flight powder patterns."],
+                    ["UB matrix", "Load or build the orientation (ISAW/Mantid), compare it with the CIF cell, change the basis."],
+                    ...(ExperimentPage ? [["Experiment", "Simulate the measurement on TOPAZ, CORELLI, NOMAD, POWGEN, ARCS, SEQUOIA or CNCS detectors."]] : []),
+                  ] as [string, string][]
+                ).map(([title, text], i) => (
+                  <li key={title}>
+                    <span className="workflow__step">{i + 1}</span>
+                    <b>{title}</b>
+                    <span>{text}</span>
+                  </li>
+                ))}
+              </ol>
             )}
 
             {file && result && !result.ok && (

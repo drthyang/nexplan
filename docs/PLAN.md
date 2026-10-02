@@ -1,4 +1,4 @@
-# ScatterPlan: scientific implementation and validation plan
+# NEXPLAN: scientific implementation and validation plan
 
 Revision 2 · 2026-10-02 · supersedes the 2026-10-02 draft.
 Status: implementation started. The data pipeline and verification reports exist; nothing is certified for research use.
@@ -16,7 +16,7 @@ Status: implementation started. The data pipeline and verification reports exist
 | Absences from a "verified symmetry reference". | Computed from the operations: h is absent iff some (R, t) has hR = h and h·t ∉ ℤ. Tables only verify the result (§7). | Needs no lookup table, works for any setting, and is already in MATERIA (`isReflectionAbsent`). |
 | Powder: "explicit sum or families, never both". | **Explicit sum over the full signed list is the default.** Families are used only for labels (§7). | It needs no multiplicity or Laue-class logic, so a symmetry bug cannot change intensities. |
 | UI unspecified. | Match the MATERIA / NEBULA3D / RMCProfile Workbench design system (§11). | User requirement. |
-| — | Deployment origin `https://drthyang.github.io/scatterplan/`; license AGPL-3.0-only (§13). | COD CORS must be tested at the real origin. Copied MATERIA code is AGPL. |
+| — | Deployment origin `https://drthyang.github.io/nexplan/`; license AGPL-3.0-only (§13). | COD CORS must be tested at the real origin. Copied MATERIA code is AGPL. |
 
 ## Progress (2026-10-02)
 
@@ -78,7 +78,7 @@ dialogs or browser state.
 
 ```text
 src/materia/   copied MATERIA modules, unmodified except import paths; UPSTREAM.json pins commit + per-file sha256
-src/core/      ScatterPlan science: species, complex SF, signed reflections, powder, UB, transforms, geometry
+src/core/      NEXPLAN science: species, complex SF, signed reflections, powder, UB, transforms, geometry
 src/io/        CIF 1.1 tokenizer/reader, ISAW UB, explicit matrix adapters
 src/data/      generated, versioned scattering and symmetry tables + manifest.json
 src/workers/   reflection enumeration and simulation workers
@@ -108,7 +108,7 @@ generate reference fixtures, never on the user's machine.
 
 ### 3.2 What is replaced, and why (from the 2026-10-02 audit)
 
-| MATERIA behavior | Consequence | ScatterPlan replacement |
+| MATERIA behavior | Consequence | NEXPLAN replacement |
 |---|---|---|
 | Line-based CIF reader. Drops su values and semicolon fields, has no block selection, strips ion charges, resolves `FE1` → F. | Wrong species, silently. | New CIF 1.1 tokenizer and reader (`src/io/cif`). |
 | 230 space groups, one setting each; **origin choice 1** for the 24 two-origin groups. | A CIF that gives only an H-M symbol with origin-2 coordinates expands to the wrong structure. | Table of all gemmi settings (origin choices, :R/:H, Hall symbols). Ambiguous symbols are an error. |
@@ -386,7 +386,7 @@ panel structure, header with status chips, light and dark themes, and phone/tabl
 
 ## 13. Open decisions
 
-1. **License.** Copied MATERIA code is AGPL-3.0-only, so ScatterPlan defaults to AGPL-3.0-only. As MATERIA's
+1. **License.** Copied MATERIA code is AGPL-3.0-only, so NEXPLAN defaults to AGPL-3.0-only. As MATERIA's
    author, you can relicense if you want something more permissive.
 2. **Upstream fixes to MATERIA:** the In value, complex b, Pu/Cm, origin choice, P1 fallback, silent truncation and
    CIF species. These are tracked as a separate task in MATERIA.

@@ -190,20 +190,6 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio }: { result: Ca
         </Card>
 
         <div className="ui-stack">
-          <Card title="Goniometer" info={`${UNIVERSAL.note} Instrument-specific goniometers and detectors are on the Experiment page.`}>
-            <div className="form-rows">
-              <GoniometerControls axes={UNIVERSAL.axes} angles={gonio.angles} onAngles={(angles) => onGonio({ ...gonio, angles })} />
-              <div className="form-row">
-                <span className="ui-control-label">
-                  <span className="sym">λ</span> band
-                </span>
-                <UnitField label="Minimum wavelength" value={gonio.lambdaMin} unit="Å" min={0.05} width="4.5ch" onCommit={(v) => onGonio({ ...gonio, lambdaMin: v })} />
-                <UnitField label="Maximum wavelength" value={gonio.lambdaMax} unit="Å" min={0.06} width="4.5ch" onCommit={(v) => onGonio({ ...gonio, lambdaMax: v })} />
-              </div>
-            </div>
-            <p className="empty-note">Lab frame: beam +z, up +y. q_lab = R·UB·h with R = R_y(ω)·R_z(χ)·R_y(φ) (Mantid Universal).</p>
-          </Card>
-
           <Card
             title="UB matrix"
             meta={ub.fileName ?? "from the CIF cell, U = I"}
@@ -308,6 +294,20 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio }: { result: Ca
                 </dd>
               </div>
             </dl>
+          </Card>
+
+          <Card title="Goniometer" info={`${UNIVERSAL.note} Instrument-specific goniometers and detectors are on the Experiment page.`}>
+            <div className="form-rows">
+              <GoniometerControls axes={UNIVERSAL.axes} angles={gonio.angles} onAngles={(angles) => onGonio({ ...gonio, angles })} />
+              <div className="form-row">
+                <span className="ui-control-label">
+                  <span className="sym">λ</span> band
+                </span>
+                <UnitField label="Minimum wavelength" value={gonio.lambdaMin} unit="Å" min={0.05} width="4.5ch" onCommit={(v) => onGonio({ ...gonio, lambdaMin: v })} />
+                <UnitField label="Maximum wavelength" value={gonio.lambdaMax} unit="Å" min={0.06} width="4.5ch" onCommit={(v) => onGonio({ ...gonio, lambdaMax: v })} />
+              </div>
+            </div>
+            <p className="empty-note">Lab frame: beam +z, up +y. q_lab = R·UB·h with R = R_y(ω)·R_z(χ)·R_y(φ) (Mantid Universal).</p>
           </Card>
         </div>
       </div>

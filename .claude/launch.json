@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "scatterplan-dev",
+      "name": "nexplan-dev",
       "runtimeExecutable": "npm",
       "runtimeArgs": [
         "run",
@@ -16,7 +16,7 @@
       "url": "http://localhost:5187"
     },
     {
-      "name": "scatterplan-preview",
+      "name": "nexplan-preview",
       "runtimeExecutable": "sh",
       "runtimeArgs": [
         "-c",
@@ -26,7 +26,7 @@
       "url": "http://localhost:4187"
     },
     {
-      "name": "scatterplan-preview-experimental",
+      "name": "nexplan-preview-experimental",
       "runtimeExecutable": "sh",
       "runtimeArgs": [
         "-c",
