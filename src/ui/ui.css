@@ -1368,3 +1368,144 @@ input.ui-range {
 .exp-chip {
   margin-left: 0.4rem;
 }
+
+/* Experiment page */
+.ui-controls--inline {
+  margin-bottom: 0.6rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  gap: 0.5rem 1.1rem;
+}
+
+.map-panel {
+  fill: var(--accent);
+  fill-opacity: 0.16;
+  stroke: var(--accent);
+  stroke-opacity: 0.7;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.map-panel[style] {
+  fill-opacity: 0.55;
+  stroke-opacity: 0.9;
+}
+
+.map-panel.is-clickable {
+  cursor: pointer;
+}
+
+.map-panel.is-clickable:hover {
+  fill-opacity: 0.7;
+}
+
+.map-panel.is-dim,
+.map-panel.is-dim[style] {
+  fill-opacity: 0.07;
+  stroke-opacity: 0.2;
+}
+
+.map-panel.is-selected,
+.map-panel.is-selected[style] {
+  fill-opacity: 0.8;
+  stroke: #ff3b5c !important;
+  stroke-opacity: 1;
+  stroke-width: 2;
+}
+
+.map-ring {
+  fill: none;
+  stroke: var(--chart-tick);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  opacity: 0.7;
+}
+
+.map-ring.is-emphasis {
+  stroke: #ff3b5c;
+  stroke-width: 2;
+  stroke-dasharray: none;
+  opacity: 0.9;
+}
+
+.map-ring-label {
+  fill: var(--chart-tick-text);
+  font-size: var(--fs-70);
+}
+
+.map-spot {
+  stroke: rgba(0, 0, 0, 0.35);
+  stroke-width: 0.6;
+  cursor: pointer;
+}
+
+.map-spot.is-selected {
+  stroke: #ff3b5c;
+  stroke-width: 2;
+}
+
+.map-spot-ring {
+  fill: none;
+  stroke: #ff3b5c;
+  stroke-width: 1.4;
+  pointer-events: none;
+}
+
+.coverage-band {
+  fill: var(--accent);
+  fill-opacity: 0.07;
+}
+
+.coverage-band.is-covered {
+  fill-opacity: 0.2;
+}
+
+.coverage-panel-span {
+  fill: #ff3b5c;
+  fill-opacity: 0.1;
+  pointer-events: none;
+}
+
+.coverage-floor {
+  fill: var(--chart-grid);
+  fill-opacity: 0.55;
+}
+
+.coverage-floor-label {
+  font-size: var(--fs-70);
+}
+
+.coverage-line {
+  stroke: var(--series-calc);
+  stroke-width: 1.2;
+  cursor: pointer;
+}
+
+.coverage-line.is-hover {
+  stroke: var(--accent);
+  stroke-width: 2.2;
+  opacity: 1;
+}
+
+.coverage-line.is-selected {
+  stroke: #ff3b5c;
+  stroke-width: 2.6;
+}
+
+.coverage-strip {
+  fill-opacity: 0.45;
+  cursor: pointer;
+}
+
+.coverage-strip.is-selected {
+  fill-opacity: 1;
+  stroke: #ff3b5c;
+  stroke-width: 1.5;
+}
+
+.scan-bar {
+  fill: var(--series-stick);
+  fill-opacity: 0.35;
+}

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import type { CalcInput, CalcResult, CalcSuccess, TofInput } from "../app/compute.ts";
+import { EXPERIMENTAL } from "../app/experimental.ts";
 import { APP_VERSION } from "../app/version.ts";
 import type { Polarization, PowderAxis } from "../core/diffraction/powder.ts";
 import { difcFromGeometry, type TofShape } from "../core/diffraction/tof.ts";
@@ -7,10 +8,14 @@ import { neutronEnergyMeV, neutronWavelengthA, xrayEnergyKeV, xrayWavelengthA } 
 import { calculate } from "../workers/client.ts";
 import { Chip, cx, InfoBadge, Segmented, UnitField } from "./components.tsx";
 import { DEMOS } from "./demos.ts";
+import { DEFAULT_EXPERIMENT, type ExperimentState } from "./experimentState.ts";
 import { PowderPage, ReflectionsPage, StructurePage, type CwProfileSettings } from "./pages.tsx";
 import { DEFAULT_GONIO, UbPage, type GonioState, type UbState } from "./UbPage.tsx";
 
-type Tab = "structure" | "reflections" | "powder" | "ub" | "planning";
+type Tab = "structure" | "reflections" | "powder" | "ub" | "experiment";
+
+/** Instrument simulations: compiled in only for experimental builds (src/app/experimental.ts). */
+const ExperimentPage = EXPERIMENTAL ? lazy(() => import("./ExperimentPage.tsx").then((m) => ({ default: m.ExperimentPage }))) : null;
 type Theme = "light" | "dark";
 type Radiation = "xray" | "neutron";
 
@@ -63,6 +68,7 @@ export function App() {
   const [cwProfile, setCwProfile] = useState<CwProfileSettings>({ fwhm: 0.1, eta: 0.5 });
   const [ub, setUb] = useState<UbState>({ warnings: [] });
   const [gonio, setGonio] = useState<GonioState>(DEFAULT_GONIO);
+  const [experiment, setExperiment] = useState<ExperimentState>(DEFAULT_EXPERIMENT);
   const [result, setResult] = useState<CalcResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState(false);
@@ -182,9 +188,15 @@ export function App() {
                   {label}
                 </button>
               ))}
-              <button type="button" disabled title="Experiment planning: milestone M4">
-                Planning<span className="soon">soon</span>
-              </button>
+              {ExperimentPage ? (
+                <button type="button" className={cx(tab === "experiment" && "is-active")} aria-current={tab === "experiment" ? "page" : undefined} onClick={() => setTab("experiment")} title="Instrument simulations (experimental build)">
+                  Experiment<span className="soon">exp</span>
+                </button>
+              ) : (
+                <button type="button" disabled title="Experiment planning: milestone M4">
+                  Planning<span className="soon">soon</span>
+                </button>
+              )}
             </nav>
           </div>
           <div className="header-actions">
@@ -362,6 +374,11 @@ export function App() {
             )}
             {ok && tab === "reflections" && <ReflectionsPage result={ok} wavelength={wavelength} radiation={radiation} />}
             {ok && tab === "ub" && <UbPage result={ok} theme={theme} ub={ub} onUb={setUb} gonio={gonio} onGonio={setGonio} />}
+            {ok && tab === "experiment" && ExperimentPage && (
+              <Suspense fallback={<p className="empty-note">Loading the experiment page…</p>}>
+                <ExperimentPage result={ok} theme={theme} ub={ub} radiation={radiation} onNeutron={() => changeRadiation("neutron")} onDMin={setDMin} exp={experiment} onExp={setExperiment} />
+              </Suspense>
+            )}
             {ok && tab === "powder" && (
               <PowderPage result={ok} axis={axis} onAxis={changeAxis} cwProfile={cwProfile} onCwProfile={setCwProfile} tofShape={tof.shape} onTofShape={(shape: TofShape) => setTof({ ...tof, shape })} />
             )}

@@ -11,7 +11,7 @@ import type { Vec3 } from "@materia/core/math/types";
 import { inverse, mulVec, transpose } from "@materia/core/math/mat3";
 import { parseIsawUB } from "../../io/isaw.ts";
 import { goniometerMatrix, laueCondition, qLab } from "./goniometer.ts";
-import { INSTRUMENTS } from "./instruments.ts";
+import { UNIVERSAL } from "./instruments.ts";
 import { latticeFromUB, orientationFromUB } from "./ub.ts";
 
 const cache = new URL("../../../data-sources/cache/", import.meta.url).pathname;
@@ -47,7 +47,7 @@ function readPeaks(text: string): PeakRow[] {
   return rows;
 }
 
-const universal = INSTRUMENTS.find((i) => i.id === "universal")!.goniometer; // R_y(ω)·R_z(χ)·R_y(φ)
+const universal = UNIVERSAL; // R_y(ω)·R_z(χ)·R_y(φ)
 
 describe.skipIf(!existsSync(matPath) || !existsSync(peaksPath))("TOPAZ_3007 (Mantid test data): UB · goniometer · Laue", () => {
   const ub = parseIsawUB(readFileSync(matPath, "utf8"));

@@ -18,6 +18,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { Mat3, Vec3 } from "@materia/core/math/types";
 import { mulVec } from "@materia/core/math/mat3";
 import { laueCondition } from "../core/ub/goniometer.ts";
+import { LAMBDA_RAMP_CSS, lambdaRgb } from "./colormaps.ts";
 import { arrowBuilder, cssVar, disposeTree, makeLabelSprite, savePng } from "./three/helpers.ts";
 
 /** Reciprocal-axis colours shared with NEBULA3D (a* amber, b* blue, c* green). */
@@ -49,24 +50,12 @@ export interface ReciprocalViewProps {
   readonly hasDetectors: boolean;
 }
 
-/** Viridis-like ramp for λ (short = purple, long = yellow). */
+/** Viridis-like ramp for λ (short = purple, long = yellow); shared with the SVG charts. */
 export function lambdaColor(t: number): THREE.Color {
-  const stops = [
-    [0.267, 0.005, 0.329],
-    [0.229, 0.322, 0.546],
-    [0.128, 0.567, 0.551],
-    [0.369, 0.789, 0.383],
-    [0.993, 0.906, 0.144],
-  ];
-  const x = Math.max(0, Math.min(1, t)) * (stops.length - 1);
-  const i = Math.min(stops.length - 2, Math.floor(x));
-  const f = x - i;
-  const a = stops[i]!;
-  const b = stops[i + 1]!;
-  return new THREE.Color(a[0]! + f * (b[0]! - a[0]!), a[1]! + f * (b[1]! - a[1]!), a[2]! + f * (b[2]! - a[2]!));
+  return new THREE.Color(...lambdaRgb(t));
 }
 
-export const LAMBDA_RAMP_CSS = "linear-gradient(90deg, #440154, #3b528b, #21918c, #5ec962, #fde725)";
+export { LAMBDA_RAMP_CSS };
 
 const toMatrix4 = (R: Mat3) => new THREE.Matrix4().set(R[0][0], R[0][1], R[0][2], 0, R[1][0], R[1][1], R[1][2], 0, R[2][0], R[2][1], R[2][2], 0, 0, 0, 0, 1);
 

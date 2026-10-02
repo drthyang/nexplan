@@ -184,3 +184,22 @@ F(h) = Σⱼ oⱼ · aⱼ(s) · exp(−Bⱼ s²) · exp(+2πi h·xⱼ)
 - **Instruments:** TOPAZ (2022-11-21), CORELLI, NOMAD (2022-05-05) and POWGEN (2018-05-05) definitions at Mantid
   commit 67c2f43, generated into `src/data/instruments.json`. They are available only when the experimental flag is
   on (`src/app/experimental.ts`: dev server, or builds with `VITE_EXPERIMENTAL=1`).
+
+## 10. Experiment simulations (experimental)
+
+On the Experiment page; code in `src/core/instrument/simulate.ts`.
+
+- **Detector map:** directions are unrolled onto a cylinder about the vertical axis, as in Mantid's instrument
+  view: γ = atan2(u_x, u_z) (0 along the beam, +90° towards +x) and ν = asin(u_y). A cone of constant 2θ
+  satisfies cos 2θ = cos γ · cos ν.
+- **Single crystal:** at goniometer setting R, reflection h is on a detector when its Laue wavelength (§8) is in the
+  band and the ray along k_f hits a panel (§9). A rotation scan steps one axis with the others fixed. Completeness is
+  the fraction of symmetry families with at least one member seen so far, over the families among the simulated
+  reflections (the strongest 6000 present with d ≥ d_min). Friedel mates are merged only when the amplitudes are
+  real.
+- **Powder (sample fixed):** a pixel at 2θ records d from λ_min/(2 sin θ) to λ_max/(2 sin θ). A spacing d reaches
+  2θ from 2 asin(λ_min/2d) to 2 asin(min(1, λ_max/2d)), and a panel records it when its 2θ span overlaps that range.
+  Panel 2θ spans come from a 9 × 9 grid over the face.
+- **Simulated pattern of one panel:** the panel is treated as one bank at the 2θ of its centre, with
+  DIFC = (m_n/h)·(L1 + L2)·2 sin θ (no DIFA or ZERO) and the TOF intensity and shapes of §7b, using Gaussian peaks of
+  constant Δd/d. Real banks are calibrated, and their resolution varies with angle.

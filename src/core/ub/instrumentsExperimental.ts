@@ -9,8 +9,8 @@
  *  - CORELLI: BL9:Mot:Sample:Axis1–3, each (0,1,0,+1) (neutrons/garnet-tools
  *    src/garnet/config/instruments.py @ 4eb3206); 0.6–2.5 Å (same file; within ORNL's
  *    10–200 meV incident-energy range).
- *  - NOMAD (0.1–3 Å, ORNL instrument page) and POWGEN are powder diffractometers with no
- *    sample goniometer; a generic vertical rotation stands in. POWGEN's band depends on the
+ *  - NOMAD (0.1–3 Å, ORNL instrument page) and POWGEN are powder diffractometers: the sample
+ *    is fixed (no goniometer axes). POWGEN's band depends on the
  *    choppers: the default is one 60 Hz frame (≈ 3956/(60·63) ≈ 1.05 Å wide for its ~63 m
  *    flight path) centred on 1.066 Å; adjust it to the chopper setting.
  */
@@ -28,11 +28,11 @@ const idfNote = (id: string) => {
   const ins = geometry.instruments.find((i) => i.id === id)!;
   return `Detectors: Mantid ${ins.idf.url.split("/").pop()} (valid from ${ins.idf.validFrom.slice(0, 10)}).`;
 };
-const GENERIC_OMEGA = { ...OMEGA, name: "ω", min: 0, max: 360 };
 
 export const EXPERIMENTAL_INSTRUMENTS: readonly InstrumentPreset[] = [
   {
     id: "topaz-cryo",
+    mode: "single-crystal",
     label: "TOPAZ · cryogenic goniometer (ω)",
     goniometer: { id: "topaz-cryo", label: "TOPAZ cryogenic", axes: [{ ...OMEGA, min: 0, max: 360, log: "BL12:Mot:Gonioc:Omega" }], note: "ω about the vertical +y axis, counter-clockwise (χ = φ = 0)." },
     lambdaMin: 0.4,
@@ -44,6 +44,7 @@ export const EXPERIMENTAL_INSTRUMENTS: readonly InstrumentPreset[] = [
   },
   {
     id: "topaz-ambient",
+    mode: "single-crystal",
     label: "TOPAZ · ambient goniometer (ω, φ; χ = 135°)",
     goniometer: {
       id: "topaz-ambient",
@@ -64,6 +65,7 @@ export const EXPERIMENTAL_INSTRUMENTS: readonly InstrumentPreset[] = [
   },
   {
     id: "corelli",
+    mode: "single-crystal",
     label: "CORELLI · sample rotation (Axis1–3)",
     goniometer: {
       id: "corelli",
@@ -84,8 +86,9 @@ export const EXPERIMENTAL_INSTRUMENTS: readonly InstrumentPreset[] = [
   },
   {
     id: "nomad",
-    label: "NOMAD · detectors (generic ω)",
-    goniometer: { id: "nomad", label: "NOMAD", axes: [GENERIC_OMEGA], note: "NOMAD has no sample goniometer; ω is a generic vertical rotation." },
+    mode: "powder",
+    label: "NOMAD · powder",
+    goniometer: { id: "nomad", label: "NOMAD", axes: [], note: "Powder diffractometer: the sample is fixed." },
     lambdaMin: 0.1,
     lambdaMax: 3.0,
     l1: l1("NOMAD"),
@@ -95,8 +98,9 @@ export const EXPERIMENTAL_INSTRUMENTS: readonly InstrumentPreset[] = [
   },
   {
     id: "powgen",
-    label: "POWGEN · detectors (generic ω)",
-    goniometer: { id: "powgen", label: "POWGEN", axes: [GENERIC_OMEGA], note: "POWGEN has no sample goniometer; ω is a generic vertical rotation." },
+    mode: "powder",
+    label: "POWGEN · powder",
+    goniometer: { id: "powgen", label: "POWGEN", axes: [], note: "Powder diffractometer: the sample is fixed." },
     lambdaMin: 0.54,
     lambdaMax: 1.59,
     l1: l1("POWGEN"),

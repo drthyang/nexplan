@@ -34,9 +34,19 @@ planning (M4) come next.
 
 ## Experimental features
 
-Instrument presets with detector geometry (TOPAZ cryogenic and ambient goniometers, CORELLI, NOMAD, POWGEN) and a
-real-space detector view are compiled in only for testing. They are on in the dev server and in an experimental
-build:
+An **Experiment** page simulates measurements on real detector geometry (Mantid instrument definitions). It is
+compiled in only for testing.
+
+- **Single crystal** (TOPAZ cryogenic and ambient goniometers, CORELLI): the goniometer turns the crystal.
+  - Spots on a 3D detector view and an unrolled detector map.
+  - Rotation scans with symmetry-family completeness.
+  - The reflections on each panel, with pixel coordinates.
+- **Powder** (NOMAD, POWGEN; the sample is fixed):
+  - A 2θ–d coverage chart for the wavelength band.
+  - The panels that record each reflection.
+  - A simulated TOF pattern for any panel.
+
+The page is on in the dev server and in an experimental build:
 
 ```bash
 npm run build:experimental   # writes dist-experimental/

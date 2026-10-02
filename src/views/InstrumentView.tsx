@@ -1,10 +1,11 @@
 /**
  * Real-space instrument view (lab frame, metres): sample at the origin, beam
- * along +z, detector panels from the instrument definition, and the spots
- * where diffracted rays hit them, coloured by wavelength. Click a spot to
- * select its reflection (shared with the reciprocal view and the table).
+ * along +z, detector panels from the instrument definition, and (single
+ * crystal) the spots where diffracted rays hit them, coloured by wavelength.
+ * Panels can be coloured individually (powder: by 2θ), highlighted, and
+ * picked. Click a spot to select its reflection, or a panel to pick it.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { Vec3 } from "@materia/core/math/types";
@@ -20,9 +21,12 @@ export interface InstrumentSpot {
   readonly panel: number;
 }
 
+const PANEL_COLOR = 0x5b8def;
+const SELECT_COLOR = 0xff3b5c;
+
 export function InstrumentView({
   panels,
-  spots,
+  spots = [],
   lambdaMin,
   lambdaMax,
   selected,
@@ -30,9 +34,15 @@ export function InstrumentView({
   theme,
   fileStem,
   instrumentName,
+  panelColors,
+  highlight,
+  selectedPanel = null,
+  onPanelClick,
+  summary,
+  legend,
 }: {
   panels: readonly DetectorPanel[];
-  spots: readonly InstrumentSpot[];
+  spots?: readonly InstrumentSpot[];
   lambdaMin: number;
   lambdaMax: number;
   selected: number | null;
@@ -40,13 +50,23 @@ export function InstrumentView({
   theme: "light" | "dark";
   fileStem: string;
   instrumentName: string;
+  /** Per-panel face colour (hex); default a uniform blue. */
+  panelColors?: readonly number[];
+  /** Panels drawn emphasised (others are dimmed when this is set). */
+  highlight?: ReadonlySet<number>;
+  selectedPanel?: number | null;
+  onPanelClick?: (i: number) => void;
+  summary?: ReactNode;
+  legend?: ReactNode;
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const [showLabels, setShowLabels] = useState(false);
   const [resetToken, setResetToken] = useState(0);
-  const live = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; spots: THREE.InstancedMesh; selection: THREE.Group; panelMeshes: THREE.Mesh[]; R: number } | null>(null);
+  const live = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; spots: THREE.InstancedMesh; selection: THREE.Group; faces: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>[]; edges: THREE.LineLoop<THREE.BufferGeometry, THREE.LineBasicMaterial>[]; R: number } | null>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const onPanelRef = useRef(onPanelClick);
+  onPanelRef.current = onPanelClick;
   const spotsRef = useRef(spots);
   spotsRef.current = spots;
 
@@ -74,17 +94,17 @@ export function InstrumentView({
     dl.position.set(1, 2, 1);
     scene.add(dl);
 
-    // Panels: translucent faces with outlines.
-    const faceMat = new THREE.MeshBasicMaterial({ color: 0x5b8def, transparent: true, opacity: theme === "dark" ? 0.16 : 0.12, side: THREE.DoubleSide, depthWrite: false });
-    const edgeMat = new THREE.LineBasicMaterial({ color: 0x5b8def, transparent: true, opacity: 0.75 });
-    const panelMeshes: THREE.Mesh[] = [];
-    panels.forEach((p) => {
+    // Panels: translucent faces with outlines (materials per panel; styled by the effect below).
+    const faces: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>[] = [];
+    const edges: THREE.LineLoop<THREE.BufferGeometry, THREE.LineBasicMaterial>[] = [];
+    panels.forEach((p, i) => {
       const n = new THREE.Vector3().crossVectors(new THREE.Vector3(...p.base), new THREE.Vector3(...p.up));
       const m = new THREE.Matrix4().makeBasis(new THREE.Vector3(...p.base), new THREE.Vector3(...p.up), n).setPosition(...p.center);
-      const face = new THREE.Mesh(new THREE.PlaneGeometry(p.width, p.height), faceMat);
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(p.width, p.height), new THREE.MeshBasicMaterial({ color: PANEL_COLOR, transparent: true, side: THREE.DoubleSide, depthWrite: false }));
       face.applyMatrix4(m);
+      face.userData.panel = i;
       scene.add(face);
-      panelMeshes.push(face);
+      faces.push(face);
       const edge = new THREE.LineLoop(
         new THREE.BufferGeometry().setFromPoints([
           new THREE.Vector3(-p.width / 2, -p.height / 2, 0),
@@ -92,10 +112,11 @@ export function InstrumentView({
           new THREE.Vector3(p.width / 2, p.height / 2, 0),
           new THREE.Vector3(-p.width / 2, p.height / 2, 0),
         ]),
-        edgeMat,
+        new THREE.LineBasicMaterial({ color: PANEL_COLOR, transparent: true }),
       );
       edge.applyMatrix4(m);
       scene.add(edge);
+      edges.push(edge);
       if (showLabels) {
         const label = makeLabelSprite(p.name, R * 0.02, muted);
         label.position.set(...p.center);
@@ -124,7 +145,7 @@ export function InstrumentView({
     controls.target.set(0, 0, 0);
     camera.lookAt(0, 0, 0);
     controls.update();
-    live.current = { renderer, scene, camera, spots: spotMesh, selection, panelMeshes, R };
+    live.current = { renderer, scene, camera, spots: spotMesh, selection, faces, edges, R };
 
     const ray = new THREE.Raycaster();
     let down: { x: number; y: number } | null = null;
@@ -133,9 +154,12 @@ export function InstrumentView({
       if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) return;
       const rect = renderer.domElement.getBoundingClientRect();
       ray.setFromCamera(new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1), camera);
-      const hit = ray.intersectObject(spotMesh, false)[0];
+      const hit = spotMesh.count > 0 ? ray.intersectObject(spotMesh, false)[0] : undefined;
       const spot = hit?.instanceId !== undefined ? spotsRef.current[hit.instanceId] : undefined;
-      onSelectRef.current(spot ? spot.index : null);
+      if (spot) return onSelectRef.current(spot.index);
+      const face = onPanelRef.current ? ray.intersectObjects(faces, false)[0] : undefined;
+      if (face) return onPanelRef.current!(face.object.userData.panel as number);
+      onSelectRef.current(null);
     };
     renderer.domElement.addEventListener("pointerdown", onDown);
     renderer.domElement.addEventListener("pointerup", onUp);
@@ -173,6 +197,24 @@ export function InstrumentView({
     };
   }, [panels, theme, showLabels, resetToken]);
 
+  // Panel styling, updated in place.
+  useEffect(() => {
+    const s = live.current;
+    if (!s) return;
+    const base = theme === "dark" ? 0.16 : 0.12;
+    s.faces.forEach((face, i) => {
+      const on = !highlight || highlight.has(i);
+      const isSel = i === selectedPanel;
+      const colour = panelColors?.[i] ?? PANEL_COLOR;
+      face.material.color.setHex(colour);
+      face.material.opacity = isSel ? 0.55 : !highlight ? (panelColors ? base * 2.6 : base) : on ? 0.42 : 0.04;
+      const edge = s.edges[i]!;
+      edge.material.color.setHex(isSel ? SELECT_COLOR : colour);
+      edge.material.opacity = isSel ? 1 : on ? 0.8 : 0.15;
+      edge.renderOrder = isSel ? 2 : 0;
+    });
+  }, [panelColors, highlight, selectedPanel, theme, showLabels, panels, resetToken]);
+
   // Spots and selection, updated in place.
   useEffect(() => {
     const s = live.current;
@@ -186,7 +228,7 @@ export function InstrumentView({
       const k = isSel ? r * 2.2 : r;
       m4.makeScale(k, k, k).setPosition(...sp.position);
       s.spots.setMatrixAt(i, m4);
-      s.spots.setColorAt(i, isSel ? new THREE.Color(0xff3b5c) : lambdaColor((sp.lambda - lambdaMin) / (lambdaMax - lambdaMin)));
+      s.spots.setColorAt(i, isSel ? new THREE.Color(SELECT_COLOR) : lambdaColor((sp.lambda - lambdaMin) / (lambdaMax - lambdaMin)));
     }
     s.spots.count = n;
     s.spots.instanceMatrix.needsUpdate = true;
@@ -197,7 +239,7 @@ export function InstrumentView({
     s.selection.clear();
     const sel = spots.find((sp) => sp.index === selected);
     if (sel) {
-      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(...sel.position)]), new THREE.LineBasicMaterial({ color: 0xff3b5c }));
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(...sel.position)]), new THREE.LineBasicMaterial({ color: SELECT_COLOR }));
       s.selection.add(line);
     }
   }, [spots, selected, lambdaMin, lambdaMax, resetToken, theme, showLabels, panels]);
@@ -206,9 +248,10 @@ export function InstrumentView({
     <div className="viewer">
       <div className="viewer-toolbar">
         <span className="dim-note">
-          {instrumentName}: {panels.length} panels · {spots.length.toLocaleString()} spots on detectors
+          {summary ?? `${instrumentName}: ${panels.length} panels · ${spots.length.toLocaleString()} spots on detectors`}
         </span>
         <span className="viewer-toolbar__end">
+          {legend}
           <label className="ui-check">
             <input type="checkbox" checked={showLabels} onChange={(e) => setShowLabels(e.target.checked)} /> Bank labels
           </label>

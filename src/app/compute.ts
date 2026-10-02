@@ -5,7 +5,7 @@
  */
 import manifest from "../data/manifest.json";
 import { classify, enumerateReflections, hasComplexAmplitudes, ReflectionLimitError, structureFactors } from "../core/diffraction/reflections.ts";
-import { cwPeaks, familyRepresentative, groupByD, synthesizeProfile, type Polarization, type PowderAxis, type PowderPeak } from "../core/diffraction/powder.ts";
+import { cwPeaks, familyRepresentative, groupByD, synthesizeProfile, type PeakGroup, type Polarization, type PowderAxis, type PowderPeak } from "../core/diffraction/powder.ts";
 import { bankDRange, difcFromGeometry, synthesizeTof, tofPeaks, type TofBank, type TofShape } from "../core/diffraction/tof.ts";
 import { parseTypeSymbol, speciesKey } from "../core/scattering/species.ts";
 import { NEUTRON_DATASET, ScatteringLookupError, XRAY_DATASET, xrayIonsFor, type Tier } from "../core/scattering/tables.ts";
@@ -110,6 +110,8 @@ export interface CalcSuccess {
     readonly familyRep: Int32Array;
   };
   readonly friedelMerged: boolean;
+  /** Present reflections grouped by d (all signed hkl at each spacing), d ≥ d_min, independent of the powder mode. */
+  readonly groups: readonly PeakGroup[];
   readonly peaks: readonly PowderPeak[];
   readonly profile: { readonly x: Float64Array; readonly y: Float64Array };
   /** "cw" or "tof"; TOF results carry the bank used. */
@@ -358,6 +360,7 @@ export async function runCalculation(input: CalcInput): Promise<CalcResult> {
     },
     reflections: { h: refl.h, k: refl.k, l: refl.l, d: refl.d, re: sf.re, im: sf.im, f2: sf.f2, cls, family, familyRep: Int32Array.from(familyRep) },
     friedelMerged: !complex,
+    groups,
     peaks,
     profile,
     powderMode: isTof ? "tof" : "cw",

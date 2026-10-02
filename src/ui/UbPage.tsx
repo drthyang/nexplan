@@ -1,32 +1,24 @@
+/**
+ * UB matrix page: orientation only. UB import/export and checks, change of
+ * basis, and the reciprocal-space (Ewald/Laue) view with a generic Eulerian
+ * goniometer. Instrument presets and detector simulations live on the
+ * Experiment page.
+ */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { Mat3, Vec3 } from "@materia/core/math/types";
-import { determinant, mulVec, transpose } from "@materia/core/math/mat3";
+import { determinant, mulMat, mulVec, transpose } from "@materia/core/math/mat3";
 import type { CalcSuccess } from "../app/compute.ts";
-import { EXPERIMENTAL } from "../app/experimental.ts";
-import { rayHit, type DetectorHit } from "../core/instrument/detectors.ts";
 import { goniometerMatrix, laueCondition } from "../core/ub/goniometer.ts";
-import { INSTRUMENTS, type InstrumentPreset } from "../core/ub/instruments.ts";
-import { axisAngle, directBasisInSample, findBasisMatch, latticeFromUB, nearestIndices, orientationFromUB, transformUB, ubFromU, type BasisMatch } from "../core/ub/ub.ts";
+import { UNIVERSAL } from "../core/ub/instruments.ts";
+import { axisAngle, directBasisInSample, latticeFromUB, nearestIndices, orientationFromUB, transformUB } from "../core/ub/ub.ts";
 import { formatIsawUB, IsawParseError, parseIsawUB } from "../io/isaw.ts";
-import { Card, Chip, Segmented, UnitField } from "./components.tsx";
+import { Card, Segmented, UnitField } from "./components.tsx";
 import { downloadText, fmt, hklText } from "./format.ts";
+import { presentReflections, useViewUB, type UbState } from "./ubShared.ts";
+
+export type { UbState } from "./ubShared.ts";
 
 const ReciprocalView = lazy(() => import("../views/ReciprocalView.tsx").then((m) => ({ default: m.ReciprocalView })));
-const InstrumentView = lazy(() => import("../views/InstrumentView.tsx").then((m) => ({ default: m.InstrumentView })));
-
-/** Experimental presets (detector geometry), loaded only when EXPERIMENTAL is on. */
-function useInstrumentPresets(): readonly InstrumentPreset[] {
-  const [extra, setExtra] = useState<readonly InstrumentPreset[]>([]);
-  useEffect(() => {
-    if (!EXPERIMENTAL) return;
-    let alive = true;
-    void import("../core/ub/instrumentsExperimental.ts").then((m) => alive && setExtra(m.EXPERIMENTAL_INSTRUMENTS));
-    return () => {
-      alive = false;
-    };
-  }, []);
-  return useMemo(() => [...extra, ...INSTRUMENTS], [extra]);
-}
 
 const IDENTITY: Mat3 = [
   [1, 0, 0],
@@ -34,15 +26,7 @@ const IDENTITY: Mat3 = [
   [0, 0, 1],
 ];
 
-export interface UbState {
-  /** UB as loaded or built (Mantid sample frame, q = UB·h, 1/Å, no 2π). */
-  readonly UB?: Mat3;
-  readonly fileName?: string;
-  readonly warnings: readonly string[];
-}
-
 export interface GonioState {
-  readonly instrumentId: string;
   readonly angles: readonly number[];
   readonly lambdaMin: number;
   readonly lambdaMax: number;
@@ -50,11 +34,9 @@ export interface GonioState {
   readonly showEwald: boolean;
 }
 
-export const DEFAULT_GONIO: GonioState = { instrumentId: EXPERIMENTAL ? "topaz-cryo" : "universal", angles: [0, 0, 0], lambdaMin: 0.4, lambdaMax: 3.5, frame: "lab", showEwald: true };
+export const DEFAULT_GONIO: GonioState = { angles: [0, 0, 0], lambdaMin: 0.4, lambdaMax: 3.5, frame: "lab", showEwald: true };
 
-const MAX_POINTS = 6000;
-
-function MatrixBlock({ M, digits = 6 }: { M: Mat3; digits?: number }) {
+export function MatrixBlock({ M, digits = 6 }: { M: Mat3; digits?: number }) {
   return (
     <table className="ui-table matrix">
       <tbody>
@@ -70,71 +52,74 @@ function MatrixBlock({ M, digits = 6 }: { M: Mat3; digits?: number }) {
   );
 }
 
+/** Goniometer sliders + numeric fields for a model (fixed axes shown as chips). */
+export function GoniometerControls({ axes, angles, onAngles }: { axes: readonly { name: string; min: number; max: number; fixed?: number }[]; angles: readonly number[]; onAngles: (a: number[]) => void }) {
+  return (
+    <>
+      {axes.map((ax, i) =>
+        ax.fixed !== undefined ? (
+          <div key={ax.name} className="form-row">
+            <span className="ui-control-label">
+              <span className="sym">{ax.name}</span>
+            </span>
+            <span className="ui-chip">fixed at {ax.fixed}°</span>
+          </div>
+        ) : (
+          <label key={ax.name} className="form-row">
+            <span className="ui-control-label">
+              <span className="sym">{ax.name}</span>
+            </span>
+            <input
+              type="range"
+              className="ui-range"
+              min={ax.min}
+              max={ax.max}
+              step={0.5}
+              value={angles[i] ?? 0}
+              onChange={(e) => onAngles(axes.map((_, j) => (j === i ? Number(e.target.value) : (angles[j] ?? 0))))}
+              aria-label={`${ax.name} angle`}
+            />
+            <UnitField label={`${ax.name} angle`} value={angles[i] ?? 0} unit="°" min={ax.min} max={ax.max} width="5ch" onCommit={(v) => onAngles(axes.map((_, j) => (j === i ? v : (angles[j] ?? 0))))} />
+          </label>
+        ),
+      )}
+    </>
+  );
+}
+
 export function UbPage({ result, theme, ub, onUb, gonio, onGonio }: { result: CalcSuccess; theme: "light" | "dark"; ub: UbState; onUb: (u: UbState) => void; gonio: GonioState; onGonio: (g: GonioState) => void }) {
   const cifCell = result.structure.cell;
-  const presets = useInstrumentPresets();
-  const instrument = presets.find((i) => i.id === gonio.instrumentId) ?? presets.find((i) => i.id === "universal")!;
-  const detectors = instrument.detectors;
   const fileInput = useRef<HTMLInputElement>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [P, setP] = useState<Mat3>(IDENTITY);
 
-  // UB used for the view: the loaded UB mapped to the CIF setting, or U = I with the CIF cell.
-  const fileUB = ub.UB;
-  const match: BasisMatch | undefined = useMemo(() => (fileUB ? findBasisMatch(cifCell, fileUB) : undefined), [fileUB, cifCell]);
-  const viewUB: Mat3 = fileUB ? (match ? match.ubForCif : fileUB) : ubFromU(IDENTITY, cifCell);
+  const { viewUB, match, fileUB } = useViewUB(result, ub);
   const orient = useMemo(() => orientationFromUB(viewUB), [viewUB]);
-  const R = useMemo(() => goniometerMatrix(instrument.goniometer, gonio.angles), [instrument, gonio.angles]);
-
-  // Present reflections, strongest first if there are too many to draw.
-  const points = useMemo(() => {
-    const r = result.reflections;
-    const idx: number[] = [];
-    for (let i = 0; i < r.h.length; i++) if (r.cls[i] === 0) idx.push(i);
-    idx.sort((a, b) => r.f2[b]! - r.f2[a]!);
-    return idx.slice(0, MAX_POINTS).map((i) => ({ h: [r.h[i]!, r.k[i]!, r.l[i]!] as Vec3, f2: r.f2[i]!, d: r.d[i]! }));
-  }, [result]);
+  const R = useMemo(() => goniometerMatrix(UNIVERSAL, gonio.angles), [gonio.angles]);
+  const points = useMemo(() => presentReflections(result), [result]);
   useEffect(() => setSelected(null), [points]);
 
-  /** Per reflection: in the band? on a detector? Status 0 = no, 1 = in band but missed, 2 = observed. */
   const laue = useMemo(() => {
     const status = new Uint8Array(points.length);
     const lambdas = new Float64Array(points.length);
-    const rows: { i: number; lambda: number; twoTheta: number; azimuth: number; hit?: DetectorHit }[] = [];
-    let missed = 0;
+    const rows: { i: number; lambda: number; twoTheta: number; azimuth: number }[] = [];
+    const RUB = mulMat(R, viewUB);
     points.forEach((p, i) => {
-      const s = laueCondition(mulVec(R, mulVec(viewUB, p.h)));
+      const s = laueCondition(mulVec(RUB, p.h));
       lambdas[i] = s.lambda;
       if (!(s.lambda >= gonio.lambdaMin && s.lambda <= gonio.lambdaMax)) return;
-      const hit = detectors ? rayHit(detectors, s.kf) : undefined;
-      if (detectors && !hit) {
-        status[i] = 1;
-        missed++;
-        return;
-      }
       status[i] = 2;
-      rows.push({ i, lambda: s.lambda, twoTheta: s.twoTheta, azimuth: s.azimuth, ...(hit ? { hit } : {}) });
+      rows.push({ i, lambda: s.lambda, twoTheta: s.twoTheta, azimuth: s.azimuth });
     });
-    return { status, lambdas, rows, missed };
-  }, [points, R, viewUB, gonio.lambdaMin, gonio.lambdaMax, detectors]);
-  const inBand = laue.rows;
-  const spots = useMemo(() => laue.rows.filter((r) => r.hit).map((r) => ({ index: r.i, position: r.hit!.position, lambda: r.lambda, panel: r.hit!.panel })), [laue]);
+    return { status, lambdas, rows };
+  }, [points, R, viewUB, gonio.lambdaMin, gonio.lambdaMax]);
 
-  // What points along the beam and up, in the crystal, at this goniometer setting.
-  const RUB = useMemo(() => {
-    const M = [0, 1, 2].map((i) => [0, 1, 2].map((j) => R[i]![0]! * viewUB[0]![j]! + R[i]![1]! * viewUB[1]![j]! + R[i]![2]! * viewUB[2]![j]!)) as unknown as Mat3;
-    return M;
-  }, [R, viewUB]);
   const along = useMemo(() => {
+    const RUB = mulMat(R, viewUB);
     const A = directBasisInSample(RUB);
-    return {
-      beamHkl: nearestIndices(RUB, [0, 0, 1]),
-      beamUvw: nearestIndices(A, [0, 0, 1]),
-      upHkl: nearestIndices(RUB, [0, 1, 0]),
-      upUvw: nearestIndices(A, [0, 1, 0]),
-    };
-  }, [RUB]);
+    return { beamHkl: nearestIndices(RUB, [0, 0, 1]), beamUvw: nearestIndices(A, [0, 0, 1]), upHkl: nearestIndices(RUB, [0, 1, 0]), upUvw: nearestIndices(A, [0, 1, 0]) };
+  }, [R, viewUB]);
 
   const loadFile = async (f: File | undefined) => {
     if (!f) return;
@@ -164,7 +149,7 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio }: { result: Ca
       <div className="ui-grid ui-grid--split">
         <Card
           title="Reciprocal space"
-          meta={detectors ? `${points.length.toLocaleString()} reflections · ${inBand.length.toLocaleString()} on detectors · ${laue.missed.toLocaleString()} in band but missed` : `${points.length.toLocaleString()} reflections · ${inBand.length.toLocaleString()} in the λ band`}
+          meta={`${points.length.toLocaleString()} reflections · ${laue.rows.length.toLocaleString()} in the λ band`}
           info="Laue (white-beam / TOF) Ewald construction in 1/Å without 2π. Points are reciprocal-lattice nodes q = UB·h sized by |F|²; a point is coloured by the wavelength at which it diffracts when that lies in the band. The two spheres are the Ewald spheres for λmin and λmax: everything between them diffracts. Click a point to draw its k_i, k_f and q. Drag to rotate, scroll to zoom."
           className="viewer-card"
           actions={
@@ -192,78 +177,22 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio }: { result: Ca
               fileStem={result.blockName}
               status={laue.status}
               lambdas={laue.lambdas}
-              hasDetectors={!!detectors}
+              hasDetectors={false}
             />
           </Suspense>
           {sel && (
             <p className="selection-note">
               <b>({hklText(sel.h)})</b> d {fmt(sel.d, 4)} Å · |F|² {sel.f2.toPrecision(4)} ·{" "}
               {selSpot && Number.isFinite(selSpot.lambda) ? `λ ${fmt(selSpot.lambda, 4)} Å, 2θ ${fmt(selSpot.twoTheta, 2)}°, azimuth ${fmt(selSpot.azimuth, 1)}°${selSpot.lambda < gonio.lambdaMin || selSpot.lambda > gonio.lambdaMax ? " (outside the band)" : ""}` : "cannot diffract at this setting (q points along the beam)"}
-              {selected !== null && detectors && (() => {
-                const h = laue.rows.find((r) => r.i === selected)?.hit;
-                return h ? ` · ${h.name}, col ${fmt(h.col, 1)}, row ${fmt(h.row, 1)}, L2 ${fmt(h.l2, 3)} m` : laue.status[selected] === 1 ? " · misses every detector" : "";
-              })()}
               <span className="dim"> · Mantid's default Inelastic convention labels this reflection ({hklText([-sel.h[0], -sel.h[1], -sel.h[2]])}).</span>
             </p>
           )}
         </Card>
 
         <div className="ui-stack">
-          <Card title="Goniometer" info={`${instrument.goniometer.note} Sources: ${instrument.source}`}>
+          <Card title="Goniometer" info={`${UNIVERSAL.note} Instrument-specific goniometers and detectors are on the Experiment page.`}>
             <div className="form-rows">
-              <label className="form-row">
-                <span className="ui-control-label">Instrument</span>
-                <select
-                  className="ui-select"
-                  value={instrument.id}
-                  onChange={(e) => {
-                    const ins = presets.find((i) => i.id === e.target.value)!;
-                    onGonio({ ...gonio, instrumentId: ins.id, angles: ins.goniometer.axes.map(() => 0), lambdaMin: ins.lambdaMin, lambdaMax: ins.lambdaMax });
-                  }}
-                >
-                  {presets.map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {i.label}
-                      {i.experimental ? " — experimental" : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {instrument.goniometer.axes.map((ax, i) =>
-                ax.fixed !== undefined ? (
-                  <div key={ax.name} className="form-row">
-                    <span className="ui-control-label">
-                      <span className="sym">{ax.name}</span>
-                    </span>
-                    <Chip>fixed at {ax.fixed}°</Chip>
-                  </div>
-                ) : (
-                  <label key={ax.name} className="form-row">
-                    <span className="ui-control-label">
-                      <span className="sym">{ax.name}</span>
-                    </span>
-                    <input
-                      type="range"
-                      className="ui-range"
-                      min={ax.min}
-                      max={ax.max}
-                      step={0.5}
-                      value={gonio.angles[i] ?? 0}
-                      onChange={(e) => onGonio({ ...gonio, angles: gonio.angles.map((v, j) => (j === i ? Number(e.target.value) : v)) })}
-                      aria-label={`${ax.name} angle`}
-                    />
-                    <UnitField
-                      label={`${ax.name} angle`}
-                      value={gonio.angles[i] ?? 0}
-                      unit="°"
-                      min={ax.min}
-                      max={ax.max}
-                      width="5ch"
-                      onCommit={(v) => onGonio({ ...gonio, angles: gonio.angles.map((x, j) => (j === i ? v : x)) })}
-                    />
-                  </label>
-                ),
-              )}
+              <GoniometerControls axes={UNIVERSAL.axes} angles={gonio.angles} onAngles={(angles) => onGonio({ ...gonio, angles })} />
               <div className="form-row">
                 <span className="ui-control-label">
                   <span className="sym">λ</span> band
@@ -272,11 +201,7 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio }: { result: Ca
                 <UnitField label="Maximum wavelength" value={gonio.lambdaMax} unit="Å" min={0.06} width="4.5ch" onCommit={(v) => onGonio({ ...gonio, lambdaMax: v })} />
               </div>
             </div>
-            <p className="empty-note">
-              Lab frame: beam +z, up +y. q_lab = R·UB·h, R = {instrument.goniometer.axes.map((a) => `R(${a.name})`).join("·")}.{" "}
-              {detectors ? `Detectors: ${detectors.length} panels from the Mantid instrument definition; a reflection counts when its scattered ray hits a panel.` : "No detector geometry: every reflection in the band counts."}
-              {instrument.experimental && <span className="ui-chip ui-chip--warn exp-chip">experimental</span>}
-            </p>
+            <p className="empty-note">Lab frame: beam +z, up +y. q_lab = R·UB·h with R = R_y(ω)·R_z(χ)·R_y(φ) (Mantid Universal).</p>
           </Card>
 
           <Card
@@ -341,11 +266,11 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio }: { result: Ca
                     <p className="ok-note">The UB cell matches the CIF cell (metric misfit {(100 * match.misfit).toFixed(2)} %).</p>
                   ) : (
                     <p className="warn-note">
-                      The UB is in a different setting. Mapped with P = [{match.P.map((r) => r.join(" ")).join("; ")}] (h_UB = Pᵀ·h_CIF, misfit {(100 * match.misfit).toFixed(2)} %); the view uses UB·Pᵀ so CIF indices land where the UB puts them.
+                      The UB is in a different setting. Mapped with P = [{match.P.map((r) => r.join(" ")).join("; ")}] (h_UB = Pᵀ·h_CIF, misfit {(100 * match.misfit).toFixed(2)} %); the views use UB·Pᵀ so CIF indices land where the UB puts them.
                     </p>
                   )
                 ) : (
-                  <p className="error-note">The UB cell does not match the CIF cell by any simple change of axes (within 2 %). The view uses the UB as loaded, so CIF indices may not correspond to the UB's.</p>
+                  <p className="error-note">The UB cell does not match the CIF cell by any simple change of axes (within 2 %). The views use the UB as loaded, so CIF indices may not correspond to the UB's.</p>
                 )}
               </>
             )}
@@ -387,31 +312,8 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio }: { result: Ca
         </div>
       </div>
 
-      {detectors && (
-        <Card
-          title={`${instrument.label.split(" · ")[0]} detectors`}
-          info="Real space, lab frame (metres): sample at the origin, beam along +z, detector panels from the Mantid instrument definition, and where each observed reflection's scattered ray lands. Click a spot to select its reflection."
-          className="viewer-card"
-          meta={<span className="ui-chip ui-chip--warn">experimental</span>}
-        >
-          <Suspense fallback={<p className="empty-note">Loading the instrument view…</p>}>
-            <InstrumentView
-              panels={detectors}
-              spots={spots}
-              lambdaMin={gonio.lambdaMin}
-              lambdaMax={gonio.lambdaMax}
-              selected={selected}
-              onSelect={setSelected}
-              theme={theme}
-              fileStem={result.blockName}
-              instrumentName={instrument.label.split(" · ")[0]!}
-            />
-          </Suspense>
-        </Card>
-      )}
-
       <div className="ui-grid ui-grid--split">
-        <Card title={detectors ? "Reflections on the detectors" : "Reflections in the band"} meta={`${inBand.length.toLocaleString()} at this goniometer setting · strongest first`} flush>
+        <Card title="Reflections in the band" meta={`${laue.rows.length.toLocaleString()} at this goniometer setting · strongest first`} flush>
           <div className="ui-table-wrap" style={{ maxHeight: "22rem" }}>
             <table className="ui-table">
               <thead>
@@ -421,18 +323,11 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio }: { result: Ca
                   <th>λ (Å)</th>
                   <th>2θ (°)</th>
                   <th>azimuth (°)</th>
-                  {detectors && (
-                    <>
-                      <th className="left">bank</th>
-                      <th>col</th>
-                      <th>row</th>
-                    </>
-                  )}
                   <th>|F|²</th>
                 </tr>
               </thead>
               <tbody>
-                {inBand
+                {laue.rows
                   .slice()
                   .sort((a, b) => points[b.i]!.f2 - points[a.i]!.f2)
                   .slice(0, 400)
@@ -445,13 +340,6 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio }: { result: Ca
                         <td>{fmt(row.lambda, 4)}</td>
                         <td>{fmt(row.twoTheta, 2)}</td>
                         <td>{fmt(row.azimuth, 1)}</td>
-                        {detectors && (
-                          <>
-                            <td className="left">{row.hit?.name}</td>
-                            <td>{row.hit ? fmt(row.hit.col, 1) : ""}</td>
-                            <td>{row.hit ? fmt(row.hit.row, 1) : ""}</td>
-                          </>
-                        )}
                         <td>{p.f2.toPrecision(5)}</td>
                       </tr>
                     );
@@ -463,7 +351,7 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio }: { result: Ca
 
         <Card
           title="Change of basis"
-          info="ITA convention (a′, b′, c′) = (a, b, c)·P: h′ = Pᵀ·h and UB′ = UB·P⁻ᵀ, so every reflection keeps its q. Integer P with |det P| > 1 makes a supercell. Export the result for Mantid or ISAW; the view keeps the CIF setting."
+          info="ITA convention (a′, b′, c′) = (a, b, c)·P: h′ = Pᵀ·h and UB′ = UB·P⁻ᵀ, so every reflection keeps its q. Integer P with |det P| > 1 makes a supercell. Export the result for Mantid or ISAW; the views keep the CIF setting."
           actions={
             <>
               <button type="button" className="ui-pill" onClick={() => setP(IDENTITY)}>
@@ -536,4 +424,3 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio }: { result: Ca
     </div>
   );
 }
-

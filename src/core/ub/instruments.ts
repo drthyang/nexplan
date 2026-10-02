@@ -33,6 +33,8 @@ export interface InstrumentPreset {
   readonly detectors?: readonly DetectorPanel[];
   /** Shown only in experimental builds. */
   readonly experimental?: true;
+  /** Single-crystal instruments rotate the sample; powder instruments keep it fixed. */
+  readonly mode?: "single-crystal" | "powder";
 }
 
 export const OMEGA: GoniometerAxis = { name: "ω", direction: [0, 1, 0], sense: 1, min: -180, max: 360 };
@@ -45,15 +47,3 @@ export const UNIVERSAL: GoniometerModel = {
   axes: [OMEGA, CHI, PHI],
   note: "R = R_y(ω)·R_z(χ)·R_y(φ), counter-clockwise; beam +z, up +y.",
 };
-
-/** Always-available presets. Instrument-specific presets live in instrumentsExperimental.ts. */
-export const INSTRUMENTS: readonly InstrumentPreset[] = [
-  {
-    id: "universal",
-    label: "Eulerian ω, χ, φ (Mantid Universal)",
-    goniometer: UNIVERSAL,
-    lambdaMin: 0.4,
-    lambdaMax: 3.5,
-    source: "Mantid Goniometer::makeUniversalGoniometer.",
-  },
-];
