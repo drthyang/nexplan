@@ -1,6 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import type { CalcInput, CalcResult, CalcSuccess, TofInput } from "../app/compute.ts";
-import { EXPERIMENTAL } from "../app/experimental.ts";
 import { APP_VERSION } from "../app/version.ts";
 import type { Polarization, PowderAxis } from "../core/diffraction/powder.ts";
 import { difcFromGeometry, type TofShape } from "../core/diffraction/tof.ts";
@@ -14,8 +13,8 @@ import { DEFAULT_GONIO, UbPage, type GonioState, type UbState } from "./UbPage.t
 
 type Tab = "structure" | "reflections" | "powder" | "ub" | "experiment";
 
-/** Instrument simulations: compiled in only for experimental builds (src/app/experimental.ts). */
-const ExperimentPage = EXPERIMENTAL ? lazy(() => import("./ExperimentPage.tsx").then((m) => ({ default: m.ExperimentPage }))) : null;
+/** Instrument simulations, loaded with their detector geometry only when the page is opened. */
+const ExperimentPage = lazy(() => import("./ExperimentPage.tsx").then((m) => ({ default: m.ExperimentPage })));
 type Theme = "light" | "dark";
 type Radiation = "xray" | "neutron";
 
@@ -52,6 +51,22 @@ export function App() {
       /* storage unavailable: theme still applies for this session */
     }
   }, [theme]);
+
+  const [showNotice, setShowNotice] = useState(() => {
+    try {
+      return localStorage.getItem("nexplan-notice") !== "hidden";
+    } catch {
+      return true;
+    }
+  });
+  const hideNotice = () => {
+    setShowNotice(false);
+    try {
+      localStorage.setItem("nexplan-notice", "hidden");
+    } catch {
+      /* storage unavailable: hidden for this session only */
+    }
+  };
 
   const [tab, setTab] = useState<Tab>("structure");
   const [file, setFile] = useState<{ name: string; text: string } | null>(null);
@@ -146,7 +161,7 @@ export function App() {
     setAxis(m === "tof" ? "tof" : "twoTheta");
   };
 
-  // The Experiment page simulates SNS neutron instruments: it always uses neutron scattering.
+  // The Instrument page simulates SNS neutron instruments: it always uses neutron scattering.
   const onExperiment = tab === "experiment";
   useEffect(() => {
     if (onExperiment && radiation !== "neutron") changeRadiation("neutron");
@@ -177,9 +192,7 @@ export function App() {
                 </svg>
               </div>
               <div className="brand-copy">
-                <h1>
-                  NEXPLAN<span>Neutron Experiment Planner</span>
-                </h1>
+                <h1 title="NEXPLAN · Neutron Experiment Planner">NEXPLAN</h1>
               </div>
               <span className="beta-pill">
                 beta<span className="ver">v{APP_VERSION}</span>
@@ -192,21 +205,13 @@ export function App() {
                   ["reflections", "Reflections"],
                   ["powder", "Powder"],
                   ["ub", "UB matrix"],
+                  ["experiment", "Instrument"],
                 ] as const
               ).map(([id, label]) => (
                 <button key={id} type="button" className={cx(tab === id && "is-active")} aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}>
                   {label}
                 </button>
               ))}
-              {ExperimentPage ? (
-                <button type="button" className={cx(tab === "experiment" && "is-active")} aria-current={tab === "experiment" ? "page" : undefined} onClick={() => setTab("experiment")} title="Instrument simulations (experimental build)">
-                  Experiment<span className="soon">exp</span>
-                </button>
-              ) : (
-                <button type="button" disabled title="Experiment planning: milestone M4">
-                  Planning<span className="soon">soon</span>
-                </button>
-              )}
             </nav>
           </div>
           <div className="header-actions">
@@ -239,10 +244,17 @@ export function App() {
             </button>
           </div>
         </header>
-        <div className="disclaimer" role="note">
-          Public beta. Scattering tables are cross-checked against independent sources but not yet certified against the printed literature; validate results before publication.
-          Files stay in your browser. <a href={README} target="_blank" rel="noreferrer">Data provenance</a>
-        </div>
+        {showNotice && (
+          <div className="disclaimer" role="note">
+            <span>
+              <b>Public beta</b> · tables cross-checked, not yet certified; validate before publishing · files stay in your browser ·{" "}
+              <a href={README} target="_blank" rel="noreferrer">Data provenance</a>
+            </span>
+            <button type="button" className="disclaimer__close" aria-label="Hide this notice" title="Hide this notice" onClick={hideNotice}>
+              ×
+            </button>
+          </div>
+        )}
 
         <div className="workspace">
           <section className="ui-page">
@@ -250,7 +262,7 @@ export function App() {
               {onExperiment ? (
                 <span className="ui-control">
                   <span className="ui-control-label">Radiation</span>
-                  <Chip tone="accent" title="The Experiment page simulates SNS neutron instruments; the incident beam comes from the instrument.">
+                  <Chip tone="accent" title="The Instrument page simulates SNS neutron instruments; the incident beam comes from the instrument.">
                     Neutrons · SNS instruments
                   </Chip>
                 </span>
@@ -353,7 +365,7 @@ export function App() {
                   <circle cx="40" cy="60" r="13" fill="none" stroke="var(--accent)" strokeWidth="7" />
                   <circle cx="70" cy="30" r="8" fill="var(--accent)" />
                 </svg>
-                <h2>Drop a CIF file here</h2>
+                <h2>Neutron Experiment Planner</h2>
                 <p>Start from a crystal structure (CIF 1.1). NEXPLAN calculates neutron and X-ray reflections, structure factors and powder patterns, orients the crystal from a UB matrix, and simulates the measurement on SNS instruments. Everything runs in this browser tab; nothing is uploaded.</p>
                 <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", justifyContent: "center" }}>
                   <button type="button" className="ui-btn-primary" onClick={() => fileInput.current?.click()}>
@@ -365,6 +377,7 @@ export function App() {
                     </button>
                   ))}
                 </div>
+                <small className="dropzone-hint">or drop a CIF file anywhere on this page</small>
               </div>
             )}
             {!file && (
@@ -374,7 +387,7 @@ export function App() {
                     ["Structure", "Load a CIF: cell, symmetry, sites and the scattering lengths used, each with its source."],
                     ["Reflections & powder", "Every reflection with d, Q and complex F; absences; CW or time-of-flight powder patterns."],
                     ["UB matrix", "Load or build the orientation (ISAW/Mantid), compare it with the CIF cell, change the basis."],
-                    ...(ExperimentPage ? [["Experiment", "Simulate the measurement on TOPAZ, CORELLI, NOMAD, POWGEN, ARCS, SEQUOIA or CNCS detectors."]] : []),
+                    ["Instrument", "Simulate the measurement on TOPAZ, CORELLI, NOMAD, POWGEN, ARCS, SEQUOIA or CNCS detectors."],
                   ] as [string, string][]
                 ).map(([title, text], i) => (
                   <li key={title}>
@@ -413,9 +426,9 @@ export function App() {
             )}
             {ok && tab === "reflections" && <ReflectionsPage result={ok} wavelength={wavelength} radiation={radiation} />}
             {ok && tab === "ub" && <UbPage result={ok} theme={theme} ub={ub} onUb={setUb} gonio={gonio} onGonio={setGonio} />}
-            {ok && onExperiment && ExperimentPage && ok.provenance.settings.radiation === "neutron" && (
+            {ok && onExperiment && ok.provenance.settings.radiation === "neutron" && (
               <Suspense fallback={<p className="empty-note">Loading the experiment page…</p>}>
-                <ExperimentPage result={ok} theme={theme} ub={ub} onDMin={setDMin} exp={experiment} onExp={setExperiment} />
+                <ExperimentPage result={ok} theme={theme} ub={ub} onDMin={setDMin} onOpenUb={() => setTab("ub")} exp={experiment} onExp={setExperiment} />
               </Suspense>
             )}
             {ok && tab === "powder" && (

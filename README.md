@@ -4,12 +4,11 @@
 you can audit.**
 
 Load a CIF file. NEXPLAN lists every reflection with its d, Q and complex structure factor, flags systematic and
-accidental absences, and draws neutron (or X-ray) powder patterns. It also orients the crystal from a UB matrix and,
-in experimental builds, simulates the measurement on SNS instruments. Nothing is uploaded and there is nothing to
-install.
+accidental absences, and draws neutron (or X-ray) powder patterns. It orients the crystal from a UB matrix and
+simulates the measurement on SNS instruments. Nothing is uploaded and there is nothing to install.
 
 Status: **public beta.** The scattering tables are cross-checked against independent sources but are not yet
-certified against the printed literature. The SNS instrument simulations are in testing (see below).
+certified against the printed literature.
 
 ## What it does now
 
@@ -37,10 +36,10 @@ certified against the printed literature. The SNS instrument simulations are in 
   - ISAW/Mantid UB files in and out; lattice and orientation from the UB, matched to the CIF setting.
   - Change of basis; a 3D reciprocal-space view with the Ewald spheres for a wavelength band.
 
-## Experimental features
+## SNS instruments (Instrument page)
 
-An **Experiment** page simulates neutron measurements on the detector geometry of SNS instruments, taken from the
-Mantid instrument definitions. It always uses neutron scattering and is compiled in only for testing.
+The **Instrument** page simulates neutron measurements on the detector geometry of SNS instruments, taken from the
+Mantid instrument definitions. It always uses neutron scattering.
 
 - **Single crystal** (TOPAZ cryogenic and ambient goniometers, CORELLI): the goniometer turns the crystal.
   - Spots on a 3D detector view and an unrolled detector map.
@@ -58,13 +57,7 @@ Mantid instrument definitions. It always uses neutron scattering and is compiled
   - Single crystals on a vertical rotation ψ, with exact rotation scans.
   - Powders, with fixed elastic rings on the detectors and an elastic 2θ pattern.
 
-The page is on in the dev server and in an experimental build:
-
-```bash
-npm run build:experimental   # writes dist-experimental/
-```
-
-Regular builds (`npm run build`, the Pages deploy) leave them out entirely.
+The page and its detector geometry load only when the tab is opened.
 
 ## Data you can check
 

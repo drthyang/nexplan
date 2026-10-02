@@ -276,3 +276,68 @@ describe("reflection coverage (NeuXtalViz individual-peak style)", () => {
     expect(new Set(cov.points.map((p) => p.hit.panel)).size).toBeGreaterThan(new Set(one.points.map((p) => p.hit.panel)).size);
   });
 });
+
+describe("reflection coverage: independent checks", () => {
+  const topaz = instruments.instruments.find((i) => i.id === "TOPAZ")!;
+  const panels = topaz.panels as unknown as DetectorPanel[];
+  const omegaOnly = { ...UNIVERSAL, axes: [{ ...UNIVERSAL.axes[0]!, min: 0, max: 360 }] };
+  const ambient = { ...UNIVERSAL, axes: [{ ...UNIVERSAL.axes[0]!, min: 0, max: 360 }, { ...UNIVERSAL.axes[1]!, fixed: 135 }, { ...UNIVERSAL.axes[2]!, min: 0, max: 360 }] };
+  const cubic = (a: number) => ubFromU(I, { a, b: a, c: a, alpha: 90, beta: 90, gamma: 90 });
+  const window = (d: number, lo: number, hi: number) => ({ min: (2 * Math.asin(lo / (2 * d)) * 180) / Math.PI, max: (2 * Math.asin(Math.min(1, hi / (2 * d))) * 180) / Math.PI });
+
+  it("ω only, q ⟂ ω: the spot runs along the horizontal plane at γ = 2ω with λ = 2d sinω (analytic)", () => {
+    // q = (cosω, 0, −sinω)/d; k_f = q + ẑ/λ with λ = 2d sinω gives k_f ∝ (sin2ω, 0, cos2ω).
+    const a = 5.431;
+    const d = a / 4;
+    const cov = reflectionCoverage(omegaOnly, [0], cubic(a), [{ h: [4, 0, 0] }], panels, 0.4, 3.5, 0.5);
+    expect(cov.points.length).toBeGreaterThan(50);
+    for (const p of cov.points) {
+      const w = p.angles[0]!;
+      const { gamma, nu } = cylinderAngles(p.hit.position);
+      expect(nu).toBeCloseTo(0, 9);
+      expect(((gamma - 2 * w + 540) % 360) - 180).toBeCloseTo(0, 9);
+      expect(p.lambda).toBeCloseTo(2 * d * Math.sin((w * Math.PI) / 180), 9);
+    }
+  });
+
+  it("every point lies in the Bragg window 2 asin(λmin/2d) ≤ 2θ ≤ 2 asin(λmax/2d); low-index, large-d reflections reach few panels", () => {
+    const cases = [
+      { name: "Si (4 0 0)", a: 5.431, h: [4, 0, 0] as Vec3 },
+      { name: "Si (1 1 1)", a: 5.431, h: [1, 1, 1] as Vec3 },
+      { name: "spinel (1 1 1)", a: 8.0844, h: [1, 1, 1] as Vec3 },
+    ];
+    const allTwoTheta = panels.flatMap((p) => [panelAngles(p).twoThetaMin, panelAngles(p).twoThetaMax]);
+    console.log(`TOPAZ panels span 2θ ${Math.min(...allTwoTheta).toFixed(1)}–${Math.max(...allTwoTheta).toFixed(1)}°`);
+    for (const c of cases) {
+      const d = c.a / Math.hypot(...c.h);
+      const win = window(d, 0.4, 3.5);
+      const res: string[] = [];
+      for (const [label, model, base] of [
+        ["ω only", omegaOnly, [0]],
+        ["ω, φ (χ 135°)", ambient, [0, 135, 0]],
+      ] as const) {
+        const cov = reflectionCoverage(model, base, cubic(c.a), [{ h: c.h }], panels, 0.4, 3.5, 1);
+        for (const p of cov.points) {
+          const tt = directionAngles(p.hit.position).twoTheta;
+          expect(tt).toBeGreaterThanOrEqual(win.min - 1e-6);
+          expect(tt).toBeLessThanOrEqual(win.max + 1e-6);
+        }
+        res.push(`${label}: ${new Set(cov.points.map((p) => p.hit.panel)).size} panels`);
+      }
+      console.log(`${c.name}: d ${d.toFixed(3)} Å, Bragg window 2θ ${win.min.toFixed(1)}–${win.max.toFixed(1)}° · ${res.join(" · ")}`);
+    }
+  });
+
+  it("ω, φ with χ = 135°: q never leans more than 45° from the horizontal plane (|q̂_y| ≤ cos 45°)", () => {
+    // R = R_y(ω)·R_z(135°)·R_y(φ) keeps q̂·ŷ = 0.7071·cosφ for q along x in the sample frame.
+    const cov = reflectionCoverage(ambient, [0, 135, 0], cubic(5.431), [{ h: [4, 0, 0] }], panels, 0.4, 3.5, 2);
+    let max = 0;
+    for (const p of cov.points) {
+      const R = goniometerMatrix(ambient, p.angles);
+      const q = mulVec(mulMat(R, cubic(5.431)), [4, 0, 0]);
+      max = Math.max(max, Math.abs(q[1]) / Math.hypot(...q));
+    }
+    expect(max).toBeLessThanOrEqual(Math.SQRT1_2 + 1e-9);
+    expect(max).toBeGreaterThan(0.6); // the bound is approached: the check is not vacuous
+  });
+});

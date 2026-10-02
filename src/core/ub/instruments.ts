@@ -31,8 +31,6 @@ export interface InstrumentPreset {
   readonly source: string;
   /** Detector panels (lab frame, m); absent = every direction counts as detected. */
   readonly detectors?: readonly DetectorPanel[];
-  /** Shown only in experimental builds. */
-  readonly experimental?: true;
   /** Sample kinds the instrument is simulated for: single crystals rotate, powders stay fixed. */
   readonly modes?: readonly ("single-crystal" | "powder")[];
   /**

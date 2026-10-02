@@ -163,7 +163,7 @@ F(h) = Σⱼ oⱼ · aⱼ(s) · exp(−Bⱼ s²) · exp(+2πi h·xⱼ)
 - **Basis change** (ITA): UB′ = UB·P⁻ᵀ and h′ = Pᵀh. A loaded UB in another setting is mapped onto the CIF setting
   by an integer P with entries in {−1, 0, 1} and det P = +1, such that Pᵀ·G_CIF·P ≈ G_UB within 2 %.
 
-## 9. Detector geometry (experimental)
+## 9. Detector geometry
 
 - **Panels** are read from Mantid instrument definition files (IDFs) with `scripts/data/idf.ts`:
   - `<location>` positions are relative to the parent, in the parent's rotated frame. Spherical (r, t, p) has t from
@@ -181,13 +181,13 @@ F(h) = Σⱼ oⱼ · aⱼ(s) · exp(−Bⱼ s²) · exp(+2πi h·xⱼ)
   - Every observed peak lands on its recorded detector within 0.1 pixel.
   - Peaks predicted from UB and the goniometer land on the right detector, within the UB fit's angular residual
     (≤ 5.4 pixels).
-- **Instruments:** TOPAZ (2022-11-21), CORELLI, NOMAD (2022-05-05) and POWGEN (2018-05-05) definitions at Mantid
-  commit 67c2f43, generated into `src/data/instruments.json`. They are available only when the experimental flag is
-  on (`src/app/experimental.ts`: dev server, or builds with `VITE_EXPERIMENTAL=1`).
+- **Instruments:** TOPAZ (2022-11-21), CORELLI, NOMAD (2022-05-05), POWGEN (2018-05-05), ARCS (2012-10-11),
+  SEQUOIA (2019-04-04) and CNCS (2026-02-02) definitions at Mantid commit 67c2f43, generated into
+  `src/data/instruments.json` and loaded with the Instrument page.
 
-## 10. Experiment simulations (experimental)
+## 10. Instrument simulations
 
-On the Experiment page, for SNS neutron instruments only (the page always uses neutron scattering); code in
+On the Instrument page, for SNS neutron instruments only (the page always uses neutron scattering); code in
 `src/core/instrument/simulate.ts` and `src/core/instrument/powderRings.ts`.
 
 - **Detector map:** directions are unrolled onto a cylinder about the vertical axis, as in Mantid's instrument

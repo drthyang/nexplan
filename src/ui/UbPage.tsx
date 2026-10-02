@@ -2,7 +2,7 @@
  * UB matrix page: orientation only. UB import/export and checks, change of
  * basis, and the reciprocal-space (Ewald/Laue) view with a generic Eulerian
  * goniometer. Instrument presets and detector simulations live on the
- * Experiment page.
+ * Instrument page.
  */
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { Mat3, Vec3 } from "@materia/core/math/types";
@@ -296,7 +296,7 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio }: { result: Ca
             </dl>
           </Card>
 
-          <Card title="Goniometer" info={`${UNIVERSAL.note} Instrument-specific goniometers and detectors are on the Experiment page.`}>
+          <Card title="Goniometer" info={`${UNIVERSAL.note} Instrument-specific goniometers and detectors are on the Instrument page.`}>
             <div className="form-rows">
               <GoniometerControls axes={UNIVERSAL.axes} angles={gonio.angles} onAngles={(angles) => onGonio({ ...gonio, angles })} />
               <div className="form-row">

@@ -1,6 +1,6 @@
 /**
- * Experiment page state, kept in App so it survives tab switches. It holds no
- * instrument data: the presets are experimental and load with the page.
+ * Instrument page state, kept in App so it survives tab switches. It holds no
+ * instrument data: the presets load with the page.
  */
 export interface ExperimentState {
   readonly instrumentId: string;

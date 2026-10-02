@@ -120,11 +120,42 @@
 
 /* MATERIA's public-beta disclaimer bar. */
 .disclaimer {
-  padding: 0.4rem calc(1.25rem + var(--safe-right)) 0.4rem calc(1.25rem + var(--safe-left));
-  font-size: var(--fs-76);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.3rem calc(0.6rem + var(--safe-right)) 0.3rem calc(1.25rem + var(--safe-left));
+  font-size: var(--fs-74);
+  line-height: 1.4;
   color: var(--warn-ink);
   background: color-mix(in srgb, var(--warn-line) 10%, var(--panel-bg));
   border-bottom: 1px solid color-mix(in srgb, var(--warn-line) 35%, transparent);
+}
+
+.disclaimer > span {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.disclaimer__close {
+  flex: none;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: inherit;
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.disclaimer__close:hover {
+  background: color-mix(in srgb, var(--warn-line) 18%, transparent);
+}
+
+.dropzone-hint {
+  color: var(--subtle);
+  font-size: var(--fs-74);
 }
 
 .disclaimer a {
@@ -190,15 +221,6 @@
   background: var(--panel-bg);
   color: var(--text-strong);
   box-shadow: var(--shadow-xs), var(--shadow-tab);
-}
-
-.ui-seg--nav .soon {
-  margin-left: 0.35rem;
-  font-size: var(--fs-62);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--subtle);
 }
 
 .ui-seg--frame {
@@ -302,9 +324,9 @@
 /* Side-by-side layouts: both columns stretch to the same height so the outer
    card edges line up top and bottom; the last card of each column takes up the
    slack and scrolls inside itself when its content is taller. */
-@media (min-width: 961px) {
+@media (min-width: 841px) {
   .ui-grid--split {
-    grid-template-columns: minmax(0, 1.55fr) minmax(22rem, 1fr);
+    grid-template-columns: minmax(0, 1.55fr) minmax(20rem, 1fr);
     align-items: stretch;
   }
 
@@ -1409,11 +1431,7 @@ input.ui-range {
   font-variant-numeric: tabular-nums;
 }
 
-.exp-chip {
-  margin-left: 0.4rem;
-}
-
-/* Experiment page */
+/* Instrument page */
 .ui-controls--inline {
   margin-bottom: 0.6rem;
   padding: 0;
@@ -1605,4 +1623,20 @@ input.ui-range {
   stroke: #ff3b5c;
   stroke-width: 1.6;
   pointer-events: none;
+}
+
+/* A button that reads as an inline link (navigation within the app). */
+.ui-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.ui-link:hover {
+  color: var(--accent-strong, var(--accent));
 }

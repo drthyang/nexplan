@@ -1,6 +1,5 @@
 node_modules/
 dist/
-dist-experimental/
 *.tsbuildinfo
 .DS_Store
 # Upstream source files are fetched and hash-checked, not committed (see data-sources/sources.json)

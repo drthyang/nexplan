@@ -1,4 +1,4 @@
-/** Orientation shared by the UB and Experiment pages: the loaded UB mapped to the CIF setting. */
+/** Orientation shared by the UB and Instrument pages: the loaded UB mapped to the CIF setting. */
 import { useMemo } from "react";
 import type { Mat3 } from "@materia/core/math/types";
 import type { CalcSuccess } from "../app/compute.ts";

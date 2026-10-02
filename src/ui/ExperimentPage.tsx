@@ -1,5 +1,5 @@
 /**
- * Experiment page (experimental builds only): simulations on real detector
+ * Instrument page: simulations on the real detector geometry of SNS instruments
  * geometry (src/core/instrument/simulate.ts).
  *
  *  - Single crystal (TOPAZ, CORELLI): the goniometer turns the crystal; spots
@@ -22,7 +22,7 @@ import { braggCrossings, coveredTwoTheta, crossingsToScan, dRangeAt, panelAngles
 import { neutronWavelengthA } from "../core/physics/energy.ts";
 import { goniometerMatrix, laueCondition } from "../core/ub/goniometer.ts";
 import type { InstrumentPreset } from "../core/ub/instruments.ts";
-import { EXPERIMENTAL_INSTRUMENTS } from "../core/ub/instrumentsExperimental.ts";
+import { SNS_INSTRUMENTS } from "../core/ub/instrumentsSns.ts";
 import { ANGLE_RAMP_CSS, angleCss, angleHex, INTENSITY_RAMP_CSS, LAMBDA_RAMP_CSS } from "../views/colormaps.ts";
 import { Card, Segmented, UnitField } from "./components.tsx";
 import { CoverageChart, type CoverageLine } from "./CoverageChart.tsx";
@@ -43,6 +43,8 @@ interface PageProps {
   readonly theme: "light" | "dark";
   readonly ub: UbState;
   readonly onDMin: (d: number) => void;
+  /** Switch to the UB matrix page (to load an orientation). */
+  readonly onOpenUb: () => void;
   readonly exp: ExperimentState;
   readonly onExp: (e: ExperimentState) => void;
 }
@@ -61,14 +63,14 @@ const firstFreeAxis = (ins: InstrumentPreset) => Math.max(0, ins.goniometer.axes
 
 export function ExperimentPage(props: PageProps) {
   const { exp, onExp, result } = props;
-  const instrument = EXPERIMENTAL_INSTRUMENTS.find((i) => i.id === exp.instrumentId) ?? EXPERIMENTAL_INSTRUMENTS[0]!;
+  const instrument = SNS_INSTRUMENTS.find((i) => i.id === exp.instrumentId) ?? SNS_INSTRUMENTS[0]!;
   const panels = instrument.detectors ?? [];
   const info = useMemo(() => panels.map(panelAngles), [panels]);
   const modes = instrument.modes ?? ["single-crystal"];
   const sample = modes.includes(exp.sample) ? exp.sample : modes[0]!;
   const mono = instrument.incident;
   const choose = (id: string) => {
-    const ins = EXPERIMENTAL_INSTRUMENTS.find((i) => i.id === id);
+    const ins = SNS_INSTRUMENTS.find((i) => i.id === id);
     if (!ins) return;
     const inc = ins.incident;
     const next = { ...exp, instrumentId: id, angles: ins.goniometer.axes.map((ax) => ax.fixed ?? 0), panel: null, scan: { ...exp.scan, axis: firstFreeAxis(ins) } };
@@ -80,9 +82,9 @@ export function ExperimentPage(props: PageProps) {
   const dMin = result.provenance.dMin;
   const suggest = Math.max(0.3, Math.ceil(reach * 100) / 100);
   const groups: { label: string; list: readonly InstrumentPreset[] }[] = [
-    { label: "Single-crystal diffractometers", list: EXPERIMENTAL_INSTRUMENTS.filter((i) => !i.incident && i.modes?.includes("single-crystal")) },
-    { label: "Powder diffractometers", list: EXPERIMENTAL_INSTRUMENTS.filter((i) => !i.incident && i.modes?.includes("powder")) },
-    { label: "Chopper spectrometers (elastic)", list: EXPERIMENTAL_INSTRUMENTS.filter((i) => i.incident) },
+    { label: "Single-crystal diffractometers", list: SNS_INSTRUMENTS.filter((i) => !i.incident && i.modes?.includes("single-crystal")) },
+    { label: "Powder diffractometers", list: SNS_INSTRUMENTS.filter((i) => !i.incident && i.modes?.includes("powder")) },
+    { label: "Chopper spectrometers (elastic)", list: SNS_INSTRUMENTS.filter((i) => i.incident) },
   ];
   const lambda0 = (exp.lambdaMin + exp.lambdaMax) / 2;
 
@@ -90,7 +92,7 @@ export function ExperimentPage(props: PageProps) {
     <Card
       title={
         <>
-          Instrument <span className="ui-chip ui-chip--warn exp-chip">experimental</span>
+          Instrument
         </>
       }
       meta={mono ? `${sample === "powder" ? "powder" : "single crystal"} · elastic, Ei ${Number(exp.eiMeV.toPrecision(6))} meV` : sample === "powder" ? "powder · sample fixed" : "single crystal · TOF Laue"}
@@ -182,7 +184,7 @@ interface Observed {
   readonly hit: DetectorHit;
 }
 
-function SingleCrystalExperiment({ result, theme, ub, exp, onExp, instrument, panels, setup }: ModeProps) {
+function SingleCrystalExperiment({ result, theme, ub, exp, onExp, onOpenUb, instrument, panels, setup }: ModeProps) {
   const l1 = instrument.l1 ?? 0;
   /** Moderator-to-detector flight time (µs) of an observed reflection. */
   const tofOf = (o: Observed) => tofFromWavelength(l1 + o.hit.l2, o.lambda);
@@ -312,6 +314,9 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, instrument, pa
     : coverage && "step" in coverage
       ? `${coverage.settings.toLocaleString()} settings: ${free.map(({ ax }) => `${ax.name} ${ax.min}–${Math.min(ax.max, ax.min + 360)}°`).join(", ")} in ${coverage.step}° steps`
       : "";
+  // Bragg window: a spacing d lands only at 2 asin(λmin/2d) ≤ 2θ ≤ 2 asin(min(1, λmax/2d)), whatever the orientation.
+  const covWindow = covOn ? twoThetaRangeForD(points[selected!]!.d, exp.lambdaMin, exp.lambdaMax) : undefined;
+  const covRings = useMemo<MapRing[]>(() => (covWindow ? [covWindow.min, covWindow.max].filter((t) => t > 0.5 && t < 179.5).map((t) => ({ twoTheta: t, emphasis: true })) : []), [covWindow?.min, covWindow?.max]);
   const covStatus =
     selected === null
       ? "Select a reflection (type hkl, or pick it in the table, map or 3D view) to see everywhere it can be recorded."
@@ -320,7 +325,7 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, instrument, pa
         : coverage && "error" in coverage
           ? coverage.error
           : coverage
-            ? `(${hklText(points[selected]!.h)})${coverage.targets > 1 ? ` + ${coverage.targets - 1} equivalents` : ""}: ${coverage.points.length.toLocaleString()} landing positions on ${new Set(coverage.points.map((p) => p.hit.panel)).size} panels · ${sweep}`
+            ? `(${hklText(points[selected]!.h)}) d ${fmt(points[selected]!.d, 4)} Å${coverage.targets > 1 ? ` + ${coverage.targets - 1} equivalents` : ""}: ${coverage.points.length.toLocaleString()} landing positions on ${new Set(coverage.points.map((p) => p.hit.panel)).size} panels, inside the Bragg window 2θ ${fmt(covWindow?.min ?? NaN, 1)}–${fmt(covWindow?.max ?? NaN, 1)}° · ${sweep}`
             : "";
   const pickHkl = (text: string) => {
     const v = text.trim().split(/[\s,]+/).map(Number);
@@ -449,7 +454,11 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, instrument, pa
                 </div>
               </dl>
               <p className="empty-note">
-                {fileUB ? `Orientation from ${ub.fileName ?? "the loaded UB"}.` : "No UB loaded: U = I with the CIF cell. Load an ISAW UB on the UB matrix page."} The {points.length.toLocaleString()} strongest present reflections with d ≥ d_min are simulated.
+                {fileUB ? `Orientation from ${ub.fileName ?? "the loaded UB"}. ` : "No UB loaded: U = I with the CIF cell. "}
+                <button type="button" className="ui-link" onClick={onOpenUb}>
+                  {fileUB ? "Change it on the UB matrix page" : "Load an orientation on the UB matrix page"}
+                </button>
+                . The {points.length.toLocaleString()} strongest present reflections with d ≥ d_min are simulated.
               </p>
             </>,
           )}
@@ -461,11 +470,11 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, instrument, pa
         meta={covOn ? `coverage of (${hklText(points[selected!]!.h)})${equivalents ? " and equivalents" : ""}, coloured by λ` : panelFilter !== null ? `${panels[panelFilter]!.name} selected · click it again to clear` : `${panels.length} panels unrolled about the vertical axis`}
         info={
           covOn
-            ? "Everywhere the selected reflection (and its symmetry equivalents, if ticked) can be recorded as the free goniometer axes sweep their full ranges, coloured by the wavelength it is recorded at (λ = 2d sinθ at that pixel); grey panels it never reaches. As in NeuXtalViz's experiment planner, white-beam instruments use a grid of settings (1°, doubled for each extra free axis); chopper spectrometers use the exact Bragg crossings. γ is the horizontal angle from the beam (positive towards +x), ν the elevation."
+            ? "Everywhere the selected reflection (and its symmetry equivalents, if ticked) can be recorded as the free goniometer axes sweep their full ranges, coloured by the wavelength it is recorded at (λ = 2d sinθ at that pixel); grey panels it never reaches. As in NeuXtalViz's experiment planner, white-beam instruments use a grid of settings (1°, doubled for each extra free axis); chopper spectrometers use the exact Bragg crossings. The red curves bound the Bragg window, 2 asin(λmin/2d) ≤ 2θ ≤ 2 asin(min(1, λmax/2d)): whatever the orientation, the reflection can only land between them, so small-d reflections can reach most panels and large-d ones only a few at low angle. γ is the horizontal angle from the beam (positive towards +x), ν the elevation."
             : "Every panel projected onto a cylinder around the sample with its axis vertical: γ is the horizontal angle from the beam (positive towards +x), ν the elevation. Dashed curves are cones of constant 2θ (Debye–Scherrer rings). Hover a spot or panel for details; click a spot to select it, a panel to filter the table."
         }
       >
-        <DetectorMap {...(covOn ? { raster: covRaster } : {})} panels={panels} spots={covOn ? [] : mapSpots} lambdaMin={exp.lambdaMin} lambdaMax={exp.lambdaMax} selected={selected} onSelect={setSelected} selectedPanel={covOn ? null : (selObs?.hit.panel ?? panelFilter)} onPanelClick={togglePanel} />
+        <DetectorMap {...(covOn ? { raster: covRaster, rings: covRings } : {})} panels={panels} spots={covOn ? [] : mapSpots} lambdaMin={exp.lambdaMin} lambdaMax={exp.lambdaMax} selected={selected} onSelect={setSelected} selectedPanel={covOn ? null : (selObs?.hit.panel ?? panelFilter)} onPanelClick={togglePanel} />
         <p className="plot-hint">{lambdaLegend}</p>
       </Card>
 

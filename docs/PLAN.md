@@ -38,11 +38,11 @@ Status: implementation started. The data pipeline and verification reports exist
 | Folded reflection families; per-site X-ray ion opt-in (neutral default); energy ↔ λ | done |
 | Structure viewer (ported from MATERIA, RMCProfile export/theming) | done |
 | UB workbench: ISAW I/O, lattice/orientation, setting match, basis change, TOPAZ cryo/ambient + Universal goniometers, 3D Laue view | done; validated on Mantid TOPAZ_3007 peaks |
-| Detector geometry from Mantid IDFs (TOPAZ, CORELLI, NOMAD, POWGEN) + real-space instrument view, behind an experimental flag | done; pixel mapping validated on TOPAZ_3007 |
-| Experiment page (experimental): single crystal (3D detectors, unrolled detector map, rotation scan with family completeness, reflections on panels) and powder (sample fixed: 2θ–d coverage, panels per reflection, per-panel TOF pattern) | done; UB page is now orientation-only |
+| Detector geometry from Mantid IDFs (TOPAZ, CORELLI, NOMAD, POWGEN, ARCS, SEQUOIA, CNCS) + real-space instrument view | done; pixel mapping validated on TOPAZ_3007 |
+| Instrument page: single crystal (3D detectors, unrolled detector map, rotation scan with family completeness, reflections on panels) and powder (sample fixed: 2θ–d coverage, panels per reflection, per-panel TOF pattern) | done; UB page is now orientation-only |
 | CI and Pages workflows | written; repo not yet pushed |
 | Anisotropic Debye–Waller, anomalous X-ray terms | not started |
-| Powder rings on the detectors (TOF slices, ray-traced check); ARCS, SEQUOIA, CNCS (elastic, exact monochromatic scans); Experiment page neutron-only | done |
+| Powder rings on the detectors (TOF slices, ray-traced check); ARCS, SEQUOIA, CNCS (elastic, exact monochromatic scans); Instrument page neutron-only | done |
 | M4 planning extras: masks, multi-axis scan plans, calibrated banks | not started |
 
 ## 1. Product objective
