@@ -763,7 +763,7 @@ ${n.out.join("\n")}
 
 // ===================================================================== instruments
 
-/** Detector geometry flattened from Mantid IDFs (experimental feature data). */
+/** Detector geometry flattened from Mantid IDFs (SNS instruments on the Experiment page). */
 function buildInstruments() {
   const r6 = (v: readonly number[]) => v.map((x) => Math.round(x * 1e6) / 1e6);
   const instruments = (["idf-topaz", "idf-corelli", "idf-nomad", "idf-powgen", "idf-arcs", "idf-sequoia", "idf-cncs"] as const).map((id) => {
