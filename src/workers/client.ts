@@ -29,8 +29,9 @@ function spawn(): Worker {
   };
   w.onerror = (ev) => {
     ev.preventDefault();
-    console.error("calculation worker error", ev.message);
-    fail(`The calculation worker failed: ${ev.message || "unknown error"}`);
+    // A worker script that fails to load has no message: usually an old tab after a redeploy.
+    console.error("calculation worker error", ev.message ?? "(script failed to load)");
+    fail(ev.message ? `The calculation worker failed: ${ev.message}` : "The calculation engine could not be loaded. Reload the page; the app may have been updated.");
   };
   w.onmessageerror = () => fail("The calculation result could not be transferred from the worker.");
   return w;
