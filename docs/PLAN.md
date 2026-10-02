@@ -32,7 +32,11 @@ Status: implementation started. The data pipeline and verification reports exist
 | CIF 1.1 reader, block selection, species, U_eq | done |
 | Expansion, signed reflections, complex F (vs gemmi 1e-8) | done |
 | Powder sticks, LP, profiles, exports | done |
-| UI matching the MATERIA / NEBULA3D / RMCProfile design system | done (first version) |
+| UI matching the MATERIA / NEBULA3D / RMCProfile design system | done; aligned split layouts |
+| Neutron TOF powder (one bank, GSAS-II position/Lorentz/back-to-back) | done |
+| Interactive reflection ticks linked to the peaks table and peak details | done |
+| Folded reflection families; per-site X-ray ion opt-in (neutral default); energy ↔ λ | done |
+| Structure viewer (shared three.js stack with MATERIA / RMCProfile) | next |
 | CI and Pages workflows | written; repo not yet pushed |
 | Anisotropic Debye–Waller, anomalous X-ray terms | not started |
 | M3 UB workbench, M4 planning | not started |
@@ -56,7 +60,7 @@ to published validation evidence.
 | Reflections | Full signed hkl list with d, Q, absence class and complex F. Unscaled \|F\|². | No absolute count prediction. |
 | X-ray scattering | Non-resonant WK1995 f0 for neutral atoms and tabulated ions. Optional ITC Cromer–Mann for matched comparisons. | No anomalous terms initially. Ions only from an explicit type symbol or user choice. |
 | Neutron scattering | Coherent nuclear b (Sears 1992) for natural elements and named isotopes, complex where tabulated. | No magnetic intensity. Complex b is valid near 2200 m/s only and is labeled as such. |
-| Powder | Stick pattern; CW Lorentz(-polarization) for named geometries; unit-area Gaussian and pseudo-Voigt profiles; 2θ, d and Q axes. | No refinement, TOF intensities, texture or absorption initially. |
+| Powder | CW: Lorentz(-polarization) for named geometries, unit-area pseudo-Voigt, 2θ/d/Q axes. Neutron TOF at one bank: DIFC/DIFA/ZERO, sinθ·d⁴, Δd/d Gaussian or GSAS-II back-to-back, TOF/d/Q axes. | No refinement, texture, absorption, incident-spectrum or resonance-energy modelling. |
 | UB tools | ISAW import and export, validation, axis and basis changes, integer supercells. | No guessing unknown matrix formats or frames. |
 | Single-crystal display | Reciprocal lattice, arbitrary planes, finite-thickness slices. | Not a detector image until detector geometry exists. |
 | Planning | Wavelength or band, rotations, detectors, accessible reflections. | Each instrument adapter is validated separately. |

@@ -94,6 +94,39 @@ F(h) = Σⱼ oⱼ · aⱼ(s) · exp(−Bⱼ s²) · exp(+2πi h·xⱼ)
   resampling is involved.
 - **Not modelled:** absorption, texture, extinction, sample displacement and asymmetry.
 
+## 7b. Powder (neutron time-of-flight, one detector bank)
+
+- **Position** (GSAS-II `GSASIIlattice.py`): t = ZERO + DIFC·d + DIFA·d² in µs.
+- **DIFC from geometry** (Mantid `Unit.cpp`): DIFC = (m_n/h)·L·2 sinθ. Here m_n/h = 252.778 413 µs/(m·Å)
+  (CODATA 2018; agrees with Mantid's CODATA 2006 value to 8×10⁻⁹), L = L1 + L2 and 2θ is the bank angle.
+  Calibrated DIFC/DIFA/ZERO from an instrument file override the geometry.
+- **Wavelength band.** A bank sees d = λ/(2 sinθ) for λ in [λmin, λmax]. Each peak has its own λ = 2d sinθ.
+- **Intensity** (GSAS-II `GSASIIstrMath.py`, "TOF Lorentz correction"): I = Σ|F|² · sinθ · d⁴. This is for data
+  normalized by the incident spectrum; the spectrum and detector efficiency are not modelled.
+- **Peak shapes.**
+  - Constant relative resolution: a Gaussian with FWHM_t = (Δd/d)·t.
+  - GSAS-II back-to-back exponentials ⊗ Gaussian (MATERIA `tofBackToBack`, unit area), with α = α₁/d,
+    β = β₀ + β₁/d⁴ and σ² = σ₀ + σ₁d² + σ₂d⁴ (µs). There is no Lorentzian γ term yet.
+- **Grid and axes.** The pattern is built on a logarithmic TOF grid (constant Δt/t). A d or Q axis transforms the
+  density with its Jacobian (|dt/dd| = DIFC + 2·DIFA·d; |dt/dQ| = |dt/dd|·d²/2π), so peak areas are the same on
+  every axis.
+- **Resonant nuclei.** Complex b (Sears) is valid near 2200 m/s only. TOF spans many wavelengths, so resonant
+  absorbers are flagged.
+
+## 7c. Wavelength and energy
+
+- X-rays: E = hc/λ, with hc = 12.398 419 843 keV·Å.
+- Neutrons: E = h²/(2m_nλ²), with h²/2m_n = 81.8042 meV·Å².
+- Both use CODATA 2018. λ is the stored quantity; energy is a view of it.
+
+## 7d. X-ray form factors and ions
+
+- Every site uses the neutral-atom Waasmaier–Kirfel f0 by default, whatever charge its CIF type symbol gives, as in
+  GSAS-II and FullProf.
+- A site switches to a tabulated ionic f0 only by an explicit per-site choice, which is recorded as an assumption.
+  Free O²⁻ in particular is ill-defined; see `data-verification/XRAY_WK1995.md`.
+- Neutron b never depends on the charge.
+
 ## 8. Orientation (for M3; recorded now so importers agree)
 
 - UB maps a column hkl to g in the sample frame, without 2π. Sample rotations act on the left; basis changes act on

@@ -48,8 +48,10 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
 }
 
 /**
- * Number field with the unit inside the border. Commits on Enter or blur and
- * keeps invalid text visible (flagged) instead of silently reverting it.
+ * Number field with the unit inside the border. Commits on Enter or blur, but
+ * only when the text was edited, so a displayed (rounded) value never
+ * overwrites the exact one. Invalid text stays visible (flagged) instead of
+ * silently reverting.
  */
 export function UnitField({ value, unit, onCommit, min, max, label, width }: { value: number; unit: string; onCommit: (v: number) => void; min?: number; max?: number; label: string; width?: string }) {
   const [text, setText] = useState(String(value));
@@ -57,7 +59,7 @@ export function UnitField({ value, unit, onCommit, min, max, label, width }: { v
   const parsed = Number(text);
   const valid = text.trim() !== "" && Number.isFinite(parsed) && (min === undefined || parsed >= min) && (max === undefined || parsed <= max);
   const commit = () => {
-    if (valid && parsed !== value) onCommit(parsed);
+    if (valid && text !== String(value) && parsed !== value) onCommit(parsed);
   };
   return (
     <span className={cx("ui-unit-field", !valid && "is-invalid")} title={valid ? undefined : `Enter a number${min !== undefined ? ` ≥ ${min}` : ""}${max !== undefined ? ` ≤ ${max}` : ""}`}>

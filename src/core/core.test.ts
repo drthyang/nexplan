@@ -305,7 +305,7 @@ describe("powder", () => {
     const refl = enumerateReflections(m.cell, m.symmetry.ops, 1.0);
     const sf = structureFactors(m, expandModel(m), refl, { kind: "neutron" });
     const peaks = powderPeaks(refl, sf, m.symmetry.ops, { wavelength: 1.5, lorentz: true, polarization: { kind: "none" } }, { friedel: true });
-    const inside = peaks.filter((p) => p.twoTheta > 20 && p.twoTheta < 140);
+    const inside = peaks.filter((p) => p.twoTheta! > 20 && p.twoTheta! < 140);
     const expected = inside.reduce((t, p) => t + p.intensity, 0);
     const { y } = synthesizeProfile(inside, "twoTheta", { min: 0, max: 180, step: 0.005 }, { fwhm: 0.1, eta: 0 });
     const area = y.reduce((t, v) => t + v, 0) * 0.005;

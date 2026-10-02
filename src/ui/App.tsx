@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent } from "react";
-import type { CalcInput, CalcResult, CalcSuccess } from "../app/compute.ts";
+import type { CalcInput, CalcResult, CalcSuccess, TofInput } from "../app/compute.ts";
 import { APP_VERSION } from "../app/version.ts";
 import type { Polarization, PowderAxis } from "../core/diffraction/powder.ts";
+import { difcFromGeometry, type TofShape } from "../core/diffraction/tof.ts";
+import { neutronEnergyMeV, neutronWavelengthA, xrayEnergyKeV, xrayWavelengthA } from "../core/physics/energy.ts";
 import { calculate } from "../workers/client.ts";
-import { cx, InfoBadge, Segmented, UnitField } from "./components.tsx";
+import { Chip, cx, InfoBadge, Segmented, UnitField } from "./components.tsx";
 import { DEMOS } from "./demos.ts";
-import { PowderPage, ReflectionsPage, StructurePage } from "./pages.tsx";
+import { PowderPage, ReflectionsPage, StructurePage, type CwProfileSettings } from "./pages.tsx";
 
 type Tab = "structure" | "reflections" | "powder" | "ub" | "planning";
 type Theme = "light" | "dark";
+type Radiation = "xray" | "neutron";
 
-const WAVELENGTHS: { label: string; value: number; radiation: "xray" | "neutron" | "any" }[] = [
+const WAVELENGTHS: { label: string; value: number; radiation: Radiation }[] = [
   { label: "Cu Kα1", value: 1.540593, radiation: "xray" },
   { label: "Mo Kα1", value: 0.709317, radiation: "xray" },
   { label: "Ag Kα1", value: 0.5594075, radiation: "xray" },
@@ -18,6 +21,9 @@ const WAVELENGTHS: { label: string; value: number; radiation: "xray" | "neutron"
   { label: "Thermal 1.5 Å", value: 1.5, radiation: "neutron" },
   { label: "2200 m/s, 1.798 Å", value: 1.798, radiation: "neutron" },
 ];
+
+/** A generic 90° bank; not any instrument's calibration. */
+const DEFAULT_TOF: TofInput = { twoThetaDeg: 90, flightPathM: 20, difa: 0, zero: 0, lambdaMin: 0.5, lambdaMax: 3.5, shape: { kind: "gaussian", dOverD: 0.003 } };
 
 function readTheme(): Theme {
   try {
@@ -45,24 +51,27 @@ export function App() {
   const [blockName, setBlockName] = useState<string | undefined>();
   const [chosenSetting, setChosenSetting] = useState<string | undefined>();
   const [overrides, setOverrides] = useState<Record<string, string>>({});
-  const [radiation, setRadiation] = useState<"xray" | "neutron">("xray");
+  const [xrayIons, setXrayIons] = useState<Record<string, string>>({});
+  const [radiation, setRadiation] = useState<Radiation>("xray");
+  const [neutronMode, setNeutronMode] = useState<"cw" | "tof">("cw");
   const [wavelength, setWavelength] = useState(1.540593);
+  const [tof, setTof] = useState<TofInput>(DEFAULT_TOF);
   const [dMin, setDMin] = useState(0.8);
   const [polarization, setPolarization] = useState<Polarization>({ kind: "unpolarized" });
-  const [ionFallback, setIonFallback] = useState<"error" | "neutral">("error");
   const [axis, setAxis] = useState<PowderAxis>("twoTheta");
-  const [fwhm, setFwhm] = useState(0.1);
-  const [eta, setEta] = useState(0.5);
+  const [cwProfile, setCwProfile] = useState<CwProfileSettings>({ fwhm: 0.1, eta: 0.5 });
   const [result, setResult] = useState<CalcResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const isTof = radiation === "neutron" && neutronMode === "tof";
 
   const loadText = useCallback((name: string, text: string) => {
     setFile({ name, text });
     setBlockName(undefined);
     setChosenSetting(undefined);
     setOverrides({});
+    setXrayIons({});
     setTab("structure");
   }, []);
 
@@ -88,12 +97,14 @@ export function App() {
       ...(blockName ? { blockName } : {}),
       ...(chosenSetting ? { chosenSetting } : {}),
       ...(Object.keys(overrides).length ? { speciesOverrides: overrides } : {}),
+      ...(Object.keys(xrayIons).length ? { xrayIons } : {}),
       radiation,
       wavelength,
       dMin,
       polarization,
-      ionFallback,
-      profile: { axis, fwhm, eta },
+      profile: { axis, fwhm: cwProfile.fwhm, eta: cwProfile.eta },
+      neutronMode,
+      tof,
     };
     const t = setTimeout(() => {
       setBusy(true);
@@ -105,20 +116,29 @@ export function App() {
       });
     }, 120);
     return () => clearTimeout(t);
-  }, [file, blockName, chosenSetting, overrides, radiation, wavelength, dMin, polarization, ionFallback, axis, fwhm, eta]);
+  }, [file, blockName, chosenSetting, overrides, xrayIons, radiation, wavelength, dMin, polarization, axis, cwProfile, neutronMode, tof]);
 
-  // Keep the FWHM sensible when switching axes.
+  // Keep the CW FWHM sensible when switching axes.
   const changeAxis = (a: PowderAxis) => {
     setAxis(a);
-    setFwhm(a === "twoTheta" ? 0.1 : a === "d" ? 0.002 : 0.01);
+    if (a !== "tof") setCwProfile((p) => ({ ...p, fwhm: a === "twoTheta" ? 0.1 : a === "d" ? 0.002 : 0.01 }));
   };
-  const changeRadiation = (r: "xray" | "neutron") => {
+  const changeRadiation = (r: Radiation) => {
     setRadiation(r);
     setWavelength(r === "xray" ? 1.540593 : 1.5);
+    if (r === "xray") {
+      setNeutronMode("cw");
+      if (axis === "tof") setAxis("twoTheta");
+    }
+  };
+  const changeNeutronMode = (m: "cw" | "tof") => {
+    setNeutronMode(m);
+    setAxis(m === "tof" ? "tof" : "twoTheta");
   };
 
   const ok: CalcSuccess | undefined = result?.ok ? result : undefined;
-  const preset = WAVELENGTHS.find((w) => w.value === wavelength && (w.radiation === radiation || w.radiation === "any"));
+  const preset = WAVELENGTHS.find((w) => w.value === wavelength && w.radiation === radiation);
+  const difc = tof.difcOverride ?? difcFromGeometry(tof.flightPathM, tof.twoThetaDeg);
 
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
@@ -142,9 +162,7 @@ export function App() {
                 </svg>
               </div>
               <div className="brand-copy">
-                <h1>
-                  ScatterPlan<span>Workbench</span>
-                </h1>
+                <h1>ScatterPlan</h1>
               </div>
               <span className="beta-pill">
                 beta<span className="ver">v{APP_VERSION}</span>
@@ -211,59 +229,87 @@ export function App() {
               <span className="ui-control">
                 <span className="ui-control-label">Radiation</span>
                 <Segmented label="Radiation" value={radiation} onChange={changeRadiation} options={[{ value: "xray", label: "X-ray" }, { value: "neutron", label: "Neutron" }]} />
+                {radiation === "neutron" && <Segmented label="Neutron mode" value={neutronMode} onChange={changeNeutronMode} options={[{ value: "cw", label: "CW" }, { value: "tof", label: "TOF" }]} />}
               </span>
-              <span className="ui-control">
-                <span className="ui-control-label"><span className="sym">λ</span></span>
-                <UnitField label="Wavelength" value={wavelength} unit="Å" min={0.01} max={20} onCommit={setWavelength} />
-                <select className="ui-select" aria-label="Wavelength preset" value={preset ? String(preset.value) : ""} onChange={(e) => e.target.value && setWavelength(Number(e.target.value))}>
-                  <option value="">Custom</option>
-                  {WAVELENGTHS.filter((w) => w.radiation === radiation || w.radiation === "any").map((w) => (
-                    <option key={w.label} value={w.value}>
-                      {w.label}
-                    </option>
-                  ))}
-                </select>
-              </span>
+              {!isTof ? (
+                <span className="ui-control">
+                  <span className="ui-control-label">
+                    <span className="sym">λ</span>
+                  </span>
+                  <UnitField label="Wavelength" value={Number(wavelength.toPrecision(7))} unit="Å" min={0.01} max={20} onCommit={setWavelength} />
+                  <span className="ui-control-label">
+                    <span className="sym">E</span>
+                  </span>
+                  {radiation === "xray" ? (
+                    <UnitField label="Photon energy" value={Number(xrayEnergyKeV(wavelength).toPrecision(7))} unit="keV" min={0.62} max={1240} onCommit={(e) => setWavelength(xrayWavelengthA(e))} />
+                  ) : (
+                    <UnitField label="Neutron energy" value={Number(neutronEnergyMeV(wavelength).toPrecision(7))} unit="meV" min={0.2} max={1e6} onCommit={(e) => setWavelength(neutronWavelengthA(e))} />
+                  )}
+                  <select className="ui-select" aria-label="Wavelength preset" value={preset ? String(preset.value) : ""} onChange={(e) => e.target.value && setWavelength(Number(e.target.value))}>
+                    <option value="">Custom</option>
+                    {WAVELENGTHS.filter((w) => w.radiation === radiation).map((w) => (
+                      <option key={w.label} value={w.value}>
+                        {w.label}
+                      </option>
+                    ))}
+                  </select>
+                </span>
+              ) : (
+                <>
+                  <span className="ui-control">
+                    <span className="ui-control-label">
+                      Bank 2<span className="sym">θ</span>
+                    </span>
+                    <UnitField label="Bank scattering angle" value={tof.twoThetaDeg} unit="°" min={0.1} max={179.9} onCommit={(v) => setTof({ ...tof, twoThetaDeg: v })} width="5ch" />
+                  </span>
+                  <span className="ui-control">
+                    <span className="ui-control-label">
+                      <span className="sym">L</span>
+                      <sub>1</sub>+<span className="sym">L</span>
+                      <sub>2</sub>
+                      <InfoBadge>Total flight path, moderator to sample to detector. DIFC = (m_n/h)·L·2sinθ = 252.778 µs/(m·Å)·L·2sinθ. Calibrated DIFC, DIFA and ZERO from an instrument file are more accurate than geometry.</InfoBadge>
+                    </span>
+                    <UnitField label="Total flight path" value={tof.flightPathM} unit="m" min={0.1} max={500} onCommit={(v) => setTof({ ...tof, flightPathM: v })} width="5ch" />
+                    <Chip title="DIFC from the bank geometry">DIFC {difc.toFixed(1)} µs/Å</Chip>
+                  </span>
+                  <span className="ui-control">
+                    <span className="ui-control-label">
+                      <span className="sym">λ</span> band
+                    </span>
+                    <UnitField label="Minimum wavelength" value={tof.lambdaMin} unit="Å" min={0.01} onCommit={(v) => setTof({ ...tof, lambdaMin: v })} width="4.5ch" />
+                    <UnitField label="Maximum wavelength" value={tof.lambdaMax} unit="Å" min={0.02} onCommit={(v) => setTof({ ...tof, lambdaMax: v })} width="4.5ch" />
+                  </span>
+                </>
+              )}
               <span className="ui-control">
                 <span className="ui-control-label">
-                  <span className="sym">d</span><sub>min</sub>
-                  <InfoBadge>Reflections with d ≥ d_min are listed. Powder peaks additionally need d ≥ λ/2. For X-rays d_min is held at ≥ 0.0833 Å, the limit of the Waasmaier–Kirfel fits (s ≤ 6 Å⁻¹).</InfoBadge>
+                  <span className="sym">d</span>
+                  <sub>min</sub>
+                  <InfoBadge>Reflections with d ≥ d_min are listed. CW powder peaks also need d ≥ λ/2; a TOF bank sees d = λ/(2 sinθ) across its wavelength band. For X-rays d_min is held at ≥ 0.0833 Å, the limit of the Waasmaier–Kirfel fits (s ≤ 6 Å⁻¹).</InfoBadge>
                 </span>
                 <UnitField label="Minimum d-spacing" value={dMin} unit="Å" min={0.05} onCommit={setDMin} />
               </span>
               {radiation === "xray" && (
-                <>
-                  <span className="ui-control">
-                    <span className="ui-control-label">Polarization</span>
-                    <select
-                      className="ui-select"
-                      aria-label="Polarization"
-                      value={polarization.kind === "monochromator" ? `mono:${polarization.twoThetaMDeg}` : polarization.kind === "linear" ? `lin:${polarization.fraction}` : polarization.kind}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        if (v === "unpolarized") setPolarization({ kind: "unpolarized" });
-                        else if (v.startsWith("mono:")) setPolarization({ kind: "monochromator", twoThetaMDeg: Number(v.slice(5)) });
-                        else if (v.startsWith("lin:")) setPolarization({ kind: "linear", fraction: Number(v.slice(4)) });
-                      }}
-                    >
-                      <option value="unpolarized">Unpolarized lab source</option>
-                      <option value="mono:26.6">Graphite monochromator (Cu, 2θM 26.6°)</option>
-                      <option value="mono:12.1">Graphite monochromator (Mo, 2θM 12.1°)</option>
-                      <option value="lin:0.95">Synchrotron, 95 % polarized ⟂ plane</option>
-                      <option value="lin:1">Synchrotron, fully polarized ⟂ plane</option>
-                    </select>
-                  </span>
-                  <span className="ui-control">
-                    <span className="ui-control-label">
-                      Ions
-                      <InfoBadge>Ionic form factors are used when the CIF type symbol names a charge (Fe3+, O2-). If the table has no row for that ion, the default stops with an error; the alternative uses the neutral atom and records it.</InfoBadge>
-                    </span>
-                    <select className="ui-select" aria-label="Missing ion handling" value={ionFallback} onChange={(e) => setIonFallback(e.target.value as "error" | "neutral")}>
-                      <option value="error">Require tabulated ion</option>
-                      <option value="neutral">Use neutral atom if missing</option>
-                    </select>
-                  </span>
-                </>
+                <span className="ui-control">
+                  <span className="ui-control-label">Polarization</span>
+                  <select
+                    className="ui-select"
+                    aria-label="Polarization"
+                    value={polarization.kind === "monochromator" ? `mono:${polarization.twoThetaMDeg}` : polarization.kind === "linear" ? `lin:${polarization.fraction}` : polarization.kind}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "unpolarized") setPolarization({ kind: "unpolarized" });
+                      else if (v.startsWith("mono:")) setPolarization({ kind: "monochromator", twoThetaMDeg: Number(v.slice(5)) });
+                      else if (v.startsWith("lin:")) setPolarization({ kind: "linear", fraction: Number(v.slice(4)) });
+                    }}
+                  >
+                    <option value="unpolarized">Unpolarized lab source</option>
+                    <option value="mono:26.6">Graphite monochromator (Cu, 2θM 26.6°)</option>
+                    <option value="mono:12.1">Graphite monochromator (Mo, 2θM 12.1°)</option>
+                    <option value="lin:0.95">Synchrotron, 95 % polarized ⟂ plane</option>
+                    <option value="lin:1">Synchrotron, fully polarized ⟂ plane</option>
+                  </select>
+                </span>
               )}
               {busy && <span className="ui-chip ui-chip--accent">Calculating…</span>}
             </div>
@@ -279,9 +325,7 @@ export function App() {
                   <circle cx="50" cy="74" r="7" fill="var(--accent)" />
                 </svg>
                 <h2>Drop a CIF file here</h2>
-                <p>
-                  ScatterPlan reads CIF 1.1 structures and calculates X-ray and neutron reflections, structure factors and powder patterns. Everything runs in this browser tab; nothing is uploaded.
-                </p>
+                <p>ScatterPlan reads CIF 1.1 structures and calculates X-ray and neutron reflections, structure factors and powder patterns (constant wavelength and neutron time-of-flight). Everything runs in this browser tab; nothing is uploaded.</p>
                 <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", justifyContent: "center" }}>
                   <button type="button" className="ui-btn-primary" onClick={() => fileInput.current?.click()}>
                     Choose a CIF file
@@ -302,13 +346,27 @@ export function App() {
                 onSetting={setChosenSetting}
                 onSpecies={(label, sp) => setOverrides((o) => ({ ...o, [label]: sp }))}
                 onDMin={setDMin}
-                onIonFallback={() => setIonFallback("neutral")}
               />
             )}
 
-            {ok && tab === "structure" && <StructurePage result={ok} />}
+            {ok && tab === "structure" && (
+              <StructurePage
+                result={ok}
+                radiation={radiation}
+                onXrayIon={(label, id) =>
+                  setXrayIons((m) => {
+                    const next = { ...m };
+                    if (id === undefined) delete next[label];
+                    else next[label] = id;
+                    return next;
+                  })
+                }
+              />
+            )}
             {ok && tab === "reflections" && <ReflectionsPage result={ok} wavelength={wavelength} radiation={radiation} />}
-            {ok && tab === "powder" && <PowderPage result={ok} axis={axis} fwhm={fwhm} eta={eta} onAxis={changeAxis} onFwhm={setFwhm} onEta={setEta} radiation={radiation} wavelength={wavelength} />}
+            {ok && tab === "powder" && (
+              <PowderPage result={ok} axis={axis} onAxis={changeAxis} cwProfile={cwProfile} onCwProfile={setCwProfile} tofShape={tof.shape} onTofShape={(shape: TofShape) => setTof({ ...tof, shape })} />
+            )}
 
             <footer className="ui-footer">
               © 2026 Tsung-Han Yang · AGPLv3 · <a href={README} target="_blank" rel="noreferrer">About &amp; documentation</a>
@@ -327,14 +385,12 @@ function Resolution({
   onSetting,
   onSpecies,
   onDMin,
-  onIonFallback,
 }: {
   result: Extract<CalcResult, { ok: false }>;
   onBlock: (b: string) => void;
   onSetting: (s: string) => void;
   onSpecies: (label: string, sp: string) => void;
   onDMin: (d: number) => void;
-  onIonFallback: () => void;
 }) {
   const needsChoice = result.stage === "block" || (result.settingCandidates?.length ?? 0) > 0 || (result.ambiguousLabels?.length ?? 0) > 0;
   return (
@@ -380,13 +436,6 @@ function Resolution({
         <div className="ui-banner__row">
           <button type="button" className="ui-btn-brand" onClick={() => onDMin(Number(result.suggestedDMin!.toFixed(3)))}>
             Use d_min = {result.suggestedDMin.toFixed(3)} Å
-          </button>
-        </div>
-      )}
-      {result.stage === "scattering" && /Waasmaier–Kirfel X-ray form factor for [A-Z][a-z]?\d+[+-]/.test(result.message) && (
-        <div className="ui-banner__row">
-          <button type="button" className="ui-btn-brand" onClick={onIonFallback}>
-            Use the neutral atom for missing ions
           </button>
         </div>
       )}

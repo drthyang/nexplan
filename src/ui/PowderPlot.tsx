@@ -1,14 +1,17 @@
 /**
- * Powder plot: unit-area profile (line) and integrated-intensity sticks, both
- * scaled to 100 at their maximum. SVG in CSS pixels (as MATERIA's
- * WorkbenchPlot), RMCProfile chart ink. Drag to zoom, double-click to reset,
- * hover a stick for its hkl families.
+ * Powder plot: unit-area profile and a row of reflection ticks under it
+ * (MATERIA-style Bragg ticks), in CSS-pixel SVG with RMCProfile chart ink.
+ *
+ * Interaction: click a tick or a peak to select it (the parent links the
+ * selection to its table), drag to zoom, double-click to reset, ←/→ step
+ * through peaks, Esc clears. A selection made elsewhere that lies outside the
+ * zoomed range pans the view to it.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { PowderAxis, PowderPeak } from "../core/diffraction/powder.ts";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { peakPosition, type PowderAxis, type PowderPeak } from "../core/diffraction/powder.ts";
 import { fmt, hklText } from "./format.ts";
 
-const AXIS_LABEL: Record<PowderAxis, string> = { twoTheta: "2θ (deg)", d: "d (Å)", q: "Q (Å⁻¹)" };
+export const AXIS_LABEL: Record<PowderAxis, string> = { twoTheta: "2θ (deg)", tof: "TOF (µs)", d: "d (Å)", q: "Q (Å⁻¹)" };
 
 function niceTicks(lo: number, hi: number, target: number): number[] {
   const span = hi - lo;
@@ -21,10 +24,26 @@ function niceTicks(lo: number, hi: number, target: number): number[] {
   return out;
 }
 
-export function PowderPlot({ peaks, profile, axis }: { peaks: readonly PowderPeak[]; profile: { x: Float64Array; y: Float64Array }; axis: PowderAxis }) {
+const PICK_PX = 10;
+
+export function PowderPlot({
+  peaks,
+  profile,
+  axis,
+  selected,
+  onSelect,
+  showSticks,
+}: {
+  peaks: readonly PowderPeak[];
+  profile: { x: Float64Array; y: Float64Array };
+  axis: PowderAxis;
+  selected: number | null;
+  onSelect: (index: number | null) => void;
+  showSticks: boolean;
+}) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
-  const height = Math.max(260, Math.min(460, width * 0.42));
+  const height = Math.max(280, Math.min(480, width * 0.44));
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
@@ -33,57 +52,102 @@ export function PowderPlot({ peaks, profile, axis }: { peaks: readonly PowderPea
     return () => ro.disconnect();
   }, []);
 
-  const pos = (p: PowderPeak) => (axis === "twoTheta" ? p.twoTheta : axis === "d" ? p.d : p.q);
+  const pos = useMemo(() => peaks.map((p) => peakPosition(p, axis)), [peaks, axis]);
+  /** Peak indices in increasing axis position, for ←/→ navigation. */
+  const order = useMemo(() => pos.map((_, i) => i).sort((a, b) => pos[a]! - pos[b]!), [pos]);
   const full = useMemo<[number, number]>(() => {
     if (profile.x.length > 1) return [profile.x[0]!, profile.x[profile.x.length - 1]!];
-    const xs = peaks.map(pos);
-    return xs.length ? [Math.min(...xs), Math.max(...xs)] : [0, 1];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile, peaks, axis]);
+    return pos.length ? [Math.min(...pos), Math.max(...pos)] : [0, 1];
+  }, [profile, pos]);
   const [view, setView] = useState<[number, number] | null>(null);
   useEffect(() => setView(null), [axis, peaks]);
   const [x0, x1] = view ?? full;
 
-  const m = { l: 58, r: 16, t: 14, b: 46 };
+  // Pan to a selection made outside the current window, keeping the zoom width.
+  useEffect(() => {
+    if (selected === null || !view) return;
+    const p = pos[selected];
+    if (p === undefined || (p >= view[0] && p <= view[1])) return;
+    const w = view[1] - view[0];
+    setView([p - w / 2, p + w / 2]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected]);
+
+  const m = { l: 58, r: 16, t: 14, b: 66 };
+  const tickBand = { top: 0, height: 16 };
   const W = width - m.l - m.r;
   const H = height - m.t - m.b;
+  tickBand.top = m.t + H + 6;
   const sx = (x: number) => m.l + ((x - x0) / (x1 - x0)) * W;
 
-  const visible = peaks.filter((p) => pos(p) >= x0 && pos(p) <= x1);
-  const iMax = Math.max(1e-300, ...visible.map((p) => p.intensity));
+  const visibleIdx = useMemo(() => pos.map((p, i) => (p >= x0 && p <= x1 ? i : -1)).filter((i) => i >= 0), [pos, x0, x1]);
+  const iMax = Math.max(1e-300, ...visibleIdx.map((i) => peaks[i]!.intensity));
   let yMax = 1e-300;
   for (let i = 0; i < profile.x.length; i++) if (profile.x[i]! >= x0 && profile.x[i]! <= x1) yMax = Math.max(yMax, profile.y[i]!);
   const sy = (v: number) => m.t + H - (v / 105) * H;
 
   const path = useMemo(() => {
-    const pts: string[] = [];
     const n = profile.x.length;
     if (!n) return "";
-    // Decimate to ~2 points per pixel column (min/max) to keep the path light.
-    const perPx = Math.max(1, Math.floor(n / Math.max(1, ((x1 - x0) / (full[1] - full[0])) * W * 2)));
-    for (let i = 0; i < n; i += perPx) {
+    // One min/max pair per pixel column keeps the path light and the peaks sharp.
+    const cols = new Map<number, { min: number; max: number }>();
+    for (let i = 0; i < n; i++) {
       const x = profile.x[i]!;
       if (x < x0 || x > x1) continue;
-      let ymax = profile.y[i]!;
-      for (let j = i + 1; j < Math.min(n, i + perPx); j++) ymax = Math.max(ymax, profile.y[j]!);
-      pts.push(`${sx(x).toFixed(1)},${sy((100 * ymax) / yMax).toFixed(1)}`);
+      const c = Math.round(sx(x));
+      const v = (100 * profile.y[i]!) / yMax;
+      const e = cols.get(c);
+      if (!e) cols.set(c, { min: v, max: v });
+      else {
+        e.min = Math.min(e.min, v);
+        e.max = Math.max(e.max, v);
+      }
+    }
+    const pts: string[] = [];
+    for (const [c, e] of [...cols].sort((a, b) => a[0] - b[0])) {
+      pts.push(`${c},${sy(e.min).toFixed(1)}`);
+      if (e.max !== e.min) pts.push(`${c},${sy(e.max).toFixed(1)}`);
     }
     return pts.length ? `M${pts.join("L")}` : "";
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile, x0, x1, W, H, yMax]);
 
-  const [hover, setHover] = useState<{ peak: PowderPeak; px: number; py: number } | null>(null);
-  const [drag, setDrag] = useState<{ a: number; b: number } | null>(null);
-  const toData = (clientX: number) => {
+  const [hover, setHover] = useState<{ index: number; py: number } | null>(null);
+  const [drag, setDrag] = useState<{ a: number; b: number; px0: number } | null>(null);
+  const local = (clientX: number, clientY: number) => {
     const r = wrapRef.current!.getBoundingClientRect();
-    return x0 + ((clientX - r.left - m.l) / W) * (x1 - x0);
+    return { px: clientX - r.left, py: clientY - r.top };
+  };
+  const toData = (px: number) => x0 + ((px - m.l) / W) * (x1 - x0);
+  const nearest = (px: number): number | null => {
+    let best: number | null = null;
+    let bd = PICK_PX;
+    for (const i of visibleIdx) {
+      const d = Math.abs(sx(pos[i]!) - px);
+      if (d < bd || (d === bd && best !== null && peaks[i]!.intensity > peaks[best]!.intensity)) {
+        bd = d;
+        best = i;
+      }
+    }
+    return best;
+  };
+
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === "Escape") return onSelect(null);
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const k = selected === null ? -1 : order.indexOf(selected);
+    const next = e.key === "ArrowRight" ? order[Math.min(order.length - 1, k + 1)] : order[Math.max(0, k <= 0 ? 0 : k - 1)];
+    if (next !== undefined) onSelect(next);
   };
 
   const xticks = niceTicks(x0, x1, Math.max(4, Math.floor(W / 90)));
   const yticks = [0, 25, 50, 75, 100];
+  const sel = selected !== null && pos[selected] !== undefined && pos[selected]! >= x0 && pos[selected]! <= x1 ? selected : null;
+  const tip = hover ? peaks[hover.index] : undefined;
 
   return (
-    <div ref={wrapRef} style={{ position: "relative" }}>
+    <div ref={wrapRef} className="plot-wrap" tabIndex={0} onKeyDown={onKey} aria-label="Powder pattern; arrow keys step through peaks">
       <svg
         className="plot"
         width={width}
@@ -93,27 +157,20 @@ export function PowderPlot({ peaks, profile, axis }: { peaks: readonly PowderPea
         aria-label={`Calculated powder pattern versus ${AXIS_LABEL[axis]}`}
         onPointerDown={(e) => {
           (e.target as Element).setPointerCapture?.(e.pointerId);
-          const v = toData(e.clientX);
-          setDrag({ a: v, b: v });
+          const { px } = local(e.clientX, e.clientY);
+          const v = toData(px);
+          setDrag({ a: v, b: v, px0: px });
         }}
         onPointerMove={(e) => {
-          const v = toData(e.clientX);
-          if (drag) setDrag({ ...drag, b: v });
-          const r = wrapRef.current!.getBoundingClientRect();
-          const px = e.clientX - r.left;
-          let best: PowderPeak | undefined;
-          let bd = 8;
-          for (const p of visible) {
-            const d = Math.abs(sx(pos(p)) - px);
-            if (d < bd) {
-              bd = d;
-              best = p;
-            }
-          }
-          setHover(best ? { peak: best, px: sx(pos(best)), py: e.clientY - r.top } : null);
+          const { px, py } = local(e.clientX, e.clientY);
+          if (drag) setDrag({ ...drag, b: toData(px) });
+          const i = nearest(px);
+          setHover(i === null ? null : { index: i, py });
         }}
-        onPointerUp={() => {
-          if (drag && Math.abs(sx(drag.a) - sx(drag.b)) > 6) setView([Math.min(drag.a, drag.b), Math.max(drag.a, drag.b)]);
+        onPointerUp={(e) => {
+          const { px } = local(e.clientX, e.clientY);
+          if (drag && Math.abs(px - drag.px0) > 4) setView([Math.min(drag.a, drag.b), Math.max(drag.a, drag.b)]);
+          else onSelect(nearest(px));
           setDrag(null);
         }}
         onPointerLeave={() => setHover(null)}
@@ -126,21 +183,35 @@ export function PowderPlot({ peaks, profile, axis }: { peaks: readonly PowderPea
           <line key={`gx${t}`} className="plot-grid-line" x1={sx(t)} x2={sx(t)} y1={m.t} y2={m.t + H} />
         ))}
         <clipPath id="plot-clip">
-          <rect x={m.l} y={m.t} width={W} height={H} />
+          <rect x={m.l} y={m.t} width={W} height={H + tickBand.height + 8} />
         </clipPath>
         <g clipPath="url(#plot-clip)">
-          {visible.map((p, i) => (
-            <line key={i} className={`series-stick${hover?.peak === p ? " is-hover" : ""}`} x1={sx(pos(p))} x2={sx(pos(p))} y1={sy(0)} y2={sy((100 * p.intensity) / iMax)} />
-          ))}
+          {sel !== null && <line className="selection-line" x1={sx(pos[sel]!)} x2={sx(pos[sel]!)} y1={m.t} y2={tickBand.top + tickBand.height} />}
+          {showSticks &&
+            visibleIdx.map((i) => <line key={`s${i}`} className="series-stick" x1={sx(pos[i]!)} x2={sx(pos[i]!)} y1={sy(0)} y2={sy((100 * peaks[i]!.intensity) / iMax)} />)}
           {path && <path className="series-profile" d={path} />}
-          {hover && <line className="hover-line" x1={hover.px} x2={hover.px} y1={m.t} y2={m.t + H} />}
-          {drag && <rect className="zoom-selection" x={Math.min(sx(drag.a), sx(drag.b))} y={m.t} width={Math.abs(sx(drag.b) - sx(drag.a))} height={H} />}
+          {hover && hover.index !== sel && <line className="hover-line" x1={sx(pos[hover.index]!)} x2={sx(pos[hover.index]!)} y1={m.t} y2={m.t + H} />}
+          {/* Reflection ticks */}
+          {visibleIdx.map((i) => (
+            <line
+              key={`t${i}`}
+              className={`reflection-tick${i === sel ? " is-selected" : ""}${hover?.index === i ? " is-hover" : ""}`}
+              x1={sx(pos[i]!)}
+              x2={sx(pos[i]!)}
+              y1={tickBand.top + (i === sel ? 0 : 3)}
+              y2={tickBand.top + tickBand.height}
+            />
+          ))}
+          {drag && Math.abs(sx(drag.b) - sx(drag.a)) > 4 && <rect className="zoom-selection" x={Math.min(sx(drag.a), sx(drag.b))} y={m.t} width={Math.abs(sx(drag.b) - sx(drag.a))} height={H} />}
         </g>
         <rect className="plot-frame" x={m.l} y={m.t} width={W} height={H} />
+        <text className="plot-tick tick-band-label" x={m.l - 8} y={tickBand.top + tickBand.height - 3} textAnchor="end">
+          hkl
+        </text>
         {xticks.map((t) => (
           <g key={`tx${t}`}>
-            <line className="plot-tick-mark" x1={sx(t)} x2={sx(t)} y1={m.t + H} y2={m.t + H + 5} />
-            <text className="plot-tick" x={sx(t)} y={m.t + H + 19} textAnchor="middle">
+            <line className="plot-tick-mark" x1={sx(t)} x2={sx(t)} y1={tickBand.top + tickBand.height + 2} y2={tickBand.top + tickBand.height + 7} />
+            <text className="plot-tick" x={sx(t)} y={tickBand.top + tickBand.height + 21} textAnchor="middle">
               {Number(t.toPrecision(6))}
             </text>
           </g>
@@ -157,10 +228,10 @@ export function PowderPlot({ peaks, profile, axis }: { peaks: readonly PowderPea
           Relative intensity
         </text>
       </svg>
-      {hover && (
-        <div className="plot-tooltip" style={{ left: Math.min(hover.px + 12, width - 200), top: Math.max(8, hover.py - 20) }}>
+      {tip && hover && (
+        <div className="plot-tooltip" style={{ left: Math.min(sx(pos[hover.index]!) + 12, width - 220), top: Math.max(8, Math.min(hover.py - 20, height - 90)) }}>
           <div>
-            {hover.peak.families.map((f, i) => (
+            {tip.families.map((f, i) => (
               <span key={i}>
                 {i > 0 && " + "}
                 <b>({hklText(f.hkl)})</b> ×{f.multiplicity}
@@ -168,10 +239,10 @@ export function PowderPlot({ peaks, profile, axis }: { peaks: readonly PowderPea
             ))}
           </div>
           <div>
-            d {fmt(hover.peak.d, 5)} Å · 2θ {fmt(hover.peak.twoTheta, 3)}° · Q {fmt(hover.peak.q, 4)} Å⁻¹
+            d {fmt(tip.d, 5)} Å · {tip.twoTheta !== undefined ? `2θ ${fmt(tip.twoTheta, 3)}°` : `TOF ${fmt(tip.tof!, 1)} µs`} · Q {fmt(tip.q, 4)} Å⁻¹
           </div>
           <div>
-            Σ|F|² {hover.peak.sumF2.toPrecision(5)} · I {fmt((100 * hover.peak.intensity) / iMax, 2)}
+            I {fmt((100 * tip.intensity) / iMax, 2)} · click to select
           </div>
         </div>
       )}

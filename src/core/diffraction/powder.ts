@@ -29,16 +29,26 @@ export interface PowderFamily {
   readonly f2: number;
 }
 
-export interface PowderPeak {
+/** All signed reflections at one d: the shared part of CW and TOF peaks. */
+export interface PeakGroup {
   readonly d: number;
-  readonly twoTheta: number;
   readonly q: number;
   /** Σ|F|² over all signed hkl at this d. */
   readonly sumF2: number;
+  readonly families: readonly PowderFamily[];
+}
+
+export interface PowderPeak extends PeakGroup {
+  /** CW: scattering angle (deg). TOF: undefined (fixed bank angle). */
+  readonly twoTheta?: number;
+  /** TOF: flight time (µs). */
+  readonly tof?: number;
+  /** Wavelength at which this peak is measured (Å); varies per peak in TOF. */
+  readonly lambda: number;
+  /** Lorentz(-polarization) factor applied: CW 1/(sin²θ cosθ)·P, TOF sinθ·d⁴. */
   readonly lp: number;
   /** sumF2 · lp, the integrated intensity (relative units). */
   readonly intensity: number;
-  readonly families: readonly PowderFamily[];
 }
 
 const DEG = Math.PI / 180;
@@ -84,63 +94,63 @@ export function familyRepresentative(ops: readonly SymOp[], h: readonly [number,
 }
 
 /**
- * Group reflections into powder peaks. Reflections whose d differ by less than
- * `relDTol`·d are the same peak (exact and accidental overlaps alike); the
- * contributing families are listed. Systematic absences are excluded;
- * reflections beyond λ/2 are inaccessible and excluded.
+ * Group reflections by d. Reflections whose d differ by less than `relDTol`·d
+ * form one group (exact and accidental overlaps alike) and the contributing
+ * families are listed. Systematic absences are excluded.
  */
-export function powderPeaks(
-  refl: ReflectionList,
-  sf: StructureFactors,
-  ops: readonly SymOp[],
-  settings: PowderSettings,
-  opts: { friedel: boolean; relDTol?: number },
-): PowderPeak[] {
+export function groupByD(refl: ReflectionList, sf: StructureFactors, ops: readonly SymOp[], opts: { friedel: boolean; relDTol?: number }): PeakGroup[] {
   const tol = opts.relDTol ?? 1e-9;
-  const peaks: PowderPeak[] = [];
+  const groups: PeakGroup[] = [];
   let i = 0;
   const n = refl.count;
   while (i < n) {
     const d0 = refl.d[i]!;
     let j = i;
     while (j < n && Math.abs(refl.d[j]! - d0) <= tol * d0) j++;
-    const x = settings.wavelength / (2 * d0);
-    if (x <= 1 + 1e-12) {
-      const theta = Math.asin(Math.min(1, x));
-      const fam = new Map<string, { hkl: [number, number, number]; multiplicity: number; f2: number }>();
-      let sumF2 = 0;
-      for (let r = i; r < j; r++) {
-        if (refl.absent[r]) continue;
-        sumF2 += sf.f2[r]!;
-        const rep = familyRepresentative(ops, [refl.h[r]!, refl.k[r]!, refl.l[r]!], opts.friedel);
-        const key = rep.join(",");
-        const e = fam.get(key) ?? { hkl: rep, multiplicity: 0, f2: 0 };
-        e.multiplicity++;
-        e.f2 += sf.f2[r]!;
-        fam.set(key, e);
-      }
-      if (fam.size > 0) {
-        const lp = (settings.lorentz ? powderLorentz(theta) : 1) * polarizationFactor(settings.polarization, 2 * theta);
-        peaks.push({
-          d: d0,
-          twoTheta: (2 * theta) / DEG,
-          q: (2 * Math.PI) / d0,
-          sumF2,
-          lp,
-          intensity: sumF2 * lp,
-          families: [...fam.values()].map((f) => ({ hkl: f.hkl, multiplicity: f.multiplicity, f2: f.f2 / f.multiplicity })),
-        });
-      }
+    const fam = new Map<string, { hkl: [number, number, number]; multiplicity: number; f2: number }>();
+    let sumF2 = 0;
+    for (let r = i; r < j; r++) {
+      if (refl.absent[r]) continue;
+      sumF2 += sf.f2[r]!;
+      const rep = familyRepresentative(ops, [refl.h[r]!, refl.k[r]!, refl.l[r]!], opts.friedel);
+      const key = rep.join(",");
+      const e = fam.get(key) ?? { hkl: rep, multiplicity: 0, f2: 0 };
+      e.multiplicity++;
+      e.f2 += sf.f2[r]!;
+      fam.set(key, e);
+    }
+    if (fam.size > 0) {
+      groups.push({ d: d0, q: (2 * Math.PI) / d0, sumF2, families: [...fam.values()].map((f) => ({ hkl: f.hkl, multiplicity: f.multiplicity, f2: f.f2 / f.multiplicity })) });
     }
     i = j;
   }
-  return peaks;
+  return groups;
 }
 
-export type PowderAxis = "twoTheta" | "d" | "q";
+/** CW peaks: groups with d ≥ λ/2, Lorentz 1/(sin²θ cosθ) and the polarization factor. */
+export function cwPeaks(groups: readonly PeakGroup[], settings: PowderSettings): PowderPeak[] {
+  const out: PowderPeak[] = [];
+  for (const g of groups) {
+    const x = settings.wavelength / (2 * g.d);
+    if (x > 1 + 1e-12) continue;
+    const theta = Math.asin(Math.min(1, x));
+    const lp = (settings.lorentz ? powderLorentz(theta) : 1) * polarizationFactor(settings.polarization, 2 * theta);
+    out.push({ ...g, twoTheta: (2 * theta) / DEG, lambda: settings.wavelength, lp, intensity: g.sumF2 * lp });
+  }
+  return out;
+}
+
+/** Group reflections into CW powder peaks (groupByD + cwPeaks). */
+export function powderPeaks(refl: ReflectionList, sf: StructureFactors, ops: readonly SymOp[], settings: PowderSettings, opts: { friedel: boolean; relDTol?: number }): PowderPeak[] {
+  return cwPeaks(groupByD(refl, sf, ops, opts), settings);
+}
+
+export type PowderAxis = "twoTheta" | "tof" | "d" | "q";
 
 export function peakPosition(p: PowderPeak, axis: PowderAxis): number {
-  return axis === "twoTheta" ? p.twoTheta : axis === "d" ? p.d : p.q;
+  const v = axis === "twoTheta" ? p.twoTheta : axis === "tof" ? p.tof : axis === "d" ? p.d : p.q;
+  if (v === undefined) throw new Error(`Peak has no ${axis} position`);
+  return v;
 }
 
 /**

@@ -299,15 +299,36 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* Side-by-side layouts: both columns stretch to the same height so the outer
+   card edges line up top and bottom; the last card of each column takes up the
+   slack and scrolls inside itself when its content is taller. */
 @media (min-width: 1121px) {
   .ui-grid--split {
     grid-template-columns: minmax(0, 1.55fr) minmax(22rem, 1fr);
-    align-items: start;
+    align-items: stretch;
+  }
+
+  .ui-grid--split > .ui-card,
+  .ui-grid--split > .ui-stack > .ui-card:last-child {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .ui-grid--split > .ui-stack > .ui-card:last-child {
+    flex: 1 1 auto;
+  }
+
+  .ui-grid--split > .ui-card > .ui-card__body,
+  .ui-grid--split > .ui-stack > .ui-card:last-child > .ui-card__body {
+    flex: 1 1 auto;
+    min-height: 0;
   }
 }
 
 .ui-stack {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
   min-width: 0;
 }
@@ -549,6 +570,17 @@ input.ui-unit-field__input::-webkit-inner-spin-button {
   line-height: 1rem;
   text-align: right;
   white-space: nowrap;
+}
+
+/* Outer cells share the card's 0.9rem inset, so table text lines up with the card title. */
+.ui-card__body--flush .ui-table th:first-child,
+.ui-card__body--flush .ui-table td:first-child {
+  padding-left: 0.9rem;
+}
+
+.ui-card__body--flush .ui-table th:last-child,
+.ui-card__body--flush .ui-table td:last-child {
+  padding-right: 0.9rem;
 }
 
 .ui-table thead th {
@@ -987,4 +1019,139 @@ details.ui-fold > .ui-fold__body {
   letter-spacing: 0;
   font-style: italic;
   font-size: 1.15em;
+}
+
+/* Powder plot: reflection ticks and selection (MATERIA Bragg-tick row, accent selection). */
+.plot-wrap {
+  position: relative;
+  border-radius: var(--radius);
+  outline: none;
+}
+
+.plot-wrap:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+
+.reflection-tick {
+  stroke: var(--series-stick);
+  stroke-width: 1.4;
+  cursor: pointer;
+}
+
+.reflection-tick.is-hover {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.reflection-tick.is-selected {
+  stroke: var(--accent);
+  stroke-width: 2.6;
+}
+
+.selection-line {
+  stroke: var(--accent);
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+  opacity: 0.85;
+}
+
+.tick-band-label {
+  font-size: var(--fs-70);
+  fill: var(--series-stick);
+}
+
+.ui-table tbody tr.is-clickable {
+  cursor: pointer;
+}
+
+.ui-table tbody tr.is-clickable:hover td,
+.ui-table tbody tr.is-clickable:hover th {
+  background: var(--panel-soft);
+}
+
+.ui-table tbody tr.is-selected td,
+.ui-table tbody tr.is-selected th {
+  background: var(--accent-soft);
+}
+
+.ui-table tbody tr.is-selected th:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.ui-table td.bar {
+  min-width: 6rem;
+}
+
+.share-bar {
+  display: inline-block;
+  height: 0.45rem;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  vertical-align: middle;
+  margin-right: 0.4rem;
+}
+
+.plot-hint,
+.empty-note {
+  margin: 0.5rem 0 0;
+  color: var(--subtle);
+  font-size: var(--fs-76);
+}
+
+/* Folded reflection families */
+.ui-table .hkl {
+  white-space: pre;
+}
+
+.ui-table .caret {
+  display: inline-block;
+  width: 1.1em;
+  color: var(--accent);
+}
+
+.ui-table tr.family-row.is-open td {
+  background: var(--panel-soft);
+  font-weight: 600;
+}
+
+.ui-table tr.is-member td {
+  color: var(--muted);
+}
+
+.ui-table .member-indent {
+  display: inline-block;
+  width: 1.6em;
+}
+
+select.ui-select--inline {
+  min-height: 0;
+  padding: 0.1rem 1.5rem 0.1rem 0.45rem;
+  font-size: var(--fs-74);
+  font-family: var(--font-mono);
+  background-position: right 0.45rem center;
+}
+
+.table-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.9rem;
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-80);
+}
+
+.table-more span {
+  color: var(--subtle);
+}
+
+/* Cell parameters: a b c α β γ on one row (three per row on narrow cards). */
+.ui-stats--cell {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+@media (max-width: 700px) {
+  .ui-stats--cell {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }

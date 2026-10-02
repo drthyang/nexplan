@@ -21,7 +21,7 @@ self.onmessage = async (ev: MessageEvent<CalcRequest>) => {
   const transfer: Transferable[] = [];
   if (result.ok) {
     const r = result.reflections;
-    transfer.push(r.h.buffer, r.k.buffer, r.l.buffer, r.d.buffer, r.re.buffer, r.im.buffer, r.f2.buffer, r.cls.buffer, result.profile.x.buffer, result.profile.y.buffer);
+    transfer.push(r.h.buffer, r.k.buffer, r.l.buffer, r.d.buffer, r.re.buffer, r.im.buffer, r.f2.buffer, r.cls.buffer, r.family.buffer, r.familyRep.buffer, result.profile.x.buffer, result.profile.y.buffer);
   }
   (self as unknown as DedicatedWorkerGlobalScope).postMessage({ id, result } satisfies CalcResponse, transfer);
 };
