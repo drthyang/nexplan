@@ -46,8 +46,34 @@ const MATERIA_DIR = process.env.MATERIA_DIR ?? join(REPO_ROOT, "../web-refinemen
 const MATERIA_COMMIT = "0ee9a7e96700e4ee7da239812096e863be250fec";
 
 const outputs = new Map<string, string>();
-function emit(relPath: string, content: string): void {
+/**
+ * Files holding computed floating-point values (not transcribed decimals) are
+ * compared numerically in --check: Math.exp may differ in the last bit between
+ * platforms (e.g. arm64 macOS vs x86-64 Linux CI), which would otherwise make
+ * an unchanged fixture look stale.
+ */
+const numericOutputs = new Map<string, number>();
+function emit(relPath: string, content: string, opts: { numericRelTol?: number } = {}): void {
   outputs.set(relPath, content);
+  if (opts.numericRelTol !== undefined) numericOutputs.set(relPath, opts.numericRelTol);
+}
+
+/** Same JSON structure, numbers equal within relTol (relative, with a 1e-300 floor). */
+function sameJsonNumeric(a: string, b: string, relTol: number): boolean {
+  const eq = (x: unknown, y: unknown): boolean => {
+    if (typeof x === "number" && typeof y === "number") return x === y || Math.abs(x - y) <= relTol * Math.max(Math.abs(x), Math.abs(y), 1e-300);
+    if (Array.isArray(x) && Array.isArray(y)) return x.length === y.length && x.every((v, i) => eq(v, y[i]));
+    if (x && y && typeof x === "object" && typeof y === "object") {
+      const kx = Object.keys(x), ky = Object.keys(y);
+      return kx.length === ky.length && kx.every((k) => eq((x as Record<string, unknown>)[k], (y as Record<string, unknown>)[k]));
+    }
+    return x === y;
+  };
+  try {
+    return eq(JSON.parse(a), JSON.parse(b));
+  } catch {
+    return false;
+  }
 }
 const json = (v: unknown): string => JSON.stringify(v, null, 2) + "\n";
 const fmt = (x: number, digits = 4): string => (Number.isFinite(x) ? x.toFixed(digits) : String(x));
@@ -240,6 +266,7 @@ function buildXray() {
       s: S_GRID_FIXTURE,
       rows: fixtureRows,
     }),
+    { numericRelTol: 1e-12 },
   );
 
   const md = `# X-ray f0: Waasmaier & Kirfel (1995) verification
@@ -771,6 +798,8 @@ for (const [rel, content] of outputs) {
   const abs = join(REPO_ROOT, rel);
   const current = existsSync(abs) ? readFileSync(abs, "utf8") : undefined;
   if (current === content) continue;
+  const tol = numericOutputs.get(rel);
+  if (check && current !== undefined && tol !== undefined && sameJsonNumeric(current, content, tol)) continue;
   if (check) {
     stale++;
     console.error(`stale: ${rel}`);
