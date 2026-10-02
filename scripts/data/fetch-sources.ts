@@ -15,6 +15,10 @@ for (const entry of loadRegistry()) {
     const path = await fetchSource(entry, { update: entry.id === updateId });
     console.log(`ok    ${entry.id.padEnd(22)} ${path}`);
   } catch (err) {
+    if (entry.optional) {
+      console.warn(`skip  ${entry.id} (optional test data unavailable)\n${(err as Error).message}`);
+      continue;
+    }
     failed++;
     console.error(`FAIL  ${entry.id}\n${(err as Error).message}`);
   }

@@ -52,6 +52,8 @@ export interface TofInput {
 
 export interface SiteRow {
   readonly label: string;
+  /** Element symbol (no charge, no isotope prefix). */
+  readonly element: string;
   readonly species: string;
   readonly typeSymbol?: string;
   readonly x: number;
@@ -334,6 +336,7 @@ export async function runCalculation(input: CalcInput): Promise<CalcResult> {
       ops: model.symmetry.ops.map(formatSymOp),
       sites: model.sites.map((s, j) => ({
         label: s.label,
+        element: s.species.element,
         species: speciesKey(s.species),
         ...(s.typeSymbol ? { typeSymbol: s.typeSymbol } : {}),
         x: s.fract[0],

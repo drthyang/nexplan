@@ -127,7 +127,7 @@ F(h) = Σⱼ oⱼ · aⱼ(s) · exp(−Bⱼ s²) · exp(+2πi h·xⱼ)
   Free O²⁻ in particular is ill-defined; see `data-verification/XRAY_WK1995.md`.
 - Neutron b never depends on the charge.
 
-## 8. Orientation (for M3; recorded now so importers agree)
+## 8. Orientation, goniometers and the Laue condition
 
 - UB maps a column hkl to g in the sample frame, without 2π. Sample rotations act on the left; basis changes act on
   the right. Q_lab = 2π·R·UB·h.
@@ -136,3 +136,29 @@ F(h) = Σⱼ oⱼ · aⱼ(s) · exp(−Bⱼ s²) · exp(+2πi h·xⱼ)
   - its frame is the IPNS frame: x is the beam, z is up, right-handed;
   - |Q′| = 1/d;
   - Mantid's frame relates to it by z_M = x_I, x_M = y_I, y_M = z_I.
+- **Q sign and Miller indices** (mantid @ 67c2f43):
+  - Mantid's UB uses the inelastic convention, q = (k_i − k_f)/2π = UB·h (`OrientedLattice.cpp:88-91`), and the
+    default `Q.convention` is Inelastic.
+  - The indexer keeps det UB > 0 (`IndexingUtils.cpp:1846-1850`), so a convention change flips the hkl labels, not
+    UB.
+  - ISAW peaks I/O flips hkl accordingly (`LoadIsawPeaks.cpp:427-432`).
+  - For crystallographic indices, which ScatterPlan uses, q_cryst = k_f − k_i = UB·h. Mantid's default labels the same
+    reflection (−h −k −l).
+  - Verified on Mantid's TOPAZ_3007 data: all 43 peaks index to +hkl. Predicted λ, 2θ and azimuth agree within
+    0.73 %, 0.43° and 0.38° (`src/core/ub/topaz.test.ts`).
+- **Goniometer.**
+  - An axis is "name, x, y, z, sense", with sense +1 meaning counter-clockwise (right-hand rule).
+  - R = R(axis0)·R(axis1)·…, with axis 0 outermost.
+  - q_lab = R·UB·h.
+  - Mantid "Universal" is ω about +y, χ about +z, φ about +y.
+- **TOPAZ.**
+  - Cryogenic goniometer: ω only.
+  - Ambient goniometer: ω and φ, with χ fixed at 135°.
+  - Wavelength band 0.4–3.5 Å; L1 = 18.035 m.
+  - Sources are listed in `src/core/ub/instruments.ts`.
+- **Laue condition** (white beam or TOF), with k_i = (1/λ)·ẑ and k_f = k_i + q:
+  - λ = −2 q_z/|q|², which requires q_z < 0;
+  - 2θ is the angle between k_f and ẑ;
+  - the azimuth is measured from +x toward +y.
+- **Basis change** (ITA): UB′ = UB·P⁻ᵀ and h′ = Pᵀh. A loaded UB in another setting is mapped onto the CIF setting
+  by an integer P with entries in {−1, 0, 1} and det P = +1, such that Pᵀ·G_CIF·P ≈ G_UB within 2 %.

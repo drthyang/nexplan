@@ -8,6 +8,7 @@ import { calculate } from "../workers/client.ts";
 import { Chip, cx, InfoBadge, Segmented, UnitField } from "./components.tsx";
 import { DEMOS } from "./demos.ts";
 import { PowderPage, ReflectionsPage, StructurePage, type CwProfileSettings } from "./pages.tsx";
+import { DEFAULT_GONIO, UbPage, type GonioState, type UbState } from "./UbPage.tsx";
 
 type Tab = "structure" | "reflections" | "powder" | "ub" | "planning";
 type Theme = "light" | "dark";
@@ -60,6 +61,8 @@ export function App() {
   const [polarization, setPolarization] = useState<Polarization>({ kind: "unpolarized" });
   const [axis, setAxis] = useState<PowderAxis>("twoTheta");
   const [cwProfile, setCwProfile] = useState<CwProfileSettings>({ fwhm: 0.1, eta: 0.5 });
+  const [ub, setUb] = useState<UbState>({ warnings: [] });
+  const [gonio, setGonio] = useState<GonioState>(DEFAULT_GONIO);
   const [result, setResult] = useState<CalcResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState(false);
@@ -153,12 +156,10 @@ export function App() {
           <div className="header-primary">
             <div className="brand-row">
               <div className="brand-mark" aria-hidden="true">
+                {/* Ring and spot: the direct beam and one diffracted spot. */}
                 <svg className="brand-mark-icon" viewBox="0 0 100 100">
-                  <g fill="none" stroke="currentColor" strokeWidth="9" strokeLinecap="round">
-                    <path d="M28 72 A 24 24 0 0 1 72 72" />
-                    <path d="M12 76 A 40 40 0 0 1 88 76" />
-                  </g>
-                  <circle cx="50" cy="74" r="8" fill="currentColor" />
+                  <circle cx="36" cy="64" r="20" fill="none" stroke="currentColor" strokeWidth="12" />
+                  <circle cx="76" cy="24" r="14" fill="currentColor" />
                 </svg>
               </div>
               <div className="brand-copy">
@@ -174,15 +175,13 @@ export function App() {
                   ["structure", "Structure"],
                   ["reflections", "Reflections"],
                   ["powder", "Powder"],
+                  ["ub", "UB matrix"],
                 ] as const
               ).map(([id, label]) => (
                 <button key={id} type="button" className={cx(tab === id && "is-active")} aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}>
                   {label}
                 </button>
               ))}
-              <button type="button" disabled title="UB matrix tools: milestone M3">
-                UB matrix<span className="soon">soon</span>
-              </button>
               <button type="button" disabled title="Experiment planning: milestone M4">
                 Planning<span className="soon">soon</span>
               </button>
@@ -318,11 +317,8 @@ export function App() {
               <div className={cx("ui-dropzone", drag && "is-drag")} onDragEnter={() => setDrag(true)} onDragLeave={() => setDrag(false)}>
                 <svg width="44" height="44" viewBox="0 0 100 100" aria-hidden="true">
                   <rect width="100" height="100" rx="22" fill="var(--accent-soft)" />
-                  <g fill="none" stroke="var(--accent)" strokeWidth="7" strokeLinecap="round">
-                    <path d="M28 72 A 24 24 0 0 1 72 72" />
-                    <path d="M12 76 A 40 40 0 0 1 88 76" />
-                  </g>
-                  <circle cx="50" cy="74" r="7" fill="var(--accent)" />
+                  <circle cx="40" cy="60" r="13" fill="none" stroke="var(--accent)" strokeWidth="7" />
+                  <circle cx="70" cy="30" r="8" fill="var(--accent)" />
                 </svg>
                 <h2>Drop a CIF file here</h2>
                 <p>ScatterPlan reads CIF 1.1 structures and calculates X-ray and neutron reflections, structure factors and powder patterns (constant wavelength and neutron time-of-flight). Everything runs in this browser tab; nothing is uploaded.</p>
@@ -353,6 +349,7 @@ export function App() {
               <StructurePage
                 result={ok}
                 radiation={radiation}
+                theme={theme}
                 onXrayIon={(label, id) =>
                   setXrayIons((m) => {
                     const next = { ...m };
@@ -364,6 +361,7 @@ export function App() {
               />
             )}
             {ok && tab === "reflections" && <ReflectionsPage result={ok} wavelength={wavelength} radiation={radiation} />}
+            {ok && tab === "ub" && <UbPage result={ok} theme={theme} ub={ub} onUb={setUb} gonio={gonio} onGonio={setGonio} />}
             {ok && tab === "powder" && (
               <PowderPage result={ok} axis={axis} onAxis={changeAxis} cwProfile={cwProfile} onCwProfile={setCwProfile} tofShape={tof.shape} onTofShape={(shape: TofShape) => setTof({ ...tof, shape })} />
             )}

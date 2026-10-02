@@ -28,6 +28,8 @@ export interface SourceEntry {
   readonly sha256: string;
   readonly license: string;
   readonly normalize?: "nist-n-lengths-table";
+  /** Test-only source: a failed fetch is a warning and the tests that use it skip. */
+  readonly optional?: boolean;
 }
 
 export function loadRegistry(): SourceEntry[] {

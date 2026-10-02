@@ -36,10 +36,12 @@ Status: implementation started. The data pipeline and verification reports exist
 | Neutron TOF powder (one bank, GSAS-II position/Lorentz/back-to-back) | done |
 | Interactive reflection ticks linked to the peaks table and peak details | done |
 | Folded reflection families; per-site X-ray ion opt-in (neutral default); energy ↔ λ | done |
-| Structure viewer (shared three.js stack with MATERIA / RMCProfile) | next |
+| Structure viewer (ported from MATERIA, RMCProfile export/theming) | done |
+| UB workbench: ISAW I/O, lattice/orientation, setting match, basis change, TOPAZ cryo/ambient + Universal goniometers, 3D Laue view | done; validated on Mantid TOPAZ_3007 peaks |
+| Detector coverage (TOPAZ panels), rotation scans, coverage statistics (M4) | next |
 | CI and Pages workflows | written; repo not yet pushed |
 | Anisotropic Debye–Waller, anomalous X-ray terms | not started |
-| M3 UB workbench, M4 planning | not started |
+| M4 planning: detector coverage, scans, completeness | not started |
 
 ## 1. Product objective
 

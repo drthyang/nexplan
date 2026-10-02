@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { CalcSuccess } from "../app/compute.ts";
 import type { PowderAxis, PowderPeak } from "../core/diffraction/powder.ts";
 import { tofFromD, type TofShape } from "../core/diffraction/tof.ts";
@@ -6,6 +6,9 @@ import type { Diagnostic } from "../io/cif/structure.ts";
 import { Card, Chip, InfoBadge, Segmented, TierChip, UnitField } from "./components.tsx";
 import { downloadText, exact, fmt, hklText, withSu } from "./format.ts";
 import { PowderPlot } from "./PowderPlot.tsx";
+import { toMateriaModel } from "./materiaModel.ts";
+
+const CrystalView = lazy(() => import("../views/CrystalView.tsx").then((m) => ({ default: m.CrystalView })));
 
 const SEVERITY_TONE: Record<Diagnostic["severity"], "danger" | "warn" | "accent" | undefined> = {
   error: "danger",
@@ -71,15 +74,22 @@ export function StatusCard({ result }: { result: CalcSuccess }) {
   );
 }
 
-export function StructurePage({ result, radiation, onXrayIon }: { result: CalcSuccess; radiation: "xray" | "neutron"; onXrayIon: (label: string, id: string | undefined) => void }) {
+export function StructurePage({ result, radiation, theme, onXrayIon }: { result: CalcSuccess; radiation: "xray" | "neutron"; theme: "light" | "dark"; onXrayIon: (label: string, id: string | undefined) => void }) {
   const s = result.structure;
   const su = s.cellSu;
   const xray = radiation === "xray";
+  const materiaModel = useMemo(() => toMateriaModel(result), [result]);
   return (
-    <div className="ui-grid ui-grid--split">
-      <div className="ui-stack">
-        <Card title={s.name} meta={s.formula} info="As read from the selected CIF data block. Values in parentheses are the file's standard uncertainties.">
-          <dl className="ui-stats ui-stats--cell">
+    <div className="ui-stack">
+      <div className="ui-grid ui-grid--split">
+        <Card title={s.name} meta={s.formula} info="Drag to rotate, scroll to zoom, right-drag to pan. Shared sites are drawn as occupancy wedges (grey = vacancy). Ported from the MATERIA viewer." className="viewer-card">
+          <Suspense fallback={<p className="empty-note">Loading the 3D viewer…</p>}>
+            <CrystalView structure={materiaModel} theme={theme} fileStem={result.blockName} />
+          </Suspense>
+        </Card>
+        <div className="ui-stack">
+        <Card title="Cell and symmetry" info="As read from the selected CIF data block. Values in parentheses are the file's standard uncertainties.">
+          <dl className="ui-stats ui-stats--three">
             <div><dt><span className="sym">a</span></dt><dd>{withSu(s.cell.a, su.a)} <small>Å</small></dd></div>
             <div><dt><span className="sym">b</span></dt><dd>{withSu(s.cell.b, su.b)} <small>Å</small></dd></div>
             <div><dt><span className="sym">c</span></dt><dd>{withSu(s.cell.c, su.c)} <small>Å</small></dd></div>
@@ -87,7 +97,7 @@ export function StructurePage({ result, radiation, onXrayIon }: { result: CalcSu
             <div><dt><span className="sym">β</span></dt><dd>{withSu(s.cell.beta, su.beta, 3)}°</dd></div>
             <div><dt><span className="sym">γ</span></dt><dd>{withSu(s.cell.gamma, su.gamma, 3)}°</dd></div>
           </dl>
-          <dl className="ui-stats ui-stats--cell" style={{ marginTop: "0.75rem" }}>
+          <dl className="ui-stats ui-stats--three" style={{ marginTop: "0.75rem" }}>
             <div><dt>Volume</dt><dd>{fmt(s.volume, 3)} <small>Å³</small></dd></div>
             <div><dt>Space group</dt><dd>{s.setting ?? "unlisted"}{s.settingNumber ? <small> (No. {s.settingNumber})</small> : null}</dd></div>
             <div><dt>Operations</dt><dd>{s.opCount} <small>from {s.symmetrySource}</small></dd></div>
@@ -96,6 +106,9 @@ export function StructurePage({ result, radiation, onXrayIon }: { result: CalcSu
             {s.codId && <div><dt>COD</dt><dd><a href={`https://www.crystallography.net/cod/${s.codId}.html`} target="_blank" rel="noreferrer">{s.codId}</a></dd></div>}
           </dl>
         </Card>
+        <StatusCard result={result} />
+        </div>
+      </div>
         <Card
           title="Atom sites"
           meta={`${s.sites.length} sites · ${s.content.map(([k, n]) => `${k.replace(/\d*[+-]$/, "")}${Number(n.toFixed(3))}`).join(" ")} per cell`}
@@ -168,8 +181,6 @@ export function StructurePage({ result, radiation, onXrayIon }: { result: CalcSu
             </div>
           </details>
         </Card>
-      </div>
-      <StatusCard result={result} />
     </div>
   );
 }

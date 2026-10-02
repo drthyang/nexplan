@@ -135,6 +135,45 @@
       "file": "nsf.py",
       "sha256": "47c5f841100c91fb1d063be9503d0a1bc35a80ae1e9d0791f387ad05e5589ed9",
       "license": "Public domain; comparison only."
+    },
+    {
+      "id": "mantid-topaz3007-mat",
+      "role": "crosscheck",
+      "dataset": "ub-isaw",
+      "description": "Mantid unit-test UB file TOPAZ_3007.mat (ISAW layout), external test data addressed by MD5 (Testing/Data/UnitTest/TOPAZ_3007.mat.md5 @ 67c2f43). Used to test UB, goniometer and Laue conventions against real TOPAZ peaks.",
+      "urls": [
+        "https://testdata.mantidproject.org/ftp/external-data/MD5/b2882bd419e6eae5285f940bea80cc67"
+      ],
+      "file": "TOPAZ_3007.mat",
+      "sha256": "91b0b8846aa79728aeda6e9344934a1bf15f8e31db57404e15a970feb830d88d",
+      "license": "Mantid external test data; no license stated. Fetched for tests only, never committed or redistributed.",
+      "optional": true
+    },
+    {
+      "id": "mantid-topaz3007-peaks",
+      "role": "crosscheck",
+      "dataset": "ub-isaw",
+      "description": "Mantid unit-test peaks file TOPAZ_3007.peaks (ISAW layout, 43 indexed peaks with 2θ, azimuth, λ and χ/φ/ω).",
+      "urls": [
+        "https://testdata.mantidproject.org/ftp/external-data/MD5/088caab2ce8d172e89789aed8c321075"
+      ],
+      "file": "TOPAZ_3007.peaks",
+      "sha256": "a1a3cec4d90bd79c33d02b2e2bc8a1f68565d8a301e253df46bc60fca5af4224",
+      "license": "Mantid external test data; no license stated. Fetched for tests only, never committed or redistributed.",
+      "optional": true
+    },
+    {
+      "id": "garnet-corelli-yag-ub",
+      "role": "crosscheck",
+      "dataset": "ub-isaw",
+      "description": "garnet-tools tests/data/corelli_YAG_ub.mat (ISAW layout, CORELLI, YAG).",
+      "urls": [
+        "https://raw.githubusercontent.com/neutrons/garnet-tools/4eb32068bb31eafc90b28767fd26bd91f7b8bb97/tests/data/corelli_YAG_ub.mat"
+      ],
+      "file": "corelli_YAG_ub.mat",
+      "sha256": "789b57bac2f41c20b10c56601236b8aac07a506918253ab7c002eeecb327c684",
+      "license": "BSD-3-Clause (neutrons/garnet-tools).",
+      "optional": true
     }
   ]
 }

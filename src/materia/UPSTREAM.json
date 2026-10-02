@@ -78,6 +78,22 @@
     {
       "path": "core/absorption/orientation.test.ts",
       "sha256": "31aae104328fe62ad7087ddd1db1221dfd7a9122b991f1872c4b5ee095858182"
+    },
+    {
+      "path": "core/magnetic/types.ts",
+      "sha256": "ec15a8cffb2c50dd8518784da92e41d3db87db7c138eb10508b79b68604a3ad7"
+    },
+    {
+      "path": "core/magnetic/propagation.ts",
+      "sha256": "452db9c8b108b1e203fabda1daf5fa4b8a9227ddec900a6a079c1f8e607caa63"
+    },
+    {
+      "path": "core/crystal/cellExpansion.ts",
+      "sha256": "0c8bd5d6f15f328ab1065a456da282a8361d53985968a31d34aaad9dd7291af1"
+    },
+    {
+      "path": "app/ui/elementData.ts",
+      "sha256": "63870ca7ef386ede7a7c1143d4695ae52fbf04c78192c19b873f7a8ec9fffb7a"
     }
   ]
 }
