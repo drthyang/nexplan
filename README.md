@@ -39,8 +39,10 @@ Mantid instrument definitions. It always uses neutron scattering and is compiled
 
 - **Single crystal** (TOPAZ cryogenic and ambient goniometers, CORELLI): the goniometer turns the crystal.
   - Spots on a 3D detector view and an unrolled detector map.
+  - Reflection coverage, as in NeuXtalViz: everywhere a chosen reflection (and its equivalents) can be recorded over
+    the goniometer range, coloured by wavelength.
   - Rotation scans with symmetry-family completeness.
-  - The reflections on each panel, with pixel coordinates.
+  - The reflections on each panel, with pixel coordinates and time of flight.
 - **Powder** (NOMAD, POWGEN; the sample is fixed):
   - Debye–Scherrer rings painted on the panels for a time-of-flight slice, with a play control that sweeps through
     the band.

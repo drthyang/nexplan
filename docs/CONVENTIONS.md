@@ -198,6 +198,16 @@ On the Experiment page, for SNS neutron instruments only (the page always uses n
   the fraction of symmetry families with at least one member seen so far, over the families among the simulated
   reflections (the strongest 6000 present with d ≥ d_min). Friedel mates are merged only when the amplitudes are
   real.
+- **Reflection coverage** (single crystal; NeuXtalViz's "individual peak" coverage, models/experiment_planner.py
+  @ 655afa3): every detector position where the chosen reflection can be recorded, optionally with its symmetry
+  equivalents, as the free goniometer axes sweep their ranges.
+  - Each point is coloured by its wavelength, λ = 2d sin θ at that pixel.
+  - White-beam instruments use a grid of settings: 1° steps, doubled for each extra free axis, each axis at most one
+    turn. A setting counts when λ = −2q_z/|q|² is in the band and k_f hits a panel.
+  - Chopper spectrometers use the exact Bragg crossings instead.
+  - Tested: every point satisfies λ = 2d sin θ at the pixel it hits, and lies in the band.
+- **Time of flight of a spot:** t = (m_n/h)·(L1 + L2)·λ, with L2 to the pixel. This is Mantid's TOF ↔ λ relation,
+  with no emission-time offset (T0_SHIFT = 0 in the TOPAZ_3007 peaks file).
 - **Powder (sample fixed):** a pixel at 2θ records d from λ_min/(2 sin θ) to λ_max/(2 sin θ). A spacing d reaches
   2θ from 2 asin(λ_min/2d) to 2 asin(min(1, λ_max/2d)), and a panel records it when its 2θ span overlaps that range.
   Panel 2θ spans come from a 9 × 9 grid over the face.

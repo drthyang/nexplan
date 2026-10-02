@@ -15,10 +15,10 @@ import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useR
 import { mulMat, mulVec } from "@materia/core/math/mat3";
 import type { CalcSuccess } from "../app/compute.ts";
 import { cwPeaks } from "../core/diffraction/powder.ts";
-import { NEUTRON_MASS_OVER_H, synthesizeTof, tofPeaks, type TofBank } from "../core/diffraction/tof.ts";
+import { NEUTRON_MASS_OVER_H, synthesizeTof, tofFromWavelength, tofPeaks, type TofBank } from "../core/diffraction/tof.ts";
 import { rayHit, type DetectorHit } from "../core/instrument/detectors.ts";
 import { elasticPattern, mapCells, ringProfile, ringTrace, type RingSlice } from "../core/instrument/powderRings.ts";
-import { braggCrossings, coveredTwoTheta, crossingsToScan, dRangeAt, panelAngles, panelDifc, panelsSeeing, simulateScan, twoThetaRangeForD, type PanelAngles } from "../core/instrument/simulate.ts";
+import { braggCrossings, coveredTwoTheta, crossingsToScan, dRangeAt, panelAngles, panelDifc, panelsSeeing, reflectionCoverage, simulateScan, twoThetaRangeForD, type CoveragePoint, type PanelAngles } from "../core/instrument/simulate.ts";
 import { neutronWavelengthA } from "../core/physics/energy.ts";
 import { goniometerMatrix, laueCondition } from "../core/ub/goniometer.ts";
 import type { InstrumentPreset } from "../core/ub/instruments.ts";
@@ -32,7 +32,7 @@ import { fmt, hklText } from "./format.ts";
 import { PowderPlot } from "./PowderPlot.tsx";
 import { ScanChart } from "./ScanChart.tsx";
 import { GoniometerControls } from "./UbPage.tsx";
-import { flightPathRange, paintMap, paintPanels, panelGrids } from "./ringImages.ts";
+import { flightPathRange, paintCoverageMap, paintCoveragePanels, paintMap, paintPanels, panelGrids } from "./ringImages.ts";
 import { presentReflections, useViewUB, type UbState } from "./ubShared.ts";
 
 const InstrumentView = lazy(() => import("../views/InstrumentView.tsx").then((m) => ({ default: m.InstrumentView })));
@@ -183,6 +183,9 @@ interface Observed {
 }
 
 function SingleCrystalExperiment({ result, theme, ub, exp, onExp, instrument, panels, setup }: ModeProps) {
+  const l1 = instrument.l1 ?? 0;
+  /** Moderator-to-detector flight time (µs) of an observed reflection. */
+  const tofOf = (o: Observed) => tofFromWavelength(l1 + o.hit.l2, o.lambda);
   const { viewUB, fileUB } = useViewUB(result, ub);
   const points = useMemo(() => presentReflections(result), [result]);
   const [selected, setSelected] = useState<number | null>(null);
@@ -241,11 +244,92 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, instrument, pa
 
   const spots3d = useMemo(() => sim.obs.map((o) => ({ index: o.index, position: o.hit.position, lambda: o.lambda, panel: o.hit.panel })), [sim]);
   const mapSpots = useMemo<MapSpot[]>(
-    () => sim.obs.map((o) => ({ index: o.index, dir: o.hit.position, lambda: o.lambda, label: `(${hklText(points[o.index]!.h)}) λ ${fmt(o.lambda, 3)} Å · ${o.hit.name} col ${fmt(o.hit.col, 0)} row ${fmt(o.hit.row, 0)}` })),
+    () => sim.obs.map((o) => ({ index: o.index, dir: o.hit.position, lambda: o.lambda, label: `(${hklText(points[o.index]!.h)}) λ ${fmt(o.lambda, 3)} Å · TOF ${fmt(tofOf(o), 0)} µs · ${o.hit.name} col ${fmt(o.hit.col, 0)} row ${fmt(o.hit.row, 0)}` })),
     [sim, points],
   );
   const selObs = sim.obs.find((o) => o.index === selected);
   const sel = selected !== null ? points[selected] : undefined;
+
+  // Reflection coverage (NeuXtalViz "individual peak"): everywhere the selected reflection (or its
+  // equivalents) can be recorded as the free goniometer axes sweep their ranges, coloured by λ.
+  const [show, setShow] = useState<"spots" | "coverage">("spots");
+  const [equivalents, setEquivalents] = useState(false);
+  // Tagged with the reflection list and selection it was computed for, so a stale result is never shown.
+  type Coverage = ({ points: CoveragePoint[]; settings: number; step: number; targets: number } | { error: string }) & { readonly of: typeof points; readonly index: number };
+  const [coverageState, setCoverage] = useState<Coverage | null>(null);
+  const coverage = coverageState && coverageState.of === points && coverageState.index === selected && show === "coverage" ? coverageState : null;
+  const [covBusy, setCovBusy] = useState(false);
+  useEffect(() => {
+    if (show !== "coverage" || selected === null) {
+      setCoverage(null);
+      setCovBusy(false);
+      return;
+    }
+    let alive = true;
+    setCovBusy(true);
+    const t = setTimeout(() => {
+      const target = points[selected]!;
+      const targets = equivalents ? points.filter((p) => p.family === target.family) : [target];
+      try {
+        let out: { points: CoveragePoint[]; settings: number; step: number };
+        if (instrument.incident) {
+          // Monochromatic: exact Bragg crossings along the rotation (a grid would miss the narrow band).
+          const k = free[0]?.i;
+          if (k === undefined) throw new Error("This goniometer has no free axis.");
+          const ax = axes[k]!;
+          const lambda = (exp.lambdaMin + exp.lambdaMax) / 2;
+          const cr = braggCrossings(instrument.goniometer, k, exp.angles, { start: ax.min, end: Math.min(ax.max, ax.min + 360) - 1e-9 }, viewUB, targets.map((p) => ({ h: p.h, family: 0 })), panels, lambda);
+          out = { points: cr.filter((c) => c.hit).map((c) => ({ index: c.index, angles: exp.angles.map((v, i) => (i === k ? c.angle : v)), lambda, hit: c.hit! })), settings: 0, step: 0 };
+        } else out = reflectionCoverage(instrument.goniometer, exp.angles, viewUB, targets, panels, exp.lambdaMin, exp.lambdaMax, 1);
+        if (alive) setCoverage({ ...out, targets: targets.length, of: points, index: selected });
+      } catch (e) {
+        if (alive) setCoverage({ error: (e as Error).message, of: points, index: selected });
+      }
+      if (alive) setCovBusy(false);
+    }, 30);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+    // exp.angles only fixes the non-swept axes, which goniometerMatrix takes from the model.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show, selected, equivalents, points, instrument, viewUB, panels, exp.lambdaMin, exp.lambdaMax]);
+  const covOn = coverage !== null && "points" in coverage && selected !== null;
+  const grids = useMemo(() => panelGrids(panels), [panels]);
+  const covImages = useMemo(() => (covOn ? paintCoveragePanels(grids, panels, (coverage as { points: CoveragePoint[] }).points, exp.lambdaMin, exp.lambdaMax, (coverage as { step: number }).step) : undefined), [covOn, coverage, grids, panels, exp.lambdaMin, exp.lambdaMax]);
+  const mapCache = useRef<{ key: string; cells: ReturnType<typeof mapCells> } | null>(null);
+  const covRaster = useCallback(
+    (w: number, h: number, nuMax: number) => {
+      if (!coverage || !("points" in coverage)) return undefined;
+      const key = `${w}x${h}x${nuMax}`;
+      if (mapCache.current?.key !== key) mapCache.current = { key, cells: mapCells(panels, w, h, nuMax) };
+      return paintCoverageMap(mapCache.current.cells, w, h, nuMax, coverage.points, exp.lambdaMin, exp.lambdaMax, coverage.step);
+    },
+    [coverage, panels, exp.lambdaMin, exp.lambdaMax],
+  );
+  const sweep = instrument.incident
+    ? `exact Bragg crossings over ${free.map(({ ax }) => `${ax.name} ${ax.min}–${Math.min(ax.max, ax.min + 360)}°`).join(", ")}`
+    : coverage && "step" in coverage
+      ? `${coverage.settings.toLocaleString()} settings: ${free.map(({ ax }) => `${ax.name} ${ax.min}–${Math.min(ax.max, ax.min + 360)}°`).join(", ")} in ${coverage.step}° steps`
+      : "";
+  const covStatus =
+    selected === null
+      ? "Select a reflection (type hkl, or pick it in the table, map or 3D view) to see everywhere it can be recorded."
+      : covBusy
+        ? "Calculating…"
+        : coverage && "error" in coverage
+          ? coverage.error
+          : coverage
+            ? `(${hklText(points[selected]!.h)})${coverage.targets > 1 ? ` + ${coverage.targets - 1} equivalents` : ""}: ${coverage.points.length.toLocaleString()} landing positions on ${new Set(coverage.points.map((p) => p.hit.panel)).size} panels · ${sweep}`
+            : "";
+  const pickHkl = (text: string) => {
+    const v = text.trim().split(/[\s,]+/).map(Number);
+    if (v.length !== 3 || v.some((x) => !Number.isInteger(x))) return false;
+    const i = points.findIndex((p) => p.h[0] === v[0] && p.h[1] === v[1] && p.h[2] === v[2]);
+    if (i < 0) return false;
+    setSelected(i);
+    return true;
+  };
   const togglePanel = (i: number) => setPanelFilter((p) => (p === i ? null : i));
   const rows = useMemo(
     () =>
@@ -281,7 +365,7 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, instrument, pa
             {view === "detectors" ? (
               <InstrumentView
                 panels={panels}
-                spots={spots3d}
+                spots={covOn ? [] : spots3d}
                 lambdaMin={exp.lambdaMin}
                 lambdaMax={exp.lambdaMax}
                 selected={selected}
@@ -289,9 +373,10 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, instrument, pa
                 theme={theme}
                 fileStem={result.blockName}
                 instrumentName={instrument.goniometer.label}
-                selectedPanel={selObs?.hit.panel ?? panelFilter}
+                selectedPanel={covOn ? null : (selObs?.hit.panel ?? panelFilter)}
                 onPanelClick={togglePanel}
                 legend={lambdaLegend}
+                {...(covImages ? { panelImages: covImages, summary: `coverage of (${hklText(points[selected!]!.h)})${equivalents ? " and equivalents" : ""} over the goniometer range` } : {})}
               />
             ) : (
               <ReciprocalView
@@ -313,11 +398,25 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, instrument, pa
               />
             )}
           </Suspense>
-          {sel && (
+          {view === "detectors" && (
+            <div className="ring-controls">
+              <Segmented label="Show on the detectors" value={show} onChange={setShow} options={[{ value: "spots", label: "Spots now" }, { value: "coverage", label: "Coverage" }]} />
+              {show === "coverage" && (
+                <>
+                  <HklField value={sel ? sel.h : null} onPick={pickHkl} />
+                  <label className="ui-check">
+                    <input type="checkbox" checked={equivalents} onChange={(e) => setEquivalents(e.target.checked)} /> Equivalents
+                  </label>
+                </>
+              )}
+            </div>
+          )}
+          {view === "detectors" && show === "coverage" && <p className="selection-note dim-note">{covStatus}</p>}
+          {sel && !(view === "detectors" && show === "coverage") && (
             <p className="selection-note">
               <b>({hklText(sel.h)})</b> d {fmt(sel.d, 4)} Å · |F|² {sel.f2.toPrecision(4)} ·{" "}
               {selObs
-                ? `λ ${fmt(selObs.lambda, 4)} Å, 2θ ${fmt(selObs.twoTheta, 2)}°, azimuth ${fmt(selObs.azimuth, 1)}° → ${selObs.hit.name}, col ${fmt(selObs.hit.col, 1)}, row ${fmt(selObs.hit.row, 1)}, L2 ${fmt(selObs.hit.l2, 4)} m`
+                ? `λ ${fmt(selObs.lambda, 4)} Å, TOF ${fmt(tofOf(selObs), 1)} µs, 2θ ${fmt(selObs.twoTheta, 2)}°, azimuth ${fmt(selObs.azimuth, 1)}° → ${selObs.hit.name}, col ${fmt(selObs.hit.col, 1)}, row ${fmt(selObs.hit.row, 1)}, L2 ${fmt(selObs.hit.l2, 4)} m`
                 : sim.status[selected!] === 1
                   ? `diffracts at λ ${fmt(sim.lambdas[selected!]!, 4)} Å but misses every panel`
                   : "does not diffract in the band at this setting"}
@@ -359,10 +458,14 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, instrument, pa
 
       <Card
         title="Detector map"
-        meta={panelFilter !== null ? `${panels[panelFilter]!.name} selected · click it again to clear` : `${panels.length} panels unrolled about the vertical axis`}
-        info="Every panel projected onto a cylinder around the sample with its axis vertical: γ is the horizontal angle from the beam (positive towards +x), ν the elevation. Dashed curves are cones of constant 2θ (Debye–Scherrer rings). Hover a spot or panel for details; click a spot to select it, a panel to filter the table."
+        meta={covOn ? `coverage of (${hklText(points[selected!]!.h)})${equivalents ? " and equivalents" : ""}, coloured by λ` : panelFilter !== null ? `${panels[panelFilter]!.name} selected · click it again to clear` : `${panels.length} panels unrolled about the vertical axis`}
+        info={
+          covOn
+            ? "Everywhere the selected reflection (and its symmetry equivalents, if ticked) can be recorded as the free goniometer axes sweep their full ranges, coloured by the wavelength it is recorded at (λ = 2d sinθ at that pixel); grey panels it never reaches. As in NeuXtalViz's experiment planner, white-beam instruments use a grid of settings (1°, doubled for each extra free axis); chopper spectrometers use the exact Bragg crossings. γ is the horizontal angle from the beam (positive towards +x), ν the elevation."
+            : "Every panel projected onto a cylinder around the sample with its axis vertical: γ is the horizontal angle from the beam (positive towards +x), ν the elevation. Dashed curves are cones of constant 2θ (Debye–Scherrer rings). Hover a spot or panel for details; click a spot to select it, a panel to filter the table."
+        }
       >
-        <DetectorMap panels={panels} spots={mapSpots} lambdaMin={exp.lambdaMin} lambdaMax={exp.lambdaMax} selected={selected} onSelect={setSelected} selectedPanel={selObs?.hit.panel ?? panelFilter} onPanelClick={togglePanel} />
+        <DetectorMap {...(covOn ? { raster: covRaster } : {})} panels={panels} spots={covOn ? [] : mapSpots} lambdaMin={exp.lambdaMin} lambdaMax={exp.lambdaMax} selected={selected} onSelect={setSelected} selectedPanel={covOn ? null : (selObs?.hit.panel ?? panelFilter)} onPanelClick={togglePanel} />
         <p className="plot-hint">{lambdaLegend}</p>
       </Card>
 
@@ -423,6 +526,7 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, instrument, pa
 
         <Card
           title="Reflections on the detectors"
+          info="TOF is the moderator-to-detector flight time t = 252.778 µs/(m·Å) × (L1 + L2) × λ, with L2 to the pixel the spot hits: the relation Mantid uses between TOF and wavelength, with no emission-time offset."
           meta={`${(panelFilter === null ? sim.obs.length : rows.length).toLocaleString()}${panelFilter !== null ? ` on ${panels[panelFilter]!.name}` : ""} · strongest first`}
           actions={
             panelFilter !== null ? (
@@ -440,6 +544,7 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, instrument, pa
                   <th className="left">hkl</th>
                   <th>d (Å)</th>
                   <th>λ (Å)</th>
+                  <th>TOF (µs)</th>
                   <th>2θ (°)</th>
                   <th className="left">Panel</th>
                   <th>col</th>
@@ -455,6 +560,7 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, instrument, pa
                       <th>({hklText(p.h)})</th>
                       <td>{fmt(p.d, 4)}</td>
                       <td>{fmt(o.lambda, 4)}</td>
+                      <td>{fmt(tofOf(o), 0)}</td>
                       <td>{fmt(o.twoTheta, 2)}</td>
                       <td className="left">{o.hit.name}</td>
                       <td>{fmt(o.hit.col, 1)}</td>
@@ -469,6 +575,27 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, instrument, pa
         </Card>
       </div>
     </div>
+  );
+}
+
+/** h k l entry: commits on Enter or blur; flags indices that are not among the simulated reflections. */
+function HklField({ value, onPick }: { value: readonly number[] | null; onPick: (text: string) => boolean }) {
+  const shown = value ? value.join(" ") : "";
+  const [text, setText] = useState(shown);
+  const [bad, setBad] = useState(false);
+  useEffect(() => {
+    setText(shown);
+    setBad(false);
+  }, [shown]);
+  const commit = () => {
+    if (text.trim() === "" || text === shown) return;
+    setBad(!onPick(text));
+  };
+  return (
+    <span className={`ui-unit-field${bad ? " is-invalid" : ""}`} title={bad ? "Not a present reflection with d ≥ d_min (or not among the 6000 strongest)" : "Miller indices, e.g. 4 0 0"}>
+      <input className="ui-unit-field__input" aria-label="Reflection h k l" placeholder="h k l" value={text} style={{ width: "7ch" }} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === "Enter" && commit()} />
+      <span className="ui-unit-field__unit">hkl</span>
+    </span>
   );
 }
 

@@ -302,3 +302,60 @@ export function crossingsToScan(
   }
   return { steps, families, observedFamilies: seen.size };
 }
+
+export interface CoveragePoint {
+  /** Index into the reflection list. */
+  readonly index: number;
+  /** Goniometer angles (deg) of this setting. */
+  readonly angles: readonly number[];
+  readonly lambda: number;
+  readonly hit: DetectorHit;
+}
+
+/**
+ * Where reflections can be recorded as the free goniometer axes sweep their
+ * ranges: the "individual peak" coverage of NeuXtalViz's experiment planner
+ * (neutrons/NeuXtalViz-tools models/experiment_planner.py, calculate_individual_peak
+ * @ 655afa3). Settings form a grid with `step` degrees, doubled for each extra
+ * free axis; each axis spans at most one turn. A setting counts when
+ * λ = −2q_z/|q|² is in the band and k_f hits a panel.
+ */
+export function reflectionCoverage(
+  model: GoniometerModel,
+  baseAngles: readonly number[],
+  UB: Mat3,
+  refl: readonly { readonly h: Vec3 }[],
+  panels: readonly DetectorPanel[],
+  lambdaMin: number,
+  lambdaMax: number,
+  step = 1,
+  maxSettings = 200_000,
+): { points: CoveragePoint[]; settings: number; step: number } {
+  const free = model.axes.map((ax, i) => ({ ax, i })).filter(({ ax }) => ax.fixed === undefined);
+  const st = step * 2 ** Math.max(0, free.length - 1);
+  const values = free.map(({ ax }) => {
+    const span = Math.min(ax.max - ax.min, 360);
+    const n = Math.max(1, Math.floor(span / st + 1e-9) + (span >= 360 - 1e-9 ? 0 : 1));
+    return Array.from({ length: n }, (_, k) => ax.min + k * st);
+  });
+  const settings = values.reduce((n, v) => n * v.length, 1);
+  if (settings > maxSettings) throw new Error(`Coverage needs ${settings.toLocaleString()} goniometer settings; use a larger step.`);
+  const points: CoveragePoint[] = [];
+  const idx = new Array<number>(free.length).fill(0);
+  for (let s = 0; s < settings; s++) {
+    const angles = baseAngles.slice();
+    free.forEach(({ i }, k) => (angles[i] = values[k]![idx[k]!]!));
+    const RUB = mulMat(goniometerMatrix(model, angles), UB);
+    refl.forEach((r, index) => {
+      const l = laueCondition(mulVec(RUB, r.h));
+      if (!(l.lambda >= lambdaMin && l.lambda <= lambdaMax)) return;
+      const hit = rayHit(panels, l.kf);
+      if (hit) points.push({ index, angles, lambda: l.lambda, hit });
+    });
+    for (let k = free.length - 1; k >= 0; k--) {
+      if (++idx[k]! < values[k]!.length) break;
+      idx[k] = 0;
+    }
+  }
+  return { points, settings, step: st };
+}

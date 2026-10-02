@@ -40,6 +40,14 @@ export type TofShape =
   | { readonly kind: "gaussian"; /** Relative resolution Δd/d (FWHM). */ readonly dOverD: number }
   | { readonly kind: "backToBack"; readonly alpha1: number; readonly beta0: number; readonly beta1: number; readonly sig0: number; readonly sig1: number; readonly sig2: number };
 
+/**
+ * Flight time (µs) from the moderator to a detector for wavelength λ over a total path L = L1 + L2:
+ * t = (m_n/h)·L·λ, the relation Mantid uses to convert TOF to wavelength (no emission-time offset).
+ */
+export function tofFromWavelength(flightPathM: number, lambdaA: number): number {
+  return NEUTRON_MASS_OVER_H * flightPathM * lambdaA;
+}
+
 export function difcFromGeometry(flightPathM: number, twoThetaDeg: number): number {
   return NEUTRON_MASS_OVER_H * flightPathM * 2 * Math.sin((twoThetaDeg * DEG) / 2);
 }

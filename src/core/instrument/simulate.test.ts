@@ -7,7 +7,7 @@ import { UNIVERSAL } from "../ub/instruments.ts";
 import { mulMat, mulVec } from "@materia/core/math/mat3";
 import { ubFromU } from "../ub/ub.ts";
 import type { DetectorPanel } from "./detectors.ts";
-import { braggCrossings, crossingsToScan, coneDirections, coveredTwoTheta, cylinderAngles, dRangeAt, directionAngles, observeAt, panelAngles, panelDifc, panelsSeeing, simulateScan, twoThetaRangeForD } from "./simulate.ts";
+import { braggCrossings, crossingsToScan, reflectionCoverage, coneDirections, coveredTwoTheta, cylinderAngles, dRangeAt, directionAngles, observeAt, panelAngles, panelDifc, panelsSeeing, simulateScan, twoThetaRangeForD } from "./simulate.ts";
 
 const I: [Vec3, Vec3, Vec3] = [
   [1, 0, 0],
@@ -243,5 +243,36 @@ describe("monochromatic rotation scans: exact Bragg crossings", () => {
     expect(scan.steps).toHaveLength(721);
     expect(scan.steps.reduce((n, s) => n + s.observed, 0)).toBe(exact.length);
     for (let i = 1; i < scan.steps.length; i++) expect(scan.steps[i]!.completeness).toBeGreaterThanOrEqual(scan.steps[i - 1]!.completeness);
+  });
+});
+
+describe("reflection coverage (NeuXtalViz individual-peak style)", () => {
+  const topaz = instruments.instruments.find((i) => i.id === "TOPAZ")!;
+  const panels = topaz.panels as unknown as DetectorPanel[];
+  const UB = ubFromU(I, { a: 5.431, b: 5.431, c: 5.431, alpha: 90, beta: 90, gamma: 90 });
+  const h: Vec3 = [4, 0, 0];
+  const d = 5.431 / 4;
+
+  it("every point obeys Bragg's law for its d (λ = 2d sinθ at the pixel it hits) and lies in the band", () => {
+    const omega = { ...UNIVERSAL, axes: [{ ...UNIVERSAL.axes[0]!, min: 0, max: 360 }] };
+    const cov = reflectionCoverage(omega, [0], UB, [{ h }], panels, 0.4, 3.5, 0.5);
+    expect(cov.settings).toBe(720);
+    expect(cov.points.length).toBeGreaterThan(20);
+    for (const p of cov.points) {
+      const tt = directionAngles(p.hit.position).twoTheta;
+      expect(p.lambda).toBeGreaterThanOrEqual(0.4);
+      expect(p.lambda).toBeLessThanOrEqual(3.5);
+      expect(p.lambda).toBeCloseTo(2 * d * Math.sin((tt * Math.PI) / 360), 9);
+    }
+  });
+
+  it("doubles the step for each extra free axis and skips fixed axes, as NeuXtalViz does", () => {
+    const ambient = { ...UNIVERSAL, axes: [{ ...UNIVERSAL.axes[0]!, min: 0, max: 360 }, { ...UNIVERSAL.axes[1]!, fixed: 135 }, { ...UNIVERSAL.axes[2]!, min: 0, max: 360 }] };
+    const cov = reflectionCoverage(ambient, [0, 135, 0], UB, [{ h }], panels, 0.4, 3.5, 2);
+    expect(cov.step).toBe(4);
+    expect(cov.settings).toBe(90 * 90);
+    // Two free axes reach far more of the detectors than ω alone.
+    const one = reflectionCoverage({ ...ambient, axes: [ambient.axes[0]!, ambient.axes[1]!, { ...ambient.axes[2]!, fixed: 0 }] }, [0, 135, 0], UB, [{ h }], panels, 0.4, 3.5, 4);
+    expect(new Set(cov.points.map((p) => p.hit.panel)).size).toBeGreaterThan(new Set(one.points.map((p) => p.hit.panel)).size);
   });
 });

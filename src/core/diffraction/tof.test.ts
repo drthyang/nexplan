@@ -4,9 +4,22 @@ import { readCifStructure } from "../../io/cif/structure.ts";
 import { buildModel, expandModel } from "../structure/model.ts";
 import { cwPeaks, groupByD } from "./powder.ts";
 import { enumerateReflections, structureFactors } from "./reflections.ts";
-import { bankDRange, dFromTof, difcFromGeometry, NEUTRON_MASS_OVER_H, synthesizeTof, tofFromD, tofLorentz, tofPeaks, trapezoid, type TofBank, type TofShape } from "./tof.ts";
+import { bankDRange, dFromTof, difcFromGeometry, NEUTRON_MASS_OVER_H, synthesizeTof, tofFromD, tofFromWavelength, tofLorentz, tofPeaks, trapezoid, type TofBank, type TofShape } from "./tof.ts";
 
 describe("TOF conversion", () => {
+  it("flight time from wavelength agrees with DIFC·d when λ = 2d sinθ", () => {
+    for (const [L, tt, d] of [
+      [18.457, 52.3, 1.98],
+      [20, 90, 1],
+      [63.2, 150, 0.6],
+    ] as const) {
+      const lambda = 2 * d * Math.sin((tt * Math.PI) / 360);
+      expect(tofFromWavelength(L, lambda)).toBeCloseTo(tofFromD({ difc: difcFromGeometry(L, tt), difa: 0, zero: 0 }, d), 9);
+    }
+    // 1 Å over 10 m takes 2527.78 µs (v = h/(m_n·λ) = 3956 m/s).
+    expect(tofFromWavelength(10, 1)).toBeCloseTo(2527.78, 2);
+  });
+
   it("m_n/h agrees with Mantid's constant (CODATA 2006) to 1e-8", () => {
     const mantid = (1.674927211e-27 * 1e6) / (6.62606896e-34 * 1e10); // Mantid Unit.cpp NEUTRON_MASS_OVER_H
     expect(Math.abs(NEUTRON_MASS_OVER_H / mantid - 1)).toBeLessThan(1e-8);
