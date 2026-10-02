@@ -36,21 +36,31 @@ export interface DetectorHit {
 const dot = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a: Vec3, b: Vec3): Vec3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
+/**
+ * Where a ray from the origin along unit vector `u` crosses one panel: the
+ * distance t and the offsets x, y from the centre along `base` and `up`, or
+ * undefined when it misses.
+ */
+export function panelHit(p: DetectorPanel, u: Vec3): { t: number; x: number; y: number } | undefined {
+  const n = cross(p.base, p.up);
+  const denom = dot(u, n);
+  if (Math.abs(denom) < 1e-12) return undefined;
+  const t = dot(p.center, n) / denom;
+  if (!(t > 0)) return undefined;
+  const d: Vec3 = [u[0] * t - p.center[0], u[1] * t - p.center[1], u[2] * t - p.center[2]];
+  const x = dot(d, p.base);
+  const y = dot(d, p.up);
+  if (Math.abs(x) > p.width / 2 || Math.abs(y) > p.height / 2) return undefined;
+  return { t, x, y };
+}
+
 /** First panel hit by a ray from the origin along unit vector `u`, or undefined. */
 export function rayHit(panels: readonly DetectorPanel[], u: Vec3): DetectorHit | undefined {
   let best: DetectorHit | undefined;
   panels.forEach((p, i) => {
-    const n = cross(p.base, p.up);
-    const denom = dot(u, n);
-    if (Math.abs(denom) < 1e-12) return;
-    const t = dot(p.center, n) / denom;
-    if (!(t > 0) || (best && t >= best.l2)) return;
-    const hit: Vec3 = [u[0] * t, u[1] * t, u[2] * t];
-    const d: Vec3 = [hit[0] - p.center[0], hit[1] - p.center[1], hit[2] - p.center[2]];
-    const x = dot(d, p.base);
-    const y = dot(d, p.up);
-    if (Math.abs(x) > p.width / 2 || Math.abs(y) > p.height / 2) return;
-    best = { panel: i, name: p.name, col: (x / p.width + 0.5) * p.nCols + 0.5, row: (y / p.height + 0.5) * p.nRows + 0.5, l2: t, position: hit };
+    const h = panelHit(p, u);
+    if (!h || (best && h.t >= best.l2)) return;
+    best = { panel: i, name: p.name, col: (h.x / p.width + 0.5) * p.nCols + 0.5, row: (h.y / p.height + 0.5) * p.nRows + 0.5, l2: h.t, position: [u[0] * h.t, u[1] * h.t, u[2] * h.t] };
   });
   return best;
 }

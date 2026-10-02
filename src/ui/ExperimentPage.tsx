@@ -7,18 +7,23 @@
  *    and reciprocal-space views, the unrolled detector map, a rotation scan
  *    with family completeness, and the reflections on the detectors.
  *  - Powder (NOMAD, POWGEN; sample fixed): which panels see which d-spacings
- *    for the wavelength band, and the simulated TOF pattern of one panel.
+ *    for the wavelength band, the Debye–Scherrer rings on the detectors in a
+ *    time-of-flight slice (src/core/instrument/powderRings.ts), and the
+ *    simulated TOF pattern of one panel.
  */
-import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { mulMat, mulVec } from "@materia/core/math/mat3";
 import type { CalcSuccess } from "../app/compute.ts";
-import { synthesizeTof, tofPeaks, type TofBank } from "../core/diffraction/tof.ts";
+import { cwPeaks } from "../core/diffraction/powder.ts";
+import { NEUTRON_MASS_OVER_H, synthesizeTof, tofPeaks, type TofBank } from "../core/diffraction/tof.ts";
 import { rayHit, type DetectorHit } from "../core/instrument/detectors.ts";
-import { dRangeAt, panelAngles, panelDifc, panelsSeeing, simulateScan, twoThetaRangeForD, type PanelAngles } from "../core/instrument/simulate.ts";
+import { elasticPattern, mapCells, ringProfile, ringTrace, type RingSlice } from "../core/instrument/powderRings.ts";
+import { braggCrossings, coveredTwoTheta, crossingsToScan, dRangeAt, panelAngles, panelDifc, panelsSeeing, simulateScan, twoThetaRangeForD, type PanelAngles } from "../core/instrument/simulate.ts";
+import { neutronWavelengthA } from "../core/physics/energy.ts";
 import { goniometerMatrix, laueCondition } from "../core/ub/goniometer.ts";
 import type { InstrumentPreset } from "../core/ub/instruments.ts";
 import { EXPERIMENTAL_INSTRUMENTS } from "../core/ub/instrumentsExperimental.ts";
-import { ANGLE_RAMP_CSS, angleCss, angleHex, LAMBDA_RAMP_CSS } from "../views/colormaps.ts";
+import { ANGLE_RAMP_CSS, angleCss, angleHex, INTENSITY_RAMP_CSS, LAMBDA_RAMP_CSS } from "../views/colormaps.ts";
 import { Card, Segmented, UnitField } from "./components.tsx";
 import { CoverageChart, type CoverageLine } from "./CoverageChart.tsx";
 import { DetectorMap, type MapRing, type MapSpot } from "./DetectorMap.tsx";
@@ -27,6 +32,7 @@ import { fmt, hklText } from "./format.ts";
 import { PowderPlot } from "./PowderPlot.tsx";
 import { ScanChart } from "./ScanChart.tsx";
 import { GoniometerControls } from "./UbPage.tsx";
+import { flightPathRange, paintMap, paintPanels, panelGrids } from "./ringImages.ts";
 import { presentReflections, useViewUB, type UbState } from "./ubShared.ts";
 
 const InstrumentView = lazy(() => import("../views/InstrumentView.tsx").then((m) => ({ default: m.InstrumentView })));
@@ -36,8 +42,6 @@ interface PageProps {
   readonly result: CalcSuccess;
   readonly theme: "light" | "dark";
   readonly ub: UbState;
-  readonly radiation: "xray" | "neutron";
-  readonly onNeutron: () => void;
   readonly onDMin: (d: number) => void;
   readonly exp: ExperimentState;
   readonly onExp: (e: ExperimentState) => void;
@@ -50,6 +54,9 @@ interface ModeProps extends PageProps {
   readonly setup: (children: ReactNode) => ReactNode;
 }
 
+/** Wavelengths for display: four significant figures. */
+const lam = (x: number) => Number(x.toPrecision(4));
+
 const firstFreeAxis = (ins: InstrumentPreset) => Math.max(0, ins.goniometer.axes.findIndex((ax) => ax.fixed === undefined));
 
 export function ExperimentPage(props: PageProps) {
@@ -57,16 +64,27 @@ export function ExperimentPage(props: PageProps) {
   const instrument = EXPERIMENTAL_INSTRUMENTS.find((i) => i.id === exp.instrumentId) ?? EXPERIMENTAL_INSTRUMENTS[0]!;
   const panels = instrument.detectors ?? [];
   const info = useMemo(() => panels.map(panelAngles), [panels]);
+  const modes = instrument.modes ?? ["single-crystal"];
+  const sample = modes.includes(exp.sample) ? exp.sample : modes[0]!;
+  const mono = instrument.incident;
   const choose = (id: string) => {
     const ins = EXPERIMENTAL_INSTRUMENTS.find((i) => i.id === id);
     if (!ins) return;
-    onExp({ ...exp, instrumentId: id, angles: ins.goniometer.axes.map((ax) => ax.fixed ?? 0), lambdaMin: ins.lambdaMin, lambdaMax: ins.lambdaMax, panel: null, scan: { ...exp.scan, axis: firstFreeAxis(ins) } });
+    const inc = ins.incident;
+    const next = { ...exp, instrumentId: id, angles: ins.goniometer.axes.map((ax) => ax.fixed ?? 0), panel: null, scan: { ...exp.scan, axis: firstFreeAxis(ins) } };
+    onExp(inc ? withEi(next, inc.eiMeV, inc.elasticFwhm) : { ...next, lambdaMin: ins.lambdaMin, lambdaMax: ins.lambdaMax });
   };
 
   // Shortest d any panel reaches: λmin / (2 sin θmax).
   const reach = exp.lambdaMin / (2 * Math.sin((Math.max(...info.map((a) => a.twoThetaMax)) * Math.PI) / 360));
   const dMin = result.provenance.dMin;
   const suggest = Math.max(0.3, Math.ceil(reach * 100) / 100);
+  const groups: { label: string; list: readonly InstrumentPreset[] }[] = [
+    { label: "Single-crystal diffractometers", list: EXPERIMENTAL_INSTRUMENTS.filter((i) => !i.incident && i.modes?.includes("single-crystal")) },
+    { label: "Powder diffractometers", list: EXPERIMENTAL_INSTRUMENTS.filter((i) => !i.incident && i.modes?.includes("powder")) },
+    { label: "Chopper spectrometers (elastic)", list: EXPERIMENTAL_INSTRUMENTS.filter((i) => i.incident) },
+  ];
+  const lambda0 = (exp.lambdaMin + exp.lambdaMax) / 2;
 
   const setup = (children: ReactNode) => (
     <Card
@@ -75,16 +93,16 @@ export function ExperimentPage(props: PageProps) {
           Instrument <span className="ui-chip ui-chip--warn exp-chip">experimental</span>
         </>
       }
-      meta={instrument.mode === "powder" ? "powder · sample fixed" : "single crystal · TOF Laue"}
+      meta={mono ? `${sample === "powder" ? "powder" : "single crystal"} · elastic, Ei ${Number(exp.eiMeV.toPrecision(6))} meV` : sample === "powder" ? "powder · sample fixed" : "single crystal · TOF Laue"}
       info={`${instrument.source} ${instrument.goniometer.note}`}
     >
       <div className="form-rows">
         <label className="form-row">
           <span className="ui-control-label">Instrument</span>
           <select className="ui-select" aria-label="Instrument" value={instrument.id} onChange={(e) => choose(e.target.value)}>
-            {(["single-crystal", "powder"] as const).map((mode) => (
-              <optgroup key={mode} label={mode === "powder" ? "Powder" : "Single crystal"}>
-                {EXPERIMENTAL_INSTRUMENTS.filter((i) => i.mode === mode).map((i) => (
+            {groups.map((g) => (
+              <optgroup key={g.label} label={g.label}>
+                {g.list.map((i) => (
                   <option key={i.id} value={i.id}>
                     {i.label}
                   </option>
@@ -93,23 +111,42 @@ export function ExperimentPage(props: PageProps) {
             ))}
           </select>
         </label>
-        <div className="form-row">
-          <span className="ui-control-label">
-            <span className="sym">λ</span> band
-          </span>
-          <UnitField label="Minimum wavelength" value={exp.lambdaMin} unit="Å" min={0.05} width="5ch" onCommit={(v) => onExp({ ...exp, lambdaMin: Math.min(v, exp.lambdaMax - 0.01) })} />
-          <UnitField label="Maximum wavelength" value={exp.lambdaMax} unit="Å" min={0.06} width="5ch" onCommit={(v) => onExp({ ...exp, lambdaMax: Math.max(v, exp.lambdaMin + 0.01) })} />
-        </div>
+        {modes.length > 1 && (
+          <div className="form-row">
+            <span className="ui-control-label">Sample</span>
+            <Segmented label="Sample" value={sample} onChange={(v) => onExp({ ...exp, sample: v })} options={[{ value: "single-crystal", label: "Single crystal" }, { value: "powder", label: "Powder" }]} />
+          </div>
+        )}
+        {mono ? (
+          <>
+            <div className="form-row">
+              <span className="ui-control-label">
+                <span className="sym">E</span>
+                <sub>i</sub>
+              </span>
+              <UnitField label="Incident energy" value={Number(exp.eiMeV.toPrecision(6))} unit="meV" min={mono.eiMin} max={mono.eiMax} width="5ch" onCommit={(v) => onExp(withEi(exp, v, exp.eRes))} />
+              <span className="dim-note">
+                <span className="sym">λ</span> = {fmt(lambda0, 4)} Å
+              </span>
+            </div>
+            <div className="form-row">
+              <span className="ui-control-label">
+                Δ<span className="sym">E</span>/<span className="sym">E</span>
+              </span>
+              <UnitField label="Elastic resolution (FWHM)" value={Number((100 * exp.eRes).toPrecision(6))} unit="%" min={0.01} max={50} width="4.5ch" onCommit={(v) => onExp(withEi(exp, exp.eiMeV, v / 100))} />
+            </div>
+          </>
+        ) : (
+          <div className="form-row">
+            <span className="ui-control-label">
+              <span className="sym">λ</span> band
+            </span>
+            <UnitField label="Minimum wavelength" value={exp.lambdaMin} unit="Å" min={0.05} width="5ch" onCommit={(v) => onExp({ ...exp, lambdaMin: Math.min(v, exp.lambdaMax - 0.01) })} />
+            <UnitField label="Maximum wavelength" value={exp.lambdaMax} unit="Å" min={0.06} width="5ch" onCommit={(v) => onExp({ ...exp, lambdaMax: Math.max(v, exp.lambdaMin + 0.01) })} />
+          </div>
+        )}
         {children}
       </div>
-      {props.radiation === "xray" && (
-        <p className="warn-note">
-          These are neutron instruments, but the structure factors are for X-rays.{" "}
-          <button type="button" className="ui-pill" onClick={props.onNeutron}>
-            Use neutrons
-          </button>
-        </p>
-      )}
       {reach < dMin - 1e-9 && (
         <p className="warn-note">
           The detectors reach d = {fmt(reach, 3)} Å; reflections are calculated down to d_min = {dMin} Å only.{" "}
@@ -124,7 +161,15 @@ export function ExperimentPage(props: PageProps) {
   );
 
   const mode: ModeProps = { ...props, instrument, panels, info, setup };
-  return instrument.mode === "powder" ? <PowderExperiment key={instrument.id} {...mode} /> : <SingleCrystalExperiment key={instrument.id} {...mode} />;
+  const key = `${instrument.id}-${sample}`;
+  return sample === "powder" ? <PowderExperiment key={key} {...mode} /> : <SingleCrystalExperiment key={key} {...mode} />;
+}
+
+/** Ei (meV) and ΔE/E set the band: λ = √(81.8042/Ei), Δλ/λ = ΔE/(2E), split about λ. */
+function withEi(exp: ExperimentState, eiMeV: number, eRes: number): ExperimentState {
+  const lambda = neutronWavelengthA(eiMeV);
+  const half = eRes / 4;
+  return { ...exp, eiMeV, eRes, lambdaMin: lambda * (1 - half), lambdaMax: lambda * (1 + half) };
 }
 
 /* ------------------------------------------------------------------ single crystal */
@@ -180,6 +225,12 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, instrument, pa
     if (!free.length) return undefined;
     try {
       const base = deferredBase.split(",").map(Number);
+      if (instrument.incident) {
+        // Monochromatic: exact Bragg crossings, binned into the scan steps (nothing is missed between steps).
+        const half = exp.scan.step / 2;
+        const crossings = braggCrossings(instrument.goniometer, scanAxis, base, { start: exp.scan.start - half, end: exp.scan.end + half }, viewUB, points, panels, (exp.lambdaMin + exp.lambdaMax) / 2);
+        return crossingsToScan(crossings, points, scanAxis, base, exp.scan);
+      }
       return simulateScan(instrument.goniometer, scanAxis, base, exp.scan, viewUB, points, panels, exp.lambdaMin, exp.lambdaMax);
     } catch (e) {
       return { error: (e as Error).message };
@@ -206,7 +257,7 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, instrument, pa
   );
   const lambdaLegend = (
     <span className="lambda-legend">
-      λ {exp.lambdaMin} Å <span className="lambda-ramp" style={{ background: LAMBDA_RAMP_CSS }} /> {exp.lambdaMax} Å
+      λ {lam(exp.lambdaMin)} Å <span className="lambda-ramp" style={{ background: LAMBDA_RAMP_CSS }} /> {lam(exp.lambdaMax)} Å
     </span>
   );
 
@@ -218,7 +269,9 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, instrument, pa
           meta={`${sim.obs.length.toLocaleString()} of ${points.length.toLocaleString()} reflections on the detectors`}
           info={
             view === "detectors"
-              ? "Lab frame, metres: sample at the origin, beam along +z (orange), up +y. Panels from the Mantid instrument definition; each spot is where a reflection's scattered ray hits a panel, coloured by its Laue wavelength. Click a spot to select the reflection, a panel to filter the table to it."
+              ? instrument.incident
+                ? "Lab frame, metres: sample at the origin, beam along +z (orange), up +y. Panels from the Mantid instrument definition. With a monochromatic beam only reflections within the elastic band (Δλ/λ = ΔE/2E) of the Ewald sphere diffract at one setting; each spot is where its scattered ray hits a panel. Rotate ψ (or run the scan) to bring others in. Click a spot to select the reflection, a panel to filter the table to it."
+                : "Lab frame, metres: sample at the origin, beam along +z (orange), up +y. Panels from the Mantid instrument definition; each spot is where a reflection's scattered ray hits a panel, coloured by its Laue wavelength. Click a spot to select the reflection, a panel to filter the table to it."
               : "Reciprocal lattice in the lab frame (1/Å, no 2π) with the Ewald spheres for λmin and λmax. Coloured points diffract onto a detector; tan points diffract in the band but miss every panel; grey points do not diffract in the band."
           }
           className="viewer-card"
@@ -317,7 +370,11 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, instrument, pa
         <Card
           title="Rotation scan"
           meta={scan && "steps" in scan ? `${scan.steps.length} orientations · ${fmt(100 * (scan.steps.at(-1)?.completeness ?? 0), 1)} % complete` : undefined}
-          info="Step one goniometer axis through a range (the other axes stay where they are) and count, at each step, the reflections that land on a panel. Completeness is the fraction of symmetry families (Friedel mates merged when the amplitudes are real) with at least one member seen so far, over the families among the simulated reflections. Click the chart to move the goniometer to that step."
+          info={
+            instrument.incident
+              ? "Rotate one axis through a range (the other axes stay where they are). With a monochromatic beam each reflection diffracts only where it crosses the Ewald sphere; those angles are solved exactly (q_z = −λ|q|²/2 along the rotation) and binned into the steps, so nothing is missed between steps. Bars: reflections reaching a panel per step. Completeness is the fraction of symmetry families (Friedel mates merged when the amplitudes are real) seen so far. Click the chart to move the goniometer there."
+              : "Step one goniometer axis through a range (the other axes stay where they are) and count, at each step, the reflections that land on a panel. Completeness is the fraction of symmetry families (Friedel mates merged when the amplitudes are real) with at least one member seen so far, over the families among the simulated reflections. Click the chart to move the goniometer to that step."
+          }
         >
           {free.length === 0 ? (
             <p className="empty-note">This goniometer has no free axis.</p>
@@ -437,14 +494,78 @@ function PowderExperiment({ result, theme, exp, onExp, instrument, panels, info,
     () => ({ twoThetaDeg: pa.twoThetaCenter, difc: panelDifc(panels[panel]!, l1), difa: 0, zero: 0, lambdaMin: exp.lambdaMin, lambdaMax: exp.lambdaMax }),
     [pa, panels, panel, l1, exp.lambdaMin, exp.lambdaMax],
   );
-  const peaks = useMemo(() => tofPeaks(groups, bank), [groups, bank]);
-  const profile = useMemo(() => synthesizeTof(peaks, bank, { kind: "gaussian", dOverD: exp.dOverD }, axis), [peaks, bank, exp.dOverD, axis]);
+  // Chopper spectrometers: monochromatic beam, elastic scattering at λ0 (an elastic 2θ pattern over the detectors).
+  const mono = instrument.incident;
+  const lambda0 = (exp.lambdaMin + exp.lambdaMax) / 2;
+  const covered = useMemo(() => coveredTwoTheta(info), [info]);
+  const peaks = useMemo(
+    () =>
+      mono
+        ? cwPeaks(groups, { wavelength: lambda0, lorentz: true, polarization: { kind: "none" } }).filter((p) => covered.some(([a, b]) => p.twoTheta! >= a && p.twoTheta! <= b))
+        : tofPeaks(groups, bank),
+    [mono, groups, bank, lambda0, covered],
+  );
+  const profile = useMemo(
+    () => (mono ? elasticPattern(peaks, Math.hypot(exp.dOverD, exp.eRes / 2), covered) : synthesizeTof(peaks, bank, { kind: "gaussian", dOverD: exp.dOverD }, axis)),
+    [mono, peaks, bank, exp.dOverD, exp.eRes, covered, axis],
+  );
   const peakSel = sel !== null ? peaks.findIndex((p) => p.d === groups[sel]!.d) : -1;
+
+  // Powder rings in a time-of-flight slice: an element with flight path L sees λ = t/(K·L).
+  const [display, setDisplay] = useState<"rings" | "angle">("rings");
+  const ringsOn = display === "rings";
+  const [sliceWidth, setSliceWidth] = useState(0.01);
+  const [playing, setPlaying] = useState(false);
+  const grids = useMemo(() => panelGrids(panels), [panels]);
+  const [lMin, lMax] = useMemo(() => flightPathRange(grids, l1), [grids, l1]);
+  const lNom = useMemo(() => l1 + [...info.map((a) => a.l2)].sort((a, b) => a - b)[Math.floor(info.length / 2)]!, [info, l1]);
+  const tMin = NEUTRON_MASS_OVER_H * lMin * exp.lambdaMin;
+  const tMax = NEUTRON_MASS_OVER_H * lMax * exp.lambdaMax;
+  const [tofRaw, setTof] = useState(() => (NEUTRON_MASS_OVER_H * lNom * (exp.lambdaMin + exp.lambdaMax)) / 2);
+  const tof = Math.min(tMax, Math.max(tMin, tofRaw));
+  const lambdaNom = mono ? lambda0 : tof / (NEUTRON_MASS_OVER_H * lNom);
+  useEffect(() => {
+    if (!playing || mono) return;
+    let raf = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      raf = requestAnimationFrame(tick);
+      if (now - last < 40) return;
+      const dt = now - last;
+      last = now;
+      setTof((t) => {
+        const next = Math.min(tMax, Math.max(tMin, t)) + ((tMax - tMin) * dt) / 12000;
+        return next > tMax ? tMin : next;
+      });
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing, mono, tMin, tMax]);
+  const slice = useMemo<RingSlice>(() => (mono ? { lambda: lambda0 } : { tof }), [mono, lambda0, tof]);
+  const ringProf = useMemo(
+    () => ringProfile(groups, mono ? "fixed" : "tof", Math.hypot(exp.dOverD, mono ? exp.eRes / 2 : sliceWidth)),
+    [groups, mono, exp.dOverD, exp.eRes, sliceWidth],
+  );
+  const frame = useMemo(() => (ringsOn ? paintPanels(grids, ringProf, slice, l1) : undefined), [ringsOn, grids, ringProf, slice, l1]);
+  const panelImages = frame?.images;
+  const gain = frame?.gain ?? 1;
+  const mapCache = useRef<{ key: string; cells: ReturnType<typeof mapCells> } | null>(null);
+  const raster = useCallback(
+    (w: number, h: number, nuMax: number) => {
+      const key = `${w}x${h}x${nuMax}`;
+      if (mapCache.current?.key !== key) mapCache.current = { key, cells: mapCells(panels, w, h, nuMax) };
+      return paintMap(mapCache.current.cells, w, h, ringProf, slice, l1, gain);
+    },
+    [panels, ringProf, slice, l1, gain],
+  );
 
   const g = sel !== null ? groups[sel] : undefined;
   const range = g ? twoThetaRangeForD(g.d, exp.lambdaMin, exp.lambdaMax) : undefined;
   const seeing = useMemo(() => (g ? new Set(panelsSeeing(g.d, info, exp.lambdaMin, exp.lambdaMax)) : undefined), [g, info, exp.lambdaMin, exp.lambdaMax]);
-  const rings = useMemo<MapRing[]>(() => (range ? [range.min, range.max].filter((t) => t > 0.5 && t < 179.5).map((t) => ({ twoTheta: t, emphasis: true })) : []), [range?.min, range?.max]);
+  const ringNow = g && ringsOn && lambdaNom / (2 * g.d) <= 1 ? (2 * Math.asin(lambdaNom / (2 * g.d)) * 180) / Math.PI : undefined;
+  const rings = useMemo<MapRing[]>(() => (!ringsOn && range ? [range.min, range.max].filter((t) => t > 0.5 && t < 179.5).map((t) => ({ twoTheta: t, emphasis: true })) : []), [ringsOn, range?.min, range?.max]);
+  // The selected reflection's ring in this slice, ray-traced onto the panels (independent of the images).
+  const traces = useMemo(() => (ringsOn && g ? ringTrace(panels, l1, slice, g.d, 720).map((t) => t.points) : undefined), [ringsOn, g, panels, l1, slice]);
   const lines = useMemo<CoverageLine[]>(() => groups.map((x) => ({ d: x.d, weight: x.sumF2, label: x.families.map((f) => `(${hklText(f.hkl)})`).join(" + ") })), [groups]);
   const seen = dRangeAt(pa.twoThetaCenter, exp.lambdaMin, exp.lambdaMax);
   const pickPanel = (i: number) => onExp({ ...exp, panel: i });
@@ -454,15 +575,28 @@ function PowderExperiment({ result, theme, exp, onExp, instrument, panels, info,
       2θ 0° <span className="lambda-ramp" style={{ background: ANGLE_RAMP_CSS }} /> 180°
     </span>
   );
+  const intensityLegend = (
+    <span className="lambda-legend">
+      0 <span className="lambda-ramp" style={{ background: INTENSITY_RAMP_CSS }} /> slice max <span className="dim-note">(√ scale)</span>
+    </span>
+  );
+  const legend = ringsOn ? intensityLegend : angleLegend;
 
   return (
     <div className="ui-stack">
       <div className="ui-grid ui-grid--split">
         <Card
           title="Detectors"
-          meta={g ? `${seeing!.size} of ${panels.length} panels see ${label(g)}` : `${panels.length} panels · coloured by 2θ`}
-          info="Lab frame, metres: sample at the origin, beam along +z (orange), up +y. Panels from the Mantid instrument definition, coloured by the 2θ of their centre. Select a reflection (in the coverage chart or the pattern) to see which panels record it; click a panel to simulate its pattern."
+          meta={g ? `${seeing!.size} of ${panels.length} panels see ${label(g)}` : ringsOn ? (mono ? `elastic powder rings at λ = ${fmt(lambda0, 4)} Å` : `powder rings at t = ${fmt(tof, 0)} µs`) : `${panels.length} panels · coloured by 2θ`}
+          info={
+            ringsOn && mono
+              ? "Elastic Debye–Scherrer rings at the incident wavelength λ = √(81.804/Ei): each ring is one d-spacing at 2θ = 2 asin(λ/2d), wherever it crosses a panel. Intensity per unit solid angle ∝ Σ|F|²/sin³θ (the CW powder Lorentz factor per unit ring length), each line a Gaussian of FWHM √((Δd/d)² + (ΔE/2E)²) in d. Click a panel for its details."
+              : ringsOn
+              ? "Debye–Scherrer rings on the panels in a time-of-flight slice. At time t an element with flight path L = L1 + L2 records λ = t/(252.778·L) and so d = λ/(2 sinθ); each ring is one d-spacing, and the rings move outwards as t grows. Intensity per unit solid angle ∝ Σ|F|²·d⁴·sinθ (GSAS-II TOF Lorentz factor, incident spectrum normalised out), each line a Gaussian of FWHM √((Δd/d)² + (Δt/t)²) in d. Play sweeps t through the band. Click a panel to simulate its pattern."
+              : "Lab frame, metres: sample at the origin, beam along +z (orange), up +y. Panels from the Mantid instrument definition, coloured by the 2θ of their centre. Select a reflection (in the coverage chart or the pattern) to see which panels record it; click a panel to simulate its pattern."
+          }
           className="viewer-card"
+          actions={<Segmented label="Panel colouring" value={display} onChange={setDisplay} options={[{ value: "rings", label: "Powder rings" }, { value: "angle", label: "2θ" }]} />}
         >
           <Suspense fallback={<p className="empty-note">Loading the 3D view…</p>}>
             <InstrumentView
@@ -475,30 +609,81 @@ function PowderExperiment({ result, theme, exp, onExp, instrument, panels, info,
               fileStem={result.blockName}
               instrumentName={instrument.goniometer.label}
               panelColors={colorsHex}
+              {...(panelImages ? { panelImages } : {})}
+              {...(traces ? { traces } : {})}
               {...(seeing ? { highlight: seeing } : {})}
               selectedPanel={panel}
               onPanelClick={pickPanel}
               summary={`${instrument.goniometer.label}: ${panels.length} panels, 2θ ${fmt(Math.min(...info.map((a) => a.twoThetaMin)), 1)}–${fmt(Math.max(...info.map((a) => a.twoThetaMax)), 1)}°`}
-              legend={angleLegend}
+              legend={legend}
             />
           </Suspense>
+          {ringsOn && mono && (
+            <p className="selection-note">
+              Elastic line: <span className="sym">E</span>
+              <sub>i</sub> = {Number(exp.eiMeV.toPrecision(6))} meV, <span className="sym">λ</span> = {fmt(lambda0, 4)} Å; the rings do not move with time-of-flight.
+            </p>
+          )}
+          {ringsOn && !mono && (
+            <div className="ring-controls">
+              <button type="button" className="ui-pill" onClick={() => setPlaying((v) => !v)} aria-pressed={playing}>
+                {playing ? "Pause" : "Play"}
+              </button>
+              <span className="ui-control-label">TOF</span>
+              <input
+                type="range"
+                className="ui-range"
+                min={tMin}
+                max={tMax}
+                step={(tMax - tMin) / 2000}
+                value={tof}
+                aria-label="Time-of-flight slice"
+                onChange={(e) => {
+                  setPlaying(false);
+                  setTof(Number(e.target.value));
+                }}
+              />
+              <span>
+                {fmt(tof, 0)} µs · <span className="sym">λ</span> {fmt(tof / (NEUTRON_MASS_OVER_H * lMax), 3)}–{fmt(tof / (NEUTRON_MASS_OVER_H * lMin), 3)} Å
+              </span>
+            </div>
+          )}
           {g && range && (
             <p className="selection-note">
-              <b>{label(g)}</b> d {fmt(g.d, 5)} Å · diffracts at 2θ {fmt(range.min, 1)}–{fmt(range.max, 1)}° for λ {exp.lambdaMin}–{exp.lambdaMax} Å · seen by {seeing!.size} of {panels.length} panels
+              <b>{label(g)}</b> d {fmt(g.d, 5)} Å · diffracts at 2θ {fmt(range.min, 1)}–{fmt(range.max, 1)}° for λ {lam(exp.lambdaMin)}–{lam(exp.lambdaMax)} Å · seen by {seeing!.size} of {panels.length} panels
+              {ringsOn && <span className="dim">{ringNow !== undefined ? (mono ? ` · its ring is at 2θ = ${fmt(ringNow, 2)}°` : ` · in this slice its ring is at 2θ ≈ ${fmt(ringNow, 1)}° (L = ${fmt(lNom, 2)} m)`) : mono ? " · no ring (λ > 2d)" : " · no ring in this slice (λ > 2d)"}</span>}
             </p>
           )}
         </Card>
 
         <div className="ui-stack">
           {setup(
-            <div className="form-row">
-              <span className="ui-control-label">
-                Δ<span className="sym">d</span>/<span className="sym">d</span>
-              </span>
-              <UnitField label="Relative resolution (FWHM)" value={Number((100 * exp.dOverD).toPrecision(6))} unit="%" min={0.01} max={20} width="4.5ch" onCommit={(v) => onExp({ ...exp, dOverD: v / 100 })} />
-            </div>,
+            <>
+              <div className="form-row">
+                <span className="ui-control-label">
+                  Δ<span className="sym">d</span>/<span className="sym">d</span>
+                </span>
+                <UnitField label="Relative resolution (FWHM)" value={Number((100 * exp.dOverD).toPrecision(6))} unit="%" min={0.01} max={20} width="4.5ch" onCommit={(v) => onExp({ ...exp, dOverD: v / 100 })} />
+              </div>
+              {ringsOn && !mono && (
+                <div className="form-row">
+                  <span className="ui-control-label">
+                    Slice Δ<span className="sym">t</span>/<span className="sym">t</span>
+                  </span>
+                  <UnitField label="Time slice width (relative)" value={Number((100 * sliceWidth).toPrecision(6))} unit="%" min={0.01} max={20} width="4.5ch" onCommit={(v) => setSliceWidth(v / 100)} />
+                </div>
+              )}
+            </>,
           )}
-          <Card title="Selected panel" meta={panels[panel]!.name} info="The simulated pattern treats the panel as one bank at its centre: DIFC = 252.778·(L1 + L2)·2 sinθ µs/Å (no DIFA, ZERO). Real banks are calibrated, and their resolution varies with angle; Δd/d sets a constant Gaussian width.">
+          <Card
+            title="Selected panel"
+            meta={panels[panel]!.name}
+            info={
+              mono
+                ? "Geometry of the selected panel; the elastic pattern below covers every panel."
+                : "The simulated pattern treats the panel as one bank at its centre: DIFC = 252.778·(L1 + L2)·2 sinθ µs/Å (no DIFA, ZERO). Real banks are calibrated, and their resolution varies with angle; Δd/d sets a constant Gaussian width."
+            }
+          >
             <dl className="ui-stats ui-stats--three">
               <div>
                 <dt>2θ centre</dt>
@@ -516,66 +701,114 @@ function PowderExperiment({ result, theme, exp, onExp, instrument, panels, info,
                   {fmt(l1 + pa.l2, 3)} <small>m</small>
                 </dd>
               </div>
-              <div>
-                <dt>DIFC</dt>
-                <dd>
-                  {fmt(bank.difc, 1)} <small>µs/Å</small>
-                </dd>
-              </div>
-              <div>
-                <dt>d range</dt>
-                <dd>
-                  {fmt(seen.dMin, 3)}–{fmt(seen.dMax, 2)} <small>Å</small>
-                </dd>
-              </div>
-              <div>
-                <dt>Peaks</dt>
-                <dd>{peaks.length.toLocaleString()}</dd>
-              </div>
+              {mono ? (
+                <>
+                  <div>
+                    <dt>Elastic TOF</dt>
+                    <dd>
+                      {fmt(NEUTRON_MASS_OVER_H * (l1 + pa.l2) * lambda0, 0)} <small>µs</small>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>d range</dt>
+                    <dd>
+                      {fmt(lambda0 / (2 * Math.sin((pa.twoThetaMax * Math.PI) / 360)), 3)}–{fmt(lambda0 / (2 * Math.sin((pa.twoThetaMin * Math.PI) / 360)), 2)} <small>Å</small>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Rings</dt>
+                    <dd>{peaks.filter((x) => x.twoTheta! >= pa.twoThetaMin && x.twoTheta! <= pa.twoThetaMax).length}</dd>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <dt>DIFC</dt>
+                    <dd>
+                      {fmt(bank.difc, 1)} <small>µs/Å</small>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>d range</dt>
+                    <dd>
+                      {fmt(seen.dMin, 3)}–{fmt(seen.dMax, 2)} <small>Å</small>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Peaks</dt>
+                    <dd>{peaks.length.toLocaleString()}</dd>
+                  </div>
+                </>
+              )}
             </dl>
             <p className="empty-note">
-              TOF window {fmt(bank.difc * seen.dMin, 0)}–{fmt(bank.difc * seen.dMax, 0)} µs at the panel centre.
+              {mono
+                ? `Elastic neutrons reach this panel ${fmt(NEUTRON_MASS_OVER_H * (l1 + pa.l2) * lambda0, 0)} µs after leaving the moderator (L1 + L2 at its centre).`
+                : `TOF window ${fmt(bank.difc * seen.dMin, 0)}–${fmt(bank.difc * seen.dMax, 0)} µs at the panel centre.`}
             </p>
           </Card>
         </div>
       </div>
 
-      <div className="ui-grid ui-grid--split">
-        <Card
-          title="d coverage"
-          meta={`λ ${exp.lambdaMin}–${exp.lambdaMax} Å`}
-          info="A detector at 2θ records d from λmin/(2 sinθ) to λmax/(2 sinθ): the shaded band, darker where panels are. Each reflection is a line over the 2θ range where it diffracts, darker when stronger (Σ|F|² over its equivalents). The strip below the axis shows each panel's 2θ span in its colour. Click a line to select a reflection, a panel in the strip to simulate it."
-        >
-          <CoverageChart
-            lambdaMin={exp.lambdaMin}
-            lambdaMax={exp.lambdaMax}
-            panels={info}
-            panelColors={colorsCss}
-            lines={lines}
-            selected={sel}
-            onSelect={setSel}
-            selectedPanel={panel}
-            onPanelPick={pickPanel}
-            dFloor={result.provenance.dMin}
-          />
-        </Card>
-        <Card title="Detector map" meta={g ? "bold curves: where the selected reflection can land" : "unrolled about the vertical axis"} info="Panels projected onto a cylinder around the sample (γ horizontal angle from the beam, ν elevation), coloured by 2θ. Dashed curves are cones of constant 2θ. With a reflection selected, the bold cones bound the 2θ range where it diffracts for the band, and only the panels that record it stay bright. Click a panel to simulate its pattern.">
-          <DetectorMap panels={panels} panelColors={colorsCss} {...(seeing ? { highlight: seeing } : {})} selectedPanel={panel} onPanelClick={pickPanel} lambdaMin={exp.lambdaMin} lambdaMax={exp.lambdaMax} rings={rings} />
-          <p className="plot-hint">{angleLegend}</p>
-        </Card>
-      </div>
+      <Card
+        title="Detector map"
+        meta={ringsOn ? (g ? "red: the selected reflection's ring, ray-traced" : mono ? `elastic powder rings at λ = ${fmt(lambda0, 4)} Å` : `powder rings at t = ${fmt(tof, 0)} µs`) : g ? "bold curves: where the selected reflection can land" : "unrolled about the vertical axis"}
+        info={
+          ringsOn
+            ? "Panels projected onto a cylinder around the sample (γ horizontal angle from the beam, ν elevation), painted with the powder rings of the current time-of-flight slice. Dashed curves are cones of constant 2θ. The red curve is the selected reflection's ring traced independently by ray casting (solving t = 252.778·(L1 + L2)·2d·sinθ along each azimuth); it should run along a bright ring. Click a panel to simulate its pattern."
+            : "Panels projected onto a cylinder around the sample (γ horizontal angle from the beam, ν elevation), coloured by 2θ. Dashed curves are cones of constant 2θ. With a reflection selected, the bold cones bound the 2θ range where it diffracts for the band, and only the panels that record it stay bright. Click a panel to simulate its pattern."
+        }
+      >
+        <DetectorMap panels={panels} panelColors={colorsCss} {...(seeing ? { highlight: seeing } : {})} selectedPanel={panel} onPanelClick={pickPanel} lambdaMin={exp.lambdaMin} lambdaMax={exp.lambdaMax} rings={rings} {...(ringsOn ? { raster } : {})} {...(traces ? { traces } : {})} />
+        <p className="plot-hint">{legend}</p>
+      </Card>
 
       <Card
-        title={`Simulated pattern · ${panels[panel]!.name}`}
-        meta={`2θ ${fmt(pa.twoThetaCenter, 2)}° · DIFC ${fmt(bank.difc, 1)} µs/Å · Δd/d ${Number((100 * exp.dOverD).toPrecision(6))} %`}
-        info="Neutron TOF pattern of the selected panel treated as one bank at its centre angle: I = Σ|F|²·sinθ·d⁴ (GSAS-II TOF Lorentz factor, incident spectrum normalised out), Gaussian peaks of constant Δd/d on a logarithmic TOF grid. Click a peak to select its reflection everywhere on the page."
-        actions={<Segmented label="Axis" value={axis} onChange={setAxis} options={[{ value: "tof", label: "TOF" }, { value: "d", label: "d" }]} />}
+        title={mono ? "Elastic powder pattern" : `Simulated pattern · ${panels[panel]!.name}`}
+        meta={
+          mono
+            ? `λ ${fmt(lambda0, 4)} Å · 2θ ${fmt(covered[0]?.[0] ?? 0, 1)}–${fmt(covered.at(-1)?.[1] ?? 0, 1)}° · zero in detector gaps`
+            : `2θ ${fmt(pa.twoThetaCenter, 2)}° · DIFC ${fmt(bank.difc, 1)} µs/Å · Δd/d ${Number((100 * exp.dOverD).toPrecision(6))} %`
+        }
+        info={
+          mono
+            ? "Elastic intensity per unit solid angle against 2θ over all panels, as a chopper spectrometer records it at the elastic line: I = Σ|F|²/(sin²θ cosθ) (CW powder Lorentz factor, no polarization for neutrons), each peak a Gaussian of FWHM 2·tanθ·√((Δd/d)² + (ΔE/2E)²); zero where no panel covers 2θ. Click a peak to select its reflection everywhere on the page."
+            : "Neutron TOF pattern of the selected panel treated as one bank at its centre angle: I = Σ|F|²·sinθ·d⁴ (GSAS-II TOF Lorentz factor, incident spectrum normalised out), Gaussian peaks of constant Δd/d on a logarithmic TOF grid. Click a peak to select its reflection everywhere on the page."
+        }
+        actions={mono ? undefined : <Segmented label="Axis" value={axis} onChange={setAxis} options={[{ value: "tof", label: "TOF" }, { value: "d", label: "d" }]} />}
       >
         {peaks.length ? (
-          <PowderPlot peaks={peaks} profile={profile} axis={axis} selected={peakSel >= 0 ? peakSel : null} onSelect={(i) => setSel(i === null ? null : (groupOfD.get(peaks[i]!.d) ?? null))} showSticks={false} />
+          <PowderPlot
+            peaks={peaks}
+            profile={profile}
+            axis={mono ? "twoTheta" : axis}
+            selected={peakSel >= 0 ? peakSel : null}
+            onSelect={(i) => setSel(i === null ? null : (groupOfD.get(peaks[i]!.d) ?? null))}
+            showSticks={false}
+            marker={ringsOn && !mono ? (axis === "tof" ? tof : tof / bank.difc) : undefined}
+          />
         ) : (
-          <p className="empty-note">No reflections fall in this panel's d range ({fmt(seen.dMin, 3)}–{fmt(seen.dMax, 2)} Å) above d_min.</p>
+          <p className="empty-note">{mono ? "No reflection lands on the detectors at this Ei (or above d_min)." : `No reflections fall in this panel's d range (${fmt(seen.dMin, 3)}–${fmt(seen.dMax, 2)} Å) above d_min.`}</p>
         )}
+      </Card>
+      <Card
+        title="d coverage"
+        meta={`λ ${lam(exp.lambdaMin)}–${lam(exp.lambdaMax)} Å`}
+        info="A detector at 2θ records d from λmin/(2 sinθ) to λmax/(2 sinθ): the shaded band, darker where panels are. Each reflection is a line over the 2θ range where it diffracts, darker when stronger (Σ|F|² over its equivalents). The strip below the axis shows each panel's 2θ span in its colour. Click a line to select a reflection, a panel in the strip to simulate it."
+      >
+        <CoverageChart
+          lambdaMin={exp.lambdaMin}
+          lambdaMax={exp.lambdaMax}
+          panels={info}
+          panelColors={colorsCss}
+          lines={lines}
+          selected={sel}
+          onSelect={setSel}
+          selectedPanel={panel}
+          onPanelPick={pickPanel}
+          dFloor={result.provenance.dMin}
+          sliceLambda={ringsOn ? lambdaNom : undefined}
+        />
       </Card>
     </div>
   );

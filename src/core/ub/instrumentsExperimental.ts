@@ -13,10 +13,20 @@
  *    is fixed (no goniometer axes). POWGEN's band depends on the
  *    choppers: the default is one 60 Hz frame (≈ 3956/(60·63) ≈ 1.05 Å wide for its ~63 m
  *    flight path) centred on 1.066 Å; adjust it to the chopper setting.
+ *  - ARCS, SEQUOIA and CNCS are direct-geometry chopper spectrometers: a monochromatic
+ *    beam of energy Ei, simulated here for elastic scattering (Bragg peaks at Ei), for single
+ *    crystals on a vertical rotation ψ or for powders. Ei ranges and elastic resolution from the
+ *    ORNL spec sheets (neutrons.ornl.gov/sites/default/files/{ARCS,SEQUOIA,CNCS}_spec_sheet.pdf,
+ *    Dec 2021): ARCS 20–1500 meV (the ARCS web page says 10–1500), 3–5 % Ei; SEQUOIA 4–6000 meV,
+ *    1–5 % Ei; CNCS 0.5–80 meV, 10–500 µeV. ψ is counter-clockwise about +y (Mantid sense +1); its
+ *    motor log depends on the sample environment (Mantid examples: CCR13VRot on SEQUOIA,
+ *    Testing/SystemTests/tests/framework/SNSConvertToMDTest.py; huber on CNCS,
+ *    docs/source/algorithms/ConvertMultipleRunsToSingleCrystalMD-v1.rst).
  */
 import geometry from "../../data/instruments.json";
 import type { DetectorPanel } from "../instrument/detectors.ts";
 import { CHI, OMEGA, PHI, type InstrumentPreset } from "./instruments.ts";
+import { neutronWavelengthA } from "../physics/energy.ts";
 
 const panels = (id: string): DetectorPanel[] => {
   const ins = geometry.instruments.find((i) => i.id === id);
@@ -32,7 +42,7 @@ const idfNote = (id: string) => {
 export const EXPERIMENTAL_INSTRUMENTS: readonly InstrumentPreset[] = [
   {
     id: "topaz-cryo",
-    mode: "single-crystal",
+    modes: ["single-crystal"],
     label: "TOPAZ · cryogenic goniometer (ω)",
     goniometer: { id: "topaz-cryo", label: "TOPAZ cryogenic", axes: [{ ...OMEGA, min: 0, max: 360, log: "BL12:Mot:Gonioc:Omega" }], note: "ω about the vertical +y axis, counter-clockwise (χ = φ = 0)." },
     lambdaMin: 0.4,
@@ -44,7 +54,7 @@ export const EXPERIMENTAL_INSTRUMENTS: readonly InstrumentPreset[] = [
   },
   {
     id: "topaz-ambient",
-    mode: "single-crystal",
+    modes: ["single-crystal"],
     label: "TOPAZ · ambient goniometer (ω, φ; χ = 135°)",
     goniometer: {
       id: "topaz-ambient",
@@ -65,7 +75,7 @@ export const EXPERIMENTAL_INSTRUMENTS: readonly InstrumentPreset[] = [
   },
   {
     id: "corelli",
-    mode: "single-crystal",
+    modes: ["single-crystal"],
     label: "CORELLI · sample rotation (Axis1–3)",
     goniometer: {
       id: "corelli",
@@ -86,7 +96,7 @@ export const EXPERIMENTAL_INSTRUMENTS: readonly InstrumentPreset[] = [
   },
   {
     id: "nomad",
-    mode: "powder",
+    modes: ["powder"],
     label: "NOMAD · powder",
     goniometer: { id: "nomad", label: "NOMAD", axes: [], note: "Powder diffractometer: the sample is fixed." },
     lambdaMin: 0.1,
@@ -98,7 +108,7 @@ export const EXPERIMENTAL_INSTRUMENTS: readonly InstrumentPreset[] = [
   },
   {
     id: "powgen",
-    mode: "powder",
+    modes: ["powder"],
     label: "POWGEN · powder",
     goniometer: { id: "powgen", label: "POWGEN", axes: [], note: "Powder diffractometer: the sample is fixed." },
     lambdaMin: 0.54,
@@ -108,4 +118,25 @@ export const EXPERIMENTAL_INSTRUMENTS: readonly InstrumentPreset[] = [
     source: `ORNL POWGEN page (60 m). Band: one 60 Hz frame around 1.066 Å; set it to your chopper setting. ${idfNote("POWGEN")}`,
     experimental: true,
   },
+  spectrometer("arcs", "ARCS", { eiMeV: 60, eiMin: 20, eiMax: 1500, elasticFwhm: 0.04 }, "ORNL ARCS spec sheet: 13.6 m to the sample, 3.0–3.4 m to the detectors, −28° to 135° horizontal, −27° to 26° vertical; Ei 20–1500 meV, elastic resolution 3–5 % Ei."),
+  spectrometer("sequoia", "SEQUOIA", { eiMeV: 60, eiMin: 4, eiMax: 6000, elasticFwhm: 0.03 }, "ORNL SEQUOIA spec sheet: 20.0 m to the sample, 5.5–6.3 m to the detectors, −30° to 60° horizontal, ±18° vertical (rows B–D; the A row reaches −30°); Ei 4–6000 meV, elastic resolution 1–5 % Ei."),
+  spectrometer("cncs", "CNCS", { eiMeV: 12, eiMin: 0.5, eiMax: 80, elasticFwhm: 0.02 }, "ORNL CNCS spec sheet: 36.2 m to the sample, 3.5 m to the detectors, ±16° vertical, horizontal −50° to +140° (the current IDF spans −53.6° to 132.6°); Ei 0.5–80 meV, elastic resolution 10–500 µeV."),
 ];
+
+function spectrometer(id: string, name: string, incident: NonNullable<InstrumentPreset["incident"]>, spec: string): InstrumentPreset {
+  const lambda = neutronWavelengthA(incident.eiMeV);
+  const half = incident.elasticFwhm / 4; // Δλ/λ = ΔE/(2E), split about λ
+  return {
+    id,
+    modes: ["single-crystal", "powder"],
+    label: `${name} · elastic (Ei)`,
+    goniometer: { id, label: name, axes: [{ name: "ψ", direction: [0, 1, 0], sense: 1, min: -180, max: 360 }], note: "Single crystals: rotation ψ about the vertical +y axis, counter-clockwise (Mantid sense +1); the motor log depends on the sample environment. Powders: the sample is fixed." },
+    lambdaMin: lambda * (1 - half),
+    lambdaMax: lambda * (1 + half),
+    l1: l1(name),
+    detectors: panels(name),
+    incident,
+    source: `${spec} ${idfNote(name)}`,
+    experimental: true,
+  };
+}

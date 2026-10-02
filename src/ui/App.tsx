@@ -145,6 +145,13 @@ export function App() {
     setAxis(m === "tof" ? "tof" : "twoTheta");
   };
 
+  // The Experiment page simulates SNS neutron instruments: it always uses neutron scattering.
+  const onExperiment = tab === "experiment";
+  useEffect(() => {
+    if (onExperiment && radiation !== "neutron") changeRadiation("neutron");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onExperiment, radiation]);
+
   const ok: CalcSuccess | undefined = result?.ok ? result : undefined;
   const preset = WAVELENGTHS.find((w) => w.value === wavelength && w.radiation === radiation);
   const difc = tof.difcOverride ?? difcFromGeometry(tof.flightPathM, tof.twoThetaDeg);
@@ -237,59 +244,70 @@ export function App() {
         <div className="workspace">
           <section className="ui-page">
             <div className="ui-controls" aria-label="Calculation settings">
-              <span className="ui-control">
-                <span className="ui-control-label">Radiation</span>
-                <Segmented label="Radiation" value={radiation} onChange={changeRadiation} options={[{ value: "xray", label: "X-ray" }, { value: "neutron", label: "Neutron" }]} />
-                {radiation === "neutron" && <Segmented label="Neutron mode" value={neutronMode} onChange={changeNeutronMode} options={[{ value: "cw", label: "CW" }, { value: "tof", label: "TOF" }]} />}
-              </span>
-              {!isTof ? (
+              {onExperiment ? (
                 <span className="ui-control">
-                  <span className="ui-control-label">
-                    <span className="sym">λ</span>
-                  </span>
-                  <UnitField label="Wavelength" value={Number(wavelength.toPrecision(7))} unit="Å" min={0.01} max={20} onCommit={setWavelength} />
-                  <span className="ui-control-label">
-                    <span className="sym">E</span>
-                  </span>
-                  {radiation === "xray" ? (
-                    <UnitField label="Photon energy" value={Number(xrayEnergyKeV(wavelength).toPrecision(7))} unit="keV" min={0.62} max={1240} onCommit={(e) => setWavelength(xrayWavelengthA(e))} />
-                  ) : (
-                    <UnitField label="Neutron energy" value={Number(neutronEnergyMeV(wavelength).toPrecision(7))} unit="meV" min={0.2} max={1e6} onCommit={(e) => setWavelength(neutronWavelengthA(e))} />
-                  )}
-                  <select className="ui-select" aria-label="Wavelength preset" value={preset ? String(preset.value) : ""} onChange={(e) => e.target.value && setWavelength(Number(e.target.value))}>
-                    <option value="">Custom</option>
-                    {WAVELENGTHS.filter((w) => w.radiation === radiation).map((w) => (
-                      <option key={w.label} value={w.value}>
-                        {w.label}
-                      </option>
-                    ))}
-                  </select>
+                  <span className="ui-control-label">Radiation</span>
+                  <Chip tone="accent" title="The Experiment page simulates SNS neutron instruments; the incident beam comes from the instrument.">
+                    Neutrons · SNS instruments
+                  </Chip>
                 </span>
               ) : (
                 <>
                   <span className="ui-control">
-                    <span className="ui-control-label">
-                      Bank 2<span className="sym">θ</span>
-                    </span>
-                    <UnitField label="Bank scattering angle" value={tof.twoThetaDeg} unit="°" min={0.1} max={179.9} onCommit={(v) => setTof({ ...tof, twoThetaDeg: v })} width="5ch" />
+                    <span className="ui-control-label">Radiation</span>
+                    <Segmented label="Radiation" value={radiation} onChange={changeRadiation} options={[{ value: "xray", label: "X-ray" }, { value: "neutron", label: "Neutron" }]} />
+                    {radiation === "neutron" && <Segmented label="Neutron mode" value={neutronMode} onChange={changeNeutronMode} options={[{ value: "cw", label: "CW" }, { value: "tof", label: "TOF" }]} />}
                   </span>
-                  <span className="ui-control">
-                    <span className="ui-control-label">
-                      <span className="sym">L</span>
-                      <sub>1</sub>+<span className="sym">L</span>
-                      <sub>2</sub>
-                      <InfoBadge>Total flight path, moderator to sample to detector. DIFC = (m_n/h)·L·2sinθ = 252.778 µs/(m·Å)·L·2sinθ. Calibrated DIFC, DIFA and ZERO from an instrument file are more accurate than geometry.</InfoBadge>
+                  {!isTof ? (
+                    <span className="ui-control">
+                      <span className="ui-control-label">
+                        <span className="sym">λ</span>
+                      </span>
+                      <UnitField label="Wavelength" value={Number(wavelength.toPrecision(7))} unit="Å" min={0.01} max={20} onCommit={setWavelength} />
+                      <span className="ui-control-label">
+                        <span className="sym">E</span>
+                      </span>
+                      {radiation === "xray" ? (
+                        <UnitField label="Photon energy" value={Number(xrayEnergyKeV(wavelength).toPrecision(7))} unit="keV" min={0.62} max={1240} onCommit={(e) => setWavelength(xrayWavelengthA(e))} />
+                      ) : (
+                        <UnitField label="Neutron energy" value={Number(neutronEnergyMeV(wavelength).toPrecision(7))} unit="meV" min={0.2} max={1e6} onCommit={(e) => setWavelength(neutronWavelengthA(e))} />
+                      )}
+                      <select className="ui-select" aria-label="Wavelength preset" value={preset ? String(preset.value) : ""} onChange={(e) => e.target.value && setWavelength(Number(e.target.value))}>
+                        <option value="">Custom</option>
+                        {WAVELENGTHS.filter((w) => w.radiation === radiation).map((w) => (
+                          <option key={w.label} value={w.value}>
+                            {w.label}
+                          </option>
+                        ))}
+                      </select>
                     </span>
-                    <UnitField label="Total flight path" value={tof.flightPathM} unit="m" min={0.1} max={500} onCommit={(v) => setTof({ ...tof, flightPathM: v })} width="5ch" />
-                    <Chip title="DIFC from the bank geometry">DIFC {difc.toFixed(1)} µs/Å</Chip>
-                  </span>
-                  <span className="ui-control">
-                    <span className="ui-control-label">
-                      <span className="sym">λ</span> band
-                    </span>
-                    <UnitField label="Minimum wavelength" value={tof.lambdaMin} unit="Å" min={0.01} onCommit={(v) => setTof({ ...tof, lambdaMin: v })} width="4.5ch" />
-                    <UnitField label="Maximum wavelength" value={tof.lambdaMax} unit="Å" min={0.02} onCommit={(v) => setTof({ ...tof, lambdaMax: v })} width="4.5ch" />
-                  </span>
+                  ) : (
+                    <>
+                      <span className="ui-control">
+                        <span className="ui-control-label">
+                          Bank 2<span className="sym">θ</span>
+                        </span>
+                        <UnitField label="Bank scattering angle" value={tof.twoThetaDeg} unit="°" min={0.1} max={179.9} onCommit={(v) => setTof({ ...tof, twoThetaDeg: v })} width="5ch" />
+                      </span>
+                      <span className="ui-control">
+                        <span className="ui-control-label">
+                          <span className="sym">L</span>
+                          <sub>1</sub>+<span className="sym">L</span>
+                          <sub>2</sub>
+                          <InfoBadge>Total flight path, moderator to sample to detector. DIFC = (m_n/h)·L·2sinθ = 252.778 µs/(m·Å)·L·2sinθ. Calibrated DIFC, DIFA and ZERO from an instrument file are more accurate than geometry.</InfoBadge>
+                        </span>
+                        <UnitField label="Total flight path" value={tof.flightPathM} unit="m" min={0.1} max={500} onCommit={(v) => setTof({ ...tof, flightPathM: v })} width="5ch" />
+                        <Chip title="DIFC from the bank geometry">DIFC {difc.toFixed(1)} µs/Å</Chip>
+                      </span>
+                      <span className="ui-control">
+                        <span className="ui-control-label">
+                          <span className="sym">λ</span> band
+                        </span>
+                        <UnitField label="Minimum wavelength" value={tof.lambdaMin} unit="Å" min={0.01} onCommit={(v) => setTof({ ...tof, lambdaMin: v })} width="4.5ch" />
+                        <UnitField label="Maximum wavelength" value={tof.lambdaMax} unit="Å" min={0.02} onCommit={(v) => setTof({ ...tof, lambdaMax: v })} width="4.5ch" />
+                      </span>
+                    </>
+                  )}
                 </>
               )}
               <span className="ui-control">
@@ -300,7 +318,7 @@ export function App() {
                 </span>
                 <UnitField label="Minimum d-spacing" value={dMin} unit="Å" min={0.05} onCommit={setDMin} />
               </span>
-              {radiation === "xray" && (
+              {radiation === "xray" && !onExperiment && (
                 <span className="ui-control">
                   <span className="ui-control-label">Polarization</span>
                   <select
@@ -374,9 +392,9 @@ export function App() {
             )}
             {ok && tab === "reflections" && <ReflectionsPage result={ok} wavelength={wavelength} radiation={radiation} />}
             {ok && tab === "ub" && <UbPage result={ok} theme={theme} ub={ub} onUb={setUb} gonio={gonio} onGonio={setGonio} />}
-            {ok && tab === "experiment" && ExperimentPage && (
+            {ok && onExperiment && ExperimentPage && ok.provenance.settings.radiation === "neutron" && (
               <Suspense fallback={<p className="empty-note">Loading the experiment page…</p>}>
-                <ExperimentPage result={ok} theme={theme} ub={ub} radiation={radiation} onNeutron={() => changeRadiation("neutron")} onDMin={setDMin} exp={experiment} onExp={setExperiment} />
+                <ExperimentPage result={ok} theme={theme} ub={ub} onDMin={setDMin} exp={experiment} onExp={setExperiment} />
               </Suspense>
             )}
             {ok && tab === "powder" && (

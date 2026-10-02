@@ -234,6 +234,42 @@
       "file": "POWGEN_Definition_2018-05-05.xml",
       "sha256": "b4e6777d80e120f6600cf4382d6152eacb551854b746fac65c3f86911a7aa1bf",
       "license": "GPL-3.0-or-later (Mantid instrument definitions). Only numerical detector geometry is extracted, with attribution."
+    },
+    {
+      "id": "idf-arcs",
+      "role": "primary",
+      "dataset": "instrument-geometry",
+      "description": "Mantid ARCS instrument definition (valid from 2012-10-11): 115 eight-packs of 128-pixel tubes, L1 13.6 m.",
+      "urls": [
+        "https://raw.githubusercontent.com/mantidproject/mantid/67c2f43ef79ea4ce4f3c92f417f5c74f8fedcf30/instrument/ARCS_Definition_20121011-.xml"
+      ],
+      "file": "ARCS_Definition_20121011-.xml",
+      "sha256": "5109495714ee2bd560798600b89f67b81cb16acf62e91a4f3cdc205ce3077e39",
+      "license": "GPL-3.0-or-later (Mantid instrument definitions). Only numerical detector geometry is extracted, with attribution."
+    },
+    {
+      "id": "idf-sequoia",
+      "role": "primary",
+      "dataset": "instrument-geometry",
+      "description": "Mantid SEQUOIA instrument definition (valid from 2019-04-04): 117 eight-packs of 128-pixel tubes, L1 20.01 m.",
+      "urls": [
+        "https://raw.githubusercontent.com/mantidproject/mantid/67c2f43ef79ea4ce4f3c92f417f5c74f8fedcf30/instrument/SEQUOIA_Definition.xml"
+      ],
+      "file": "SEQUOIA_Definition.xml",
+      "sha256": "93de5bfcd551e10805b8caa85e054da65ebd93209756a0610fea445e8725eda3",
+      "license": "GPL-3.0-or-later (Mantid instrument definitions). Only numerical detector geometry is extracted, with attribution."
+    },
+    {
+      "id": "idf-cncs",
+      "role": "primary",
+      "dataset": "instrument-geometry",
+      "description": "Mantid CNCS instrument definition (valid from 2026-02-02): 50 eight-packs of 128-pixel 2 m tubes, L1 36.26 m.",
+      "urls": [
+        "https://raw.githubusercontent.com/mantidproject/mantid/67c2f43ef79ea4ce4f3c92f417f5c74f8fedcf30/instrument/CNCS_Definition.xml"
+      ],
+      "file": "CNCS_Definition.xml",
+      "sha256": "ae0366b449e36dd568aa750a94dbe791f5e1c93e25d7a9970f82ab488eb98ab2",
+      "license": "GPL-3.0-or-later (Mantid instrument definitions). Only numerical detector geometry is extracted, with attribution."
     }
   ]
 }

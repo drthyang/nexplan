@@ -42,6 +42,7 @@ Status: implementation started. The data pipeline and verification reports exist
 | Experiment page (experimental): single crystal (3D detectors, unrolled detector map, rotation scan with family completeness, reflections on panels) and powder (sample fixed: 2θ–d coverage, panels per reflection, per-panel TOF pattern) | done; UB page is now orientation-only |
 | CI and Pages workflows | written; repo not yet pushed |
 | Anisotropic Debye–Waller, anomalous X-ray terms | not started |
+| Powder rings on the detectors (TOF slices, ray-traced check); ARCS, SEQUOIA, CNCS (elastic, exact monochromatic scans); Experiment page neutron-only | done |
 | M4 planning extras: masks, multi-axis scan plans, calibrated banks | not started |
 
 ## 1. Product objective

@@ -187,7 +187,8 @@ F(h) = Σⱼ oⱼ · aⱼ(s) · exp(−Bⱼ s²) · exp(+2πi h·xⱼ)
 
 ## 10. Experiment simulations (experimental)
 
-On the Experiment page; code in `src/core/instrument/simulate.ts`.
+On the Experiment page, for SNS neutron instruments only (the page always uses neutron scattering); code in
+`src/core/instrument/simulate.ts` and `src/core/instrument/powderRings.ts`.
 
 - **Detector map:** directions are unrolled onto a cylinder about the vertical axis, as in Mantid's instrument
   view: γ = atan2(u_x, u_z) (0 along the beam, +90° towards +x) and ν = asin(u_y). A cone of constant 2θ
@@ -203,3 +204,32 @@ On the Experiment page; code in `src/core/instrument/simulate.ts`.
 - **Simulated pattern of one panel:** the panel is treated as one bank at the 2θ of its centre, with
   DIFC = (m_n/h)·(L1 + L2)·2 sin θ (no DIFA or ZERO) and the TOF intensity and shapes of §7b, using Gaussian peaks of
   constant Δd/d. Real banks are calibrated, and their resolution varies with angle.
+- **Powder rings on the detectors.** An element at 2θ with flight path L = L1 + L2 records d = λ/(2 sin θ), where
+  λ = t/((m_n/h)·L) in a time-of-flight slice at time t, or the incident λ for a monochromatic beam. The counts per
+  unit solid angle from one d-group (Σ|F|² over its signed hkl), with the line a unit-area Gaussian G in ln d, are:
+  - TOF slice, incident spectrum normalised out: Σ|F|²·d⁴·sin θ·G. This is the GSAS-II TOF Lorentz factor per unit
+    solid angle. A line of power P(λ) ∝ λ³Σ|F|²/(2 sin θ) per cone, spread over 2π sin 2θ of solid angle, swept
+    through dλ = d cos θ d(2θ) by the white beam, gives λ⁴Σ|F|²/sin³θ ∝ d⁴ sin θ·Σ|F|².
+  - Fixed λ: Σ|F|²·G/(4 sin³θ). This is the CW Lorentz factor 1/(sin θ sin 2θ) per unit ring length, with the line
+    profile converted from 2θ to ln d (|d ln d/d2θ| = cot θ/2).
+  - Line FWHM in d: √((Δd/d)² + w²), with w the slice width Δt/t, or ΔE/(2E) for a monochromatic beam.
+  - Images are scaled to the brightest element of the slice and shown on a square-root scale.
+  - **Check:** `ringTrace` finds each ring independently by ray casting along every azimuth, solving
+    t = (m_n/h)·(L1 + L2)·2d·sin θ with L2 from the panel hit. The tests require each traced point to fall in a
+    panel-image cell, and a map cell, at its own 2θ within that cell's angular size, on the real NOMAD and POWGEN
+    geometry. They also check that the cone power at fixed λ is ∝ 1/sin θ, and that the time-integrated TOF line is
+    ∝ sin θ.
+- **Chopper spectrometers** (ARCS, SEQUOIA, CNCS), elastic scattering at the incident energy:
+  - λ = √(81.804 meV·Å²/Ei).
+  - The band is λ·(1 ± ΔE/4E), i.e. Δλ/λ = ΔE/2E split about λ.
+  - Single crystals rotate about the vertical axis ψ (counter-clockwise, Mantid sense +1).
+  - A monochromatic rotation scan solves the Bragg condition exactly instead of stepping. Rotating about one axis
+    keeps |q| and makes q_z = C + P cos ψ + Q sin ψ, with C, P, Q from ψ = 0°, 90° and 180°. Setting
+    q_z = −λ|q|²/2 gives at most two angles per turn. These crossings are binned into the scan steps, so no
+    reflection is missed between steps. Tested against a brute-force 0.01° scan.
+  - The elastic powder pattern is intensity per unit solid angle against 2θ: Σ|F|²/(sin²θ cos θ), with Gaussian
+    peaks of FWHM 2 tan θ·√((Δd/d)² + (ΔE/2E)²). It is zero where no panel covers 2θ.
+  - Coverage from the Mantid IDFs is tested against the ORNL spec sheets (Dec 2021):
+    - ARCS: −28° to 135°, −27° to 26°.
+    - SEQUOIA: −30° to 60°, and ±18° for rows B–D; the A row reaches −30° vertically.
+    - CNCS: ±16° vertically. ORNL quotes −50° to +140° horizontally; the current IDF spans −53.6° to 132.6°.

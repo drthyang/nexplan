@@ -2,8 +2,8 @@
  * Real-space instrument view (lab frame, metres): sample at the origin, beam
  * along +z, detector panels from the instrument definition, and (single
  * crystal) the spots where diffracted rays hit them, coloured by wavelength.
- * Panels can be coloured individually (powder: by 2θ), highlighted, and
- * picked. Click a spot to select its reflection, or a panel to pick it.
+ * Panels can be coloured individually (powder: by 2θ), painted with an
+ * image (powder rings), highlighted, and picked. Click a spot to select its reflection, or a panel to pick it.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
@@ -40,6 +40,8 @@ export function InstrumentView({
   onPanelClick,
   summary,
   legend,
+  panelImages,
+  traces,
 }: {
   panels: readonly DetectorPanel[];
   spots?: readonly InstrumentSpot[];
@@ -58,11 +60,15 @@ export function InstrumentView({
   onPanelClick?: (i: number) => void;
   summary?: ReactNode;
   legend?: ReactNode;
+  /** Per-panel RGBA images (rows from the (−w/2, −h/2) corner, along `up`), drawn on the panel faces. */
+  panelImages?: readonly { readonly width: number; readonly height: number; readonly data: Uint8Array }[];
+  /** Polylines on the detectors (lab frame, m), drawn in the selection colour (e.g. a ray-traced powder ring). */
+  traces?: readonly (readonly Vec3[])[];
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const [showLabels, setShowLabels] = useState(false);
   const [resetToken, setResetToken] = useState(0);
-  const live = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; spots: THREE.InstancedMesh; selection: THREE.Group; faces: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>[]; edges: THREE.LineLoop<THREE.BufferGeometry, THREE.LineBasicMaterial>[]; R: number } | null>(null);
+  const live = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; spots: THREE.InstancedMesh; selection: THREE.Group; traces: THREE.Group; faces: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>[]; edges: THREE.LineLoop<THREE.BufferGeometry, THREE.LineBasicMaterial>[]; R: number } | null>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
   const onPanelRef = useRef(onPanelClick);
@@ -140,12 +146,14 @@ export function InstrumentView({
     scene.add(spotMesh);
     const selection = new THREE.Group();
     scene.add(selection);
+    const traceGroup = new THREE.Group();
+    scene.add(traceGroup);
 
     camera.position.set(R * 1.4, R * 1.1, R * 0.9);
     controls.target.set(0, 0, 0);
     camera.lookAt(0, 0, 0);
     controls.update();
-    live.current = { renderer, scene, camera, spots: spotMesh, selection, faces, edges, R };
+    live.current = { renderer, scene, camera, spots: spotMesh, selection, traces: traceGroup, faces, edges, R };
 
     const ray = new THREE.Raycaster();
     let down: { x: number; y: number } | null = null;
@@ -206,14 +214,51 @@ export function InstrumentView({
       const on = !highlight || highlight.has(i);
       const isSel = i === selectedPanel;
       const colour = panelColors?.[i] ?? PANEL_COLOR;
-      face.material.color.setHex(colour);
-      face.material.opacity = isSel ? 0.55 : !highlight ? (panelColors ? base * 2.6 : base) : on ? 0.42 : 0.04;
+      const img = panelImages?.[i];
+      let tex = face.material.map as THREE.DataTexture | null;
+      if (img) {
+        if (!tex || tex.image.width !== img.width || tex.image.height !== img.height) {
+          tex?.dispose();
+          tex = new THREE.DataTexture(new Uint8Array(img.data), img.width, img.height, THREE.RGBAFormat);
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.magFilter = THREE.LinearFilter;
+          tex.minFilter = THREE.LinearFilter;
+          face.material.map = tex;
+          face.material.needsUpdate = true;
+        } else (tex.image.data as Uint8Array).set(img.data);
+        tex.needsUpdate = true;
+        face.material.color.setHex(0xffffff);
+        face.material.opacity = on ? 1 : 0.2;
+      } else {
+        if (tex) {
+          tex.dispose();
+          face.material.map = null;
+          face.material.needsUpdate = true;
+        }
+        face.material.color.setHex(colour);
+        face.material.opacity = isSel ? 0.55 : !highlight ? (panelColors ? base * 2.6 : base) : on ? 0.42 : 0.04;
+      }
       const edge = s.edges[i]!;
-      edge.material.color.setHex(isSel ? SELECT_COLOR : colour);
+      edge.material.color.setHex(isSel ? SELECT_COLOR : img ? 0x8a94a6 : colour);
       edge.material.opacity = isSel ? 1 : on ? 0.8 : 0.15;
       edge.renderOrder = isSel ? 2 : 0;
     });
-  }, [panelColors, highlight, selectedPanel, theme, showLabels, panels, resetToken]);
+  }, [panelColors, panelImages, highlight, selectedPanel, theme, showLabels, panels, resetToken]);
+
+  // Traces, drawn just in front of the panels.
+  useEffect(() => {
+    const s = live.current;
+    if (!s) return;
+    disposeTree(s.traces);
+    s.traces.clear();
+    const mat = new THREE.LineBasicMaterial({ color: SELECT_COLOR, depthTest: false });
+    for (const line of traces ?? []) {
+      if (line.length < 2) continue;
+      const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(line.map((v) => new THREE.Vector3(v[0] * 0.995, v[1] * 0.995, v[2] * 0.995))), mat);
+      l.renderOrder = 3;
+      s.traces.add(l);
+    }
+  }, [traces, theme, showLabels, panels, resetToken]);
 
   // Spots and selection, updated in place.
   useEffect(() => {

@@ -33,6 +33,7 @@ export function PowderPlot({
   selected,
   onSelect,
   showSticks,
+  marker,
 }: {
   peaks: readonly PowderPeak[];
   profile: { x: Float64Array; y: Float64Array };
@@ -40,6 +41,8 @@ export function PowderPlot({
   selected: number | null;
   onSelect: (index: number | null) => void;
   showSticks: boolean;
+  /** Optional position (axis units) to mark, e.g. the current time-of-flight slice. */
+  marker?: number | undefined;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
@@ -190,6 +193,7 @@ export function PowderPlot({
           {showSticks &&
             visibleIdx.map((i) => <line key={`s${i}`} className="series-stick" x1={sx(pos[i]!)} x2={sx(pos[i]!)} y1={sy(0)} y2={sy((100 * peaks[i]!.intensity) / iMax)} />)}
           {path && <path className="series-profile" d={path} />}
+          {marker !== undefined && marker >= x0 && marker <= x1 && <line className="slice-line" x1={sx(marker)} x2={sx(marker)} y1={m.t} y2={m.t + H} />}
           {hover && hover.index !== sel && <line className="hover-line" x1={sx(pos[hover.index]!)} x2={sx(pos[hover.index]!)} y1={m.t} y2={m.t + H} />}
           {/* Reflection ticks */}
           {visibleIdx.map((i) => (

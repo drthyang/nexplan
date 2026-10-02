@@ -207,7 +207,8 @@ export function flattenIdf(xml: string): InstrumentGeometry {
   }
   for (const [key, tubes] of packs) {
     const parts = key.split("/");
-    const bank = [...parts].reverse().find((p) => /bank/i.test(p));
+    // Name: the nearest "bank…" ancestor, else the pack's parent (ARCS/SEQUOIA "B1", "C25T"), else the path.
+    const bank = [...parts].reverse().find((p) => /bank/i.test(p)) ?? (parts.length > 1 ? parts[parts.length - 2] : undefined);
     panels.push(fitPack(bank ?? key, [...tubes.values()]));
   }
   return { name: root.attrs.name ?? "", l1, panels };

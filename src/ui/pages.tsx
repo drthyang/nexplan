@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { CalcSuccess } from "../app/compute.ts";
-import type { PowderAxis, PowderPeak } from "../core/diffraction/powder.ts";
+import type { PowderAxis } from "../core/diffraction/powder.ts";
 import { tofFromD, type TofShape } from "../core/diffraction/tof.ts";
 import type { Diagnostic } from "../io/cif/structure.ts";
 import { Card, Chip, InfoBadge, Segmented, TierChip, UnitField } from "./components.tsx";
@@ -455,191 +455,120 @@ export function PowderPage({
     downloadText(`${result.blockName}-powder-profile.csv`, lines.join("\n") + "\n", "text/csv");
   };
 
-  const sel = selected !== null ? peaks[selected] : undefined;
   return (
-    <div className="ui-grid ui-grid--split">
-      <div className="ui-stack">
-        <Card
-          title="Powder pattern"
-          meta={
-            tof
-              ? `${peaks.length} peaks · TOF bank 2θ = ${result.bank!.twoThetaDeg}° · DIFC ${fmt(result.bank!.difc, 1)} µs/Å`
-              : `${peaks.length} peaks · λ = ${settings.wavelength} Å · ${settings.radiation === "xray" ? "X-ray" : "neutron"} CW`
-          }
-          info={
-            tof
-              ? "TOF intensity = Σ|F|² over every signed hkl at the same d × sinθ·d⁴ (GSAS-II TOF Lorentz factor), for data normalized by the incident spectrum. t = ZERO + DIFC·d + DIFA·d². Peaks are unit-area shapes; switching to d or Q transforms the density, so areas are preserved. No absorption or extinction."
-              : "Intensity = Σ|F|² over every signed hkl at the same d, times the CW powder Lorentz factor 1/(sin²θ cosθ) and, for X-rays, the chosen polarization factor. No absorption, texture or extinction. Peaks are unit-area pseudo-Voigts on the chosen axis."
-          }
-          actions={
-            <>
-              <Segmented label="Axis" value={shownAxis} onChange={onAxis} options={axisOptions} />
-              {tof ? (
-                <TofShapeControls shape={tofShape} onChange={onTofShape} />
-              ) : (
-                <>
-                  <span className="ui-control">
-                    <span className="ui-control-label">FWHM</span>
-                    <UnitField label="Peak FWHM" value={cwProfile.fwhm} unit={fwhmUnit} min={1e-6} onCommit={(fwhm) => onCwProfile({ ...cwProfile, fwhm })} width="4.2ch" />
+    <div className="ui-stack">
+      <Card
+        title="Powder pattern"
+        meta={
+          tof
+            ? `${peaks.length} peaks · TOF bank 2θ = ${result.bank!.twoThetaDeg}° · DIFC ${fmt(result.bank!.difc, 1)} µs/Å`
+            : `${peaks.length} peaks · λ = ${settings.wavelength} Å · ${settings.radiation === "xray" ? "X-ray" : "neutron"} CW`
+        }
+        info={
+          tof
+            ? "TOF intensity = Σ|F|² over every signed hkl at the same d × sinθ·d⁴ (GSAS-II TOF Lorentz factor), for data normalized by the incident spectrum. t = ZERO + DIFC·d + DIFA·d². Peaks are unit-area shapes; switching to d or Q transforms the density, so areas are preserved. No absorption or extinction."
+            : "Intensity = Σ|F|² over every signed hkl at the same d, times the CW powder Lorentz factor 1/(sin²θ cosθ) and, for X-rays, the chosen polarization factor. No absorption, texture or extinction. Peaks are unit-area pseudo-Voigts on the chosen axis."
+        }
+        actions={
+          <>
+            <Segmented label="Axis" value={shownAxis} onChange={onAxis} options={axisOptions} />
+            {tof ? (
+              <TofShapeControls shape={tofShape} onChange={onTofShape} />
+            ) : (
+              <>
+                <span className="ui-control">
+                  <span className="ui-control-label">FWHM</span>
+                  <UnitField label="Peak FWHM" value={cwProfile.fwhm} unit={fwhmUnit} min={1e-6} onCommit={(fwhm) => onCwProfile({ ...cwProfile, fwhm })} width="4.2ch" />
+                </span>
+                <span className="ui-control">
+                  <span className="ui-control-label">
+                    <span className="sym">η</span>
                   </span>
-                  <span className="ui-control">
-                    <span className="ui-control-label">
-                      <span className="sym">η</span>
-                    </span>
-                    <UnitField label="Lorentzian fraction" value={cwProfile.eta} unit="" min={0} max={1} onCommit={(eta) => onCwProfile({ ...cwProfile, eta })} width="3.4ch" />
-                  </span>
-                </>
-              )}
-              <label className="ui-control" style={{ fontSize: "var(--fs-80)" }}>
-                <input type="checkbox" checked={showSticks} onChange={(e) => setShowSticks(e.target.checked)} /> Sticks
-              </label>
-            </>
-          }
-        >
-          {peaks.length ? (
-            <PowderPlot peaks={peaks} profile={result.profile} axis={shownAxis} selected={selected} onSelect={setSelected} showSticks={showSticks} />
-          ) : (
-            <p>No accessible reflections for these settings.</p>
-          )}
-          <p className="plot-hint">Click a peak or tick to select it · drag to zoom · double-click to reset · ← → step through peaks</p>
-        </Card>
-        <Card
-          title="Peaks"
-          meta={`${peaks.length} · ordered by decreasing d`}
-          actions={
-            <>
-              <button type="button" className="ui-pill" onClick={exportPeaks}>
-                Peaks CSV
-              </button>
-              <button type="button" className="ui-pill" onClick={exportProfile}>
-                Profile CSV
-              </button>
-            </>
-          }
-          flush
-        >
-          <div className="ui-table-wrap" style={{ maxHeight: "24rem" }}>
-            <table className="ui-table">
-              <thead>
-                <tr>
-                  <th className="left">hkl × multiplicity</th>
-                  <th>d (Å)</th>
+                  <UnitField label="Lorentzian fraction" value={cwProfile.eta} unit="" min={0} max={1} onCommit={(eta) => onCwProfile({ ...cwProfile, eta })} width="3.4ch" />
+                </span>
+              </>
+            )}
+            <label className="ui-control" style={{ fontSize: "var(--fs-80)" }}>
+              <input type="checkbox" checked={showSticks} onChange={(e) => setShowSticks(e.target.checked)} /> Sticks
+            </label>
+          </>
+        }
+      >
+        {peaks.length ? (
+          <PowderPlot peaks={peaks} profile={result.profile} axis={shownAxis} selected={selected} onSelect={setSelected} showSticks={showSticks} />
+        ) : (
+          <p>No accessible reflections for these settings.</p>
+        )}
+        <p className="plot-hint">Click a peak or tick to select it · drag to zoom · double-click to reset · ← → step through peaks</p>
+      </Card>
+      <Card
+        title="Peaks"
+        meta={`${peaks.length} · ordered by decreasing d`}
+        actions={
+          <>
+            <button type="button" className="ui-pill" onClick={exportPeaks}>
+              Peaks CSV
+            </button>
+            <button type="button" className="ui-pill" onClick={exportProfile}>
+              Profile CSV
+            </button>
+          </>
+        }
+        flush
+      >
+        <div className="ui-table-wrap" style={{ maxHeight: "24rem" }}>
+          <table className="ui-table">
+            <thead>
+              <tr>
+                <th className="left">hkl × multiplicity</th>
+                <th>d (Å)</th>
+                {tof ? (
+                  <>
+                    <th>TOF (µs)</th>
+                    <th>λ (Å)</th>
+                  </>
+                ) : (
+                  <th>2θ (°)</th>
+                )}
+                <th>Q (Å⁻¹)</th>
+                <th>Σ|F|²</th>
+                <th>{tof ? "sinθ·d⁴" : "LP"}</th>
+                <th>I (rel.)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {peaks.map((p, i) => (
+                <tr
+                  key={i}
+                  ref={(el) => {
+                    if (el) rowRefs.current.set(i, el);
+                    else rowRefs.current.delete(i);
+                  }}
+                  className={`is-clickable${i === selected ? " is-selected" : ""}`}
+                  aria-selected={i === selected}
+                  onClick={() => setSelected(i === selected ? null : i)}
+                >
+                  <th>{p.families.map((f) => `(${hklText(f.hkl)})×${f.multiplicity}`).join(" + ")}</th>
+                  <td>{fmt(p.d, 5)}</td>
                   {tof ? (
                     <>
-                      <th>TOF (µs)</th>
-                      <th>λ (Å)</th>
+                      <td>{fmt(p.tof!, 1)}</td>
+                      <td>{fmt(p.lambda, 4)}</td>
                     </>
                   ) : (
-                    <th>2θ (°)</th>
+                    <td>{fmt(p.twoTheta!, 3)}</td>
                   )}
-                  <th>Q (Å⁻¹)</th>
-                  <th>Σ|F|²</th>
-                  <th>{tof ? "sinθ·d⁴" : "LP"}</th>
-                  <th>I (rel.)</th>
+                  <td>{fmt(p.q, 4)}</td>
+                  <td>{p.sumF2.toPrecision(5)}</td>
+                  <td>{p.lp.toPrecision(4)}</td>
+                  <td>{fmt((100 * p.intensity) / iMax, 2)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {peaks.map((p, i) => (
-                  <tr
-                    key={i}
-                    ref={(el) => {
-                      if (el) rowRefs.current.set(i, el);
-                      else rowRefs.current.delete(i);
-                    }}
-                    className={`is-clickable${i === selected ? " is-selected" : ""}`}
-                    aria-selected={i === selected}
-                    onClick={() => setSelected(i === selected ? null : i)}
-                  >
-                    <th>{p.families.map((f) => `(${hklText(f.hkl)})×${f.multiplicity}`).join(" + ")}</th>
-                    <td>{fmt(p.d, 5)}</td>
-                    {tof ? (
-                      <>
-                        <td>{fmt(p.tof!, 1)}</td>
-                        <td>{fmt(p.lambda, 4)}</td>
-                      </>
-                    ) : (
-                      <td>{fmt(p.twoTheta!, 3)}</td>
-                    )}
-                    <td>{fmt(p.q, 4)}</td>
-                    <td>{p.sumF2.toPrecision(5)}</td>
-                    <td>{p.lp.toPrecision(4)}</td>
-                    <td>{fmt((100 * p.intensity) / iMax, 2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      </div>
-      <PeakDetails peak={sel} iMax={iMax} radiation={settings.radiation} tof={tof} onClear={() => setSelected(null)} />
-    </div>
-  );
-}
-
-function PeakDetails({ peak, iMax, radiation, tof, onClear }: { peak: PowderPeak | undefined; iMax: number; radiation: "xray" | "neutron"; tof: boolean; onClear: () => void }) {
-  const unit = radiation === "xray" ? "e" : "fm";
-  if (!peak) {
-    return (
-      <Card title="Selected peak">
-        <p className="empty-note">Click a peak or a reflection tick in the pattern, or a row in the peaks table, to see its reflections here.</p>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
-    );
-  }
-  return (
-    <Card
-      title="Selected peak"
-      meta={peak.families.map((f) => `(${hklText(f.hkl)})`).join(" + ")}
-      actions={
-        <button type="button" className="ui-pill" onClick={onClear}>
-          Clear
-        </button>
-      }
-    >
-      <dl className="ui-stats" style={{ marginBottom: "0.9rem" }}>
-        <div><dt><span className="sym">d</span></dt><dd>{fmt(peak.d, 5)} <small>Å</small></dd></div>
-        {tof ? (
-          <>
-            <div><dt>TOF</dt><dd>{fmt(peak.tof!, 2)} <small>µs</small></dd></div>
-            <div><dt><span className="sym">λ</span></dt><dd>{fmt(peak.lambda, 4)} <small>Å</small></dd></div>
-          </>
-        ) : (
-          <div><dt>2<span className="sym">θ</span></dt><dd>{fmt(peak.twoTheta!, 4)}°</dd></div>
-        )}
-        <div><dt><span className="sym">Q</span></dt><dd>{fmt(peak.q, 5)} <small>Å⁻¹</small></dd></div>
-        <div><dt>Σ|F|²</dt><dd>{peak.sumF2.toPrecision(6)} <small>{unit}²</small></dd></div>
-        <div><dt>{tof ? "sinθ·d⁴" : "LP"}</dt><dd>{peak.lp.toPrecision(5)}</dd></div>
-        <div><dt>I (rel.)</dt><dd>{fmt((100 * peak.intensity) / iMax, 3)}</dd></div>
-      </dl>
-      <table className="ui-table">
-        <thead>
-          <tr>
-            <th className="left">Family</th>
-            <th>m</th>
-            <th>|F| ({unit})</th>
-            <th>m·|F|²</th>
-            <th className="left">Share</th>
-          </tr>
-        </thead>
-        <tbody>
-          {peak.families.map((f, i) => {
-            const share = (f.multiplicity * f.f2) / peak.sumF2;
-            return (
-              <tr key={i}>
-                <th>({hklText(f.hkl)})</th>
-                <td>{f.multiplicity}</td>
-                <td>{fmt(Math.sqrt(f.f2), 4)}</td>
-                <td>{(f.multiplicity * f.f2).toPrecision(5)}</td>
-                <td className="left bar">
-                  <span className="share-bar" style={{ width: `${Math.max(2, 60 * share)}px` }} />
-                  {fmt(100 * share, 1)}%
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      {peak.families.length > 1 && <p className="empty-note" style={{ marginTop: "0.6rem" }}>Several families share this d-spacing (exact or accidental overlap); the peak is their sum.</p>}
-    </Card>
+    </div>
   );
 }
 

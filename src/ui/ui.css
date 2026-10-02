@@ -1078,19 +1078,6 @@ details.ui-fold > .ui-fold__body {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-.ui-table td.bar {
-  min-width: 6rem;
-}
-
-.share-bar {
-  display: inline-block;
-  height: 0.45rem;
-  border-radius: var(--radius-pill);
-  background: var(--accent);
-  vertical-align: middle;
-  margin-right: 0.4rem;
-}
-
 .plot-hint,
 .empty-note {
   margin: 0.5rem 0 0;
@@ -1508,4 +1495,57 @@ input.ui-range {
 .scan-bar {
   fill: var(--series-stick);
   fill-opacity: 0.35;
+}
+
+/* Powder rings: panels become outlines over the detector image. */
+.map-panel.is-outline {
+  fill: #fff;
+  fill-opacity: 0;
+  stroke: var(--chart-tick);
+  stroke-opacity: 0.8;
+}
+
+.map-panel.is-outline.is-clickable:hover {
+  fill-opacity: 0.12;
+}
+
+.map-panel.is-outline.is-dim {
+  fill: var(--plot-bg);
+  fill-opacity: 0.7;
+}
+
+.slice-line {
+  stroke: #f0883e;
+  stroke-width: 1.4;
+  stroke-dasharray: 5 3;
+  pointer-events: none;
+}
+
+.slice-curve {
+  fill: none;
+  stroke: #f0883e;
+  stroke-width: 2;
+  stroke-dasharray: 6 3;
+  pointer-events: none;
+}
+
+.ring-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+  font-size: var(--fs-80);
+  font-variant-numeric: tabular-nums;
+}
+
+.ring-controls input.ui-range {
+  flex: 1 1 auto;
+  min-width: 6rem;
+}
+
+.map-trace {
+  fill: none;
+  stroke: #ff3b5c;
+  stroke-width: 1.6;
+  pointer-events: none;
 }

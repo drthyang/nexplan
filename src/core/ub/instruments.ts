@@ -33,8 +33,14 @@ export interface InstrumentPreset {
   readonly detectors?: readonly DetectorPanel[];
   /** Shown only in experimental builds. */
   readonly experimental?: true;
-  /** Single-crystal instruments rotate the sample; powder instruments keep it fixed. */
-  readonly mode?: "single-crystal" | "powder";
+  /** Sample kinds the instrument is simulated for: single crystals rotate, powders stay fixed. */
+  readonly modes?: readonly ("single-crystal" | "powder")[];
+  /**
+   * Monochromatic incident beam (direct-geometry chopper spectrometers, elastic
+   * line): default and allowed Ei (meV) and the elastic energy resolution ΔE/E (FWHM).
+   * Absent = white beam (time-of-flight Laue) over [lambdaMin, lambdaMax].
+   */
+  readonly incident?: { readonly eiMeV: number; readonly eiMin: number; readonly eiMax: number; readonly elasticFwhm: number };
 }
 
 export const OMEGA: GoniometerAxis = { name: "ω", direction: [0, 1, 0], sense: 1, min: -180, max: 360 };

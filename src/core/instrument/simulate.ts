@@ -32,6 +32,23 @@ export function cylinderAngles(u: Vec3): { gamma: number; nu: number } {
   return { gamma: Math.atan2(u[0], u[2]) * DEG, nu: Math.atan2(u[1], Math.hypot(u[0], u[2])) * DEG };
 }
 
+/**
+ * A panel outline in unrolled-cylinder angles (γ, ν), unwrapped about its
+ * centre, plus copies shifted by ±360° when it crosses the γ = ±180° seam.
+ */
+export function panelCylinderPolygons(p: DetectorPanel, perEdge = 8): [number, number][][] {
+  const g0 = cylinderAngles(p.center).gamma;
+  const poly = panelOutline(p, perEdge).map((u): [number, number] => {
+    const { gamma, nu } = cylinderAngles(u);
+    return [gamma + 360 * Math.round((g0 - gamma) / 360), nu];
+  });
+  const gs = poly.map((q) => q[0]);
+  const out = [poly];
+  if (Math.min(...gs) < -180) out.push(poly.map(([g, n]): [number, number] => [g + 360, n]));
+  if (Math.max(...gs) > 180) out.push(poly.map(([g, n]): [number, number] => [g - 360, n]));
+  return out;
+}
+
 /** Directions on the cone at scattering angle 2θ about the beam (a Debye–Scherrer ring), lab frame. */
 export function coneDirections(twoThetaDeg: number, n = 180): Vec3[] {
   const t = twoThetaDeg / DEG;
@@ -197,6 +214,91 @@ export function simulateScan(
     const obs = observeAt(goniometerMatrix(model, angles), UB, refl, panels, lambdaMin, lambdaMax);
     for (const o of obs) seen.add(refl[o.index]!.family);
     steps.push({ angles, observed: obs.length, completeness: families ? seen.size / families : 0 });
+  }
+  return { steps, families, observedFamilies: seen.size };
+}
+
+export interface BraggCrossing {
+  /** Index into the reflection list. */
+  readonly index: number;
+  /** Scanned-axis angle (deg) at which the reflection meets the Bragg condition. */
+  readonly angle: number;
+  readonly hit: DetectorHit | undefined;
+}
+
+/**
+ * Monochromatic rotation (chopper spectrometer, elastic line): the angles of
+ * the scanned axis at which each reflection meets λ = −2q_z/|q|² exactly.
+ * Rotating about one axis leaves |q| fixed and makes q_z = C + P cosψ + Q sinψ
+ * (C, P, Q from ψ = 0°, 90°, 180°, so any axis direction and sense works), so
+ * q_z = −λ|q|²/2 has at most two solutions per turn. Returns every crossing in
+ * [start, end] with the detector it hits (undefined when it misses).
+ */
+export function braggCrossings(
+  model: GoniometerModel,
+  axisIndex: number,
+  baseAngles: readonly number[],
+  range: { start: number; end: number },
+  UB: Mat3,
+  refl: readonly ScanReflection[],
+  panels: readonly DetectorPanel[],
+  lambda: number,
+): BraggCrossing[] {
+  const at = (deg: number) => mulMat(goniometerMatrix(model, baseAngles.map((v, i) => (i === axisIndex ? deg : v))), UB);
+  const [R0, R90, R180] = [at(0), at(90), at(180)];
+  const out: BraggCrossing[] = [];
+  refl.forEach((r, index) => {
+    const z0 = mulVec(R0, r.h)[2];
+    const z90 = mulVec(R90, r.h)[2];
+    const z180 = mulVec(R180, r.h)[2];
+    const q = mulVec(R0, r.h);
+    const q2 = q[0] * q[0] + q[1] * q[1] + q[2] * q[2];
+    if (q2 === 0) return;
+    const C = (z0 + z180) / 2;
+    const P = (z0 - z180) / 2;
+    const Q = z90 - C;
+    const amp = Math.hypot(P, Q);
+    const c = (-lambda * q2) / 2 - C;
+    if (!(amp > 0) || Math.abs(c) > amp) return;
+    const phase = Math.atan2(Q, P) * DEG;
+    const half = Math.acos(c / amp) * DEG;
+    for (const base of half === 0 ? [phase] : [phase + half, phase - half]) {
+      // Every copy of this solution inside the range.
+      let a = base + 360 * Math.ceil((range.start - base) / 360 - 1e-12);
+      for (; a <= range.end + 1e-9; a += 360) {
+        const s = laueCondition(mulVec(at(a), r.h));
+        out.push({ index, angle: a, hit: Number.isFinite(s.lambda) ? rayHit(panels, s.kf) : undefined });
+      }
+    }
+  });
+  return out.sort((x, y) => x.angle - y.angle);
+}
+
+/** Bin Bragg crossings into scan steps: reflections on the detectors per step and cumulative family completeness. */
+export function crossingsToScan(
+  crossings: readonly BraggCrossing[],
+  refl: readonly ScanReflection[],
+  axisIndex: number,
+  baseAngles: readonly number[],
+  range: { start: number; end: number; step: number },
+): { steps: ScanStep[]; families: number; observedFamilies: number } {
+  const families = new Set(refl.map((r) => r.family)).size;
+  const n = Math.max(1, Math.floor((range.end - range.start) / range.step + 1e-9) + 1);
+  if (n > 3600) throw new Error("A scan is limited to 3600 steps; use a larger step.");
+  const seen = new Set<number>();
+  const steps: ScanStep[] = [];
+  let k = 0;
+  const hits = crossings.filter((c) => c.hit);
+  for (let s = 0; s < n; s++) {
+    const centre = range.start + s * range.step;
+    const upper = s === n - 1 ? Infinity : centre + range.step / 2;
+    let observed = 0;
+    while (k < hits.length && hits[k]!.angle < upper) {
+      seen.add(refl[hits[k]!.index]!.family);
+      observed++;
+      k++;
+    }
+    steps.push({ angles: baseAngles.map((v, i) => (i === axisIndex ? centre : v)), observed, completeness: families ? seen.size / families : 0 });
   }
   return { steps, families, observedFamilies: seen.size };
 }

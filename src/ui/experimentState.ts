@@ -14,6 +14,11 @@ export interface ExperimentState {
   readonly panel: number | null;
   /** Powder: relative resolution Δd/d (FWHM) of the simulated pattern. */
   readonly dOverD: number;
+  /** Instruments that take both (chopper spectrometers): which sample is simulated. */
+  readonly sample: "single-crystal" | "powder";
+  /** Chopper spectrometers: incident energy (meV) and elastic resolution ΔE/E (FWHM). */
+  readonly eiMeV: number;
+  readonly eRes: number;
 }
 
 export const DEFAULT_EXPERIMENT: ExperimentState = {
@@ -24,4 +29,7 @@ export const DEFAULT_EXPERIMENT: ExperimentState = {
   scan: { axis: 0, start: 0, end: 360, step: 5 },
   panel: null,
   dOverD: 0.005,
+  sample: "single-crystal",
+  eiMeV: 60,
+  eRes: 0.04,
 };

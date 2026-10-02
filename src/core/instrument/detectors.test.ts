@@ -42,13 +42,16 @@ describe("ray–panel geometry", () => {
 });
 
 describe("generated instrument geometry", () => {
-  it("has the four instruments with sensible panels facing the sample region", () => {
+  it("has the seven SNS instruments with sensible panels facing the sample region", () => {
     const byId = new Map(instruments.instruments.map((i) => [i.id, i]));
-    expect([...byId.keys()].sort()).toEqual(["CORELLI", "NOMAD", "POWGEN", "TOPAZ"]);
+    expect([...byId.keys()].sort()).toEqual(["ARCS", "CNCS", "CORELLI", "NOMAD", "POWGEN", "SEQUOIA", "TOPAZ"]);
     expect(byId.get("TOPAZ")!.panels).toHaveLength(25);
     expect(byId.get("CORELLI")!.panels).toHaveLength(91);
     expect(byId.get("NOMAD")!.panels).toHaveLength(99);
     expect(byId.get("POWGEN")!.panels).toHaveLength(40);
+    expect(byId.get("ARCS")!.panels).toHaveLength(115);
+    expect(byId.get("SEQUOIA")!.panels).toHaveLength(117);
+    expect(byId.get("CNCS")!.panels).toHaveLength(50);
     expect(byId.get("TOPAZ")!.l1).toBeCloseTo(18.035, 3);
     for (const ins of instruments.instruments) for (const p of ins.panels) expect(p.planarity).toBeLessThan(1e-4);
   });

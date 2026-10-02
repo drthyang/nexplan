@@ -5,11 +5,12 @@
  * the dashed curves. Single crystal: spots where the reflections land,
  * coloured by λ. Powder: panels coloured by 2θ, the panels that see the
  * selected reflection emphasised, and the cones that bound where it lands.
+ * With a raster (powder rings), the panels become outlines over the image.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Vec3 } from "@materia/core/math/types";
 import type { DetectorPanel } from "../core/instrument/detectors.ts";
-import { coneDirections, cylinderAngles, panelAngles, panelOutline } from "../core/instrument/simulate.ts";
+import { coneDirections, cylinderAngles, panelAngles, panelCylinderPolygons } from "../core/instrument/simulate.ts";
 import { lambdaCss } from "../views/colormaps.ts";
 import { fmt } from "./format.ts";
 
@@ -46,20 +47,6 @@ function projectPolyline(dirs: readonly Vec3[]): Pt[][] {
   return out;
 }
 
-/** Panel outline in (γ, ν), unwrapped about its centre, plus copies shifted by ±360° when it crosses the seam. */
-function projectPanel(p: DetectorPanel): Pt[][] {
-  const g0 = cylinderAngles(p.center).gamma;
-  const poly = panelOutline(p, 8).map((u): Pt => {
-    const { gamma, nu } = cylinderAngles(u);
-    return [gamma + 360 * Math.round((g0 - gamma) / 360), nu];
-  });
-  const gs = poly.map((q) => q[0]);
-  const out = [poly];
-  if (Math.min(...gs) < -180) out.push(poly.map(([g, n]): Pt => [g + 360, n]));
-  if (Math.max(...gs) > 180) out.push(poly.map(([g, n]): Pt => [g - 360, n]));
-  return out;
-}
-
 export function DetectorMap({
   panels,
   panelColors,
@@ -72,6 +59,8 @@ export function DetectorMap({
   selected = null,
   onSelect,
   rings = [],
+  raster,
+  traces = [],
 }: {
   panels: readonly DetectorPanel[];
   /** Per-panel CSS fill; default the accent colour. */
@@ -86,6 +75,10 @@ export function DetectorMap({
   onSelect?: (i: number | null) => void;
   /** Extra cones to draw (the 30° grid is always drawn). */
   rings?: readonly MapRing[];
+  /** Image for the plot area (width × height pixels over γ −180…180°, ν ν_max…−ν_max), as a data URL. */
+  raster?: (width: number, height: number, nuMax: number) => string | undefined;
+  /** Polylines on the detectors (lab frame), drawn in the selection colour. */
+  traces?: readonly (readonly Vec3[])[];
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
@@ -97,7 +90,7 @@ export function DetectorMap({
     return () => ro.disconnect();
   }, []);
 
-  const shapes = useMemo(() => panels.map(projectPanel), [panels]);
+  const shapes = useMemo(() => panels.map((p) => panelCylinderPolygons(p)), [panels]);
   const info = useMemo(() => panels.map(panelAngles), [panels]);
   const nuMax = useMemo(() => {
     let m = 0;
@@ -106,6 +99,7 @@ export function DetectorMap({
   }, [shapes]);
   const grid = useMemo(() => [30, 60, 90, 120, 150].map((t) => ({ t, lines: projectPolyline(coneDirections(t, 360)) })), []);
   const extra = useMemo(() => rings.map((r) => ({ ...r, lines: projectPolyline(coneDirections(r.twoTheta, 360)) })), [rings]);
+  const traceLines = useMemo(() => traces.flatMap((t) => projectPolyline(t)), [traces]);
 
   const m = { l: 46, r: 12, t: 10, b: 40 };
   const W = width - m.l - m.r;
@@ -115,6 +109,9 @@ export function DetectorMap({
   const sy = (n: number) => m.t + ((nuMax - n) / (2 * nuMax)) * H;
   const pathOf = (pts: readonly Pt[], close: boolean) => `M${pts.map(([g, n]) => `${sx(g).toFixed(1)},${sy(n).toFixed(1)}`).join("L")}${close ? "Z" : ""}`;
   const clipId = useMemo(() => `dmap-clip-${Math.random().toString(36).slice(2, 8)}`, []);
+  const rw = Math.max(1, Math.round(W));
+  const rh = Math.max(1, Math.round(H));
+  const href = useMemo(() => raster?.(rw, rh, nuMax), [raster, rw, rh, nuMax]);
 
   const xticks = [-180, -120, -60, 0, 60, 120, 180];
   const yticks: number[] = [];
@@ -134,6 +131,7 @@ export function DetectorMap({
           <line key={`gx${t}`} className="plot-grid-line" x1={sx(t)} x2={sx(t)} y1={m.t} y2={m.t + H} />
         ))}
         <g clipPath={`url(#${clipId})`}>
+          {href && <image href={href} x={m.l} y={m.t} width={W} height={H} preserveAspectRatio="none" />}
           {grid.map(({ t, lines }) => (
             <g key={t}>
               {lines.map((l, k) => (
@@ -151,9 +149,9 @@ export function DetectorMap({
             return s.map((poly, k) => (
               <path
                 key={`${i}-${k}`}
-                className={`map-panel${i === selectedPanel ? " is-selected" : ""}${on ? "" : " is-dim"}${onPanelClick ? " is-clickable" : ""}`}
+                className={`map-panel${href ? " is-outline" : ""}${i === selectedPanel ? " is-selected" : ""}${on ? "" : " is-dim"}${onPanelClick ? " is-clickable" : ""}`}
                 d={pathOf(poly, true)}
-                style={fill ? { fill, stroke: fill } : undefined}
+                style={fill && !href ? { fill, stroke: fill } : undefined}
                 onClick={(e) => {
                   if (!onPanelClick) return;
                   e.stopPropagation();
@@ -167,6 +165,9 @@ export function DetectorMap({
           {extra.map((r, j) =>
             r.lines.map((l, k) => <path key={`r${j}-${k}`} className={`map-ring${r.emphasis ? " is-emphasis" : ""}`} d={pathOf(l, false)} />),
           )}
+          {traceLines.map((l, k) => (
+            <path key={`t${k}`} className="map-trace" d={pathOf(l, false)} />
+          ))}
           {spots.map((s) => {
             const { gamma, nu } = cylinderAngles(s.dir);
             const isSel = s.index === selected;

@@ -32,6 +32,7 @@ export function CoverageChart({
   selectedPanel,
   onPanelPick,
   dFloor,
+  sliceLambda,
 }: {
   lambdaMin: number;
   lambdaMax: number;
@@ -44,6 +45,8 @@ export function CoverageChart({
   onPanelPick: (i: number) => void;
   /** Reflections are calculated only down to this d. */
   dFloor: number;
+  /** Wavelength of the current slice: drawn as the curve d = λ/(2 sinθ). */
+  sliceLambda?: number | undefined;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(640);
@@ -100,6 +103,13 @@ export function CoverageChart({
     [lines, drawn, selected, lambdaMin, lambdaMax, W, H, dLo, dHi],
   );
   const wMax = Math.max(1e-300, ...lines.map((l) => l.weight));
+  const slicePath = useMemo(() => {
+    if (sliceLambda === undefined) return "";
+    const pts: string[] = [];
+    for (let t = 0.5; t <= 180; t += 0.5) pts.push(`${sx(t).toFixed(1)},${sy(Math.min(dHi * 4, sliceLambda / (2 * Math.sin((t * Math.PI) / 360)))).toFixed(1)}`);
+    return `M${pts.join("L")}`;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sliceLambda, W, H, dLo, dHi]);
 
   const nearestLine = (px: number, py: number): number | null => {
     let best: number | null = null;
@@ -196,6 +206,7 @@ export function CoverageChart({
           {segs.map((s, i) =>
             s && i !== selected ? <line key={i} className="coverage-line" x1={s.x0} x2={s.x1} y1={s.y} y2={s.y} style={{ opacity: 0.15 + 0.85 * Math.sqrt(lines[i]!.weight / wMax) }} /> : null,
           )}
+          {slicePath && <path className="slice-curve" d={slicePath} />}
           {selected !== null && segs[selected] && <line className="coverage-line is-selected" x1={segs[selected]!.x0} x2={segs[selected]!.x1} y1={segs[selected]!.y} y2={segs[selected]!.y} />}
           {hover && hover.i !== selected && segs[hover.i] && <line className="coverage-line is-hover" x1={segs[hover.i]!.x0} x2={segs[hover.i]!.x1} y1={segs[hover.i]!.y} y2={segs[hover.i]!.y} />}
         </g>

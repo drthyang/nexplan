@@ -34,17 +34,22 @@ planning (M4) come next.
 
 ## Experimental features
 
-An **Experiment** page simulates measurements on real detector geometry (Mantid instrument definitions). It is
-compiled in only for testing.
+An **Experiment** page simulates neutron measurements on the detector geometry of SNS instruments, taken from the
+Mantid instrument definitions. It always uses neutron scattering and is compiled in only for testing.
 
 - **Single crystal** (TOPAZ cryogenic and ambient goniometers, CORELLI): the goniometer turns the crystal.
   - Spots on a 3D detector view and an unrolled detector map.
   - Rotation scans with symmetry-family completeness.
   - The reflections on each panel, with pixel coordinates.
 - **Powder** (NOMAD, POWGEN; the sample is fixed):
+  - Debye–Scherrer rings painted on the panels for a time-of-flight slice, with a play control that sweeps through
+    the band.
   - A 2θ–d coverage chart for the wavelength band.
   - The panels that record each reflection.
   - A simulated TOF pattern for any panel.
+- **Chopper spectrometers** (ARCS, SEQUOIA, CNCS), elastic scattering at a chosen Ei:
+  - Single crystals on a vertical rotation ψ, with exact rotation scans.
+  - Powders, with fixed elastic rings on the detectors and an elastic 2θ pattern.
 
 The page is on in the dev server and in an experimental build:
 

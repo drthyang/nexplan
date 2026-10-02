@@ -38,3 +38,15 @@ const ANGLE: readonly Rgb[] = [
 export const angleCss = (twoThetaDeg: number): string => css(ramp(ANGLE, twoThetaDeg / 180));
 export const angleHex = (twoThetaDeg: number): number => hex(ramp(ANGLE, twoThetaDeg / 180));
 export const ANGLE_RAMP_CSS = "linear-gradient(90deg, #313695, #4575b4, #74add1, #fee090, #f46d43, #a50026)";
+
+/** Inferno-like ramp for detector images (black → purple → orange → pale yellow). */
+const INFERNO: readonly Rgb[] = [
+  [0.0, 0.0, 0.016],
+  [0.259, 0.039, 0.408],
+  [0.576, 0.149, 0.404],
+  [0.867, 0.318, 0.227],
+  [0.988, 0.647, 0.039],
+  [0.988, 1.0, 0.643],
+];
+export const intensityRgb = (t: number): Rgb => ramp(INFERNO, t);
+export const INTENSITY_RAMP_CSS = "linear-gradient(90deg, #000004, #420a68, #932667, #dd513a, #fca50a, #fcffa4)";
