@@ -1,0 +1,83 @@
+{
+  "repo": "drthyang/web-refinement",
+  "commit": "0ee9a7e96700e4ee7da239812096e863be250fec",
+  "license": "AGPL-3.0-only",
+  "files": [
+    {
+      "path": "core/math/types.ts",
+      "sha256": "10f50830f35e9a4f01df63b6811769663b391014e5ad4f48202fef63bb303b33"
+    },
+    {
+      "path": "core/math/complex.ts",
+      "sha256": "ede1dadd5266aeefb332ea6756e3062deeb314bf93173e8f3a8aae8c5f315418"
+    },
+    {
+      "path": "core/math/mat3.ts",
+      "sha256": "a938601b5c348a5f200f7bda980642564dd39afd4b4801dd63296fe9abb5ffda"
+    },
+    {
+      "path": "core/math/vec3.ts",
+      "sha256": "7b7a4262671c964e3d368ef8277101b09c53518d0548ffc08e8bfd18ef722db0"
+    },
+    {
+      "path": "core/math/linalg.ts",
+      "sha256": "0212bb2c9caa3122143e8e1d5cb4acd25f40e3ca41743b30a61b30e2f64955bd"
+    },
+    {
+      "path": "core/math/linalg.test.ts",
+      "sha256": "be2179e209cd588f4164e3a532a008358cfc542a3084dcdbf63e420033fac748"
+    },
+    {
+      "path": "core/math/quadrature.ts",
+      "sha256": "8aa362124c5b69a83c048f555547d38921319b3a6670067647d068660db56739"
+    },
+    {
+      "path": "core/math/quadrature.test.ts",
+      "sha256": "91579d0f6f1db0fbce8f5bf7c310a2ff8b830775418be12cd2dde1188cbac498"
+    },
+    {
+      "path": "core/crystal/types.ts",
+      "sha256": "e627feb2a2c894647c639cd109622f49cdee0722be1a1bf3e6b6c2351156e3c1"
+    },
+    {
+      "path": "core/crystal/unitCell.ts",
+      "sha256": "7757c31f5d98891c0c680ba7a9153cb12b2e7d812e136e92e52e65b7611aa748"
+    },
+    {
+      "path": "core/crystal/unitCell.test.ts",
+      "sha256": "1f5ede23a79509567c54eb2934ea5bf920ea342fb8fe8cec073821c25b5e83b6"
+    },
+    {
+      "path": "core/crystal/symmetry.ts",
+      "sha256": "fe78f89e0be86a11c6d621289fa34ca02ee2a8ba6bece1375a1b403b94ed4e13"
+    },
+    {
+      "path": "core/crystal/symmetry.test.ts",
+      "sha256": "84ae1e457f94e9dbaf8fb4dfc118e41e94ca3cc5125260d0ca5d593b71e563e6"
+    },
+    {
+      "path": "core/diffraction/background.ts",
+      "sha256": "d46c87841ac3a8cb7c197fbc62dfa3abb2034b8f4507065c5f032d31c6c9183d"
+    },
+    {
+      "path": "core/diffraction/background.test.ts",
+      "sha256": "00f5e75704d673afcf47604b1a276d3531049d5ce7fa79b42d9e986f3cfbe9b1"
+    },
+    {
+      "path": "core/diffraction/profile.ts",
+      "sha256": "2c29c86c81f6824d60945e24583905009934a8ac1579860714079296dda37163"
+    },
+    {
+      "path": "core/diffraction/profile.test.ts",
+      "sha256": "c385ad8f288387a32ddb7711fc5bbadab91b15d3550786af2ffd6cf15cdbf2c2"
+    },
+    {
+      "path": "core/absorption/orientation.ts",
+      "sha256": "9c899e2edb5e1f6dd06af5e138400390819ba1057e978b164ec545ce98fbfa95"
+    },
+    {
+      "path": "core/absorption/orientation.test.ts",
+      "sha256": "31aae104328fe62ad7087ddd1db1221dfd7a9122b991f1872c4b5ee095858182"
+    }
+  ]
+}

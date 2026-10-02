@@ -1,0 +1,140 @@
+{
+  "$comment": "Upstream files used to build and cross-check scattering tables. Files are fetched into data-sources/cache/ (git-ignored) and rejected unless their SHA-256 matches. Role 'primary' feeds a generated table; 'crosscheck' is only compared against it. URLs pin a commit where the host allows it. Retrieved 2026-10-02.",
+  "sources": [
+    {
+      "id": "dabax-wk1995",
+      "role": "primary",
+      "dataset": "xray-f0-wk1995",
+      "description": "DABAX f0_WaasKirf.dat: reformat (2013, f0_WaasKirf.tcl) of the authors' sfac.dat distributed with Waasmaier & Kirfel (1995).",
+      "urls": [
+        "https://ftp.esrf.fr/pub/scisoft/DabaxFiles/f0_WaasKirf.dat",
+        "https://raw.githubusercontent.com/oasys-kit/DabaxFiles/70ff9039085dafd4eb95d66d64c6880a6a10d9a8/f0_WaasKirf.dat"
+      ],
+      "file": "f0_WaasKirf.dat",
+      "sha256": "8294958f03aad421c9e65e6fdd0cc943f6f7a13d0d09d6f3f74fd894b5ead1e7",
+      "license": "DABAX library (ESRF); no license statement in file. Redistribution assessment pending."
+    },
+    {
+      "id": "cctbx-wk1995",
+      "role": "crosscheck",
+      "dataset": "xray-f0-wk1995",
+      "description": "cctbx wk1995.cpp: independent reformat of the same authors' sfac.dat (picked up 1995-07-04, verified 2001-09-12).",
+      "urls": [
+        "https://raw.githubusercontent.com/cctbx/cctbx_project/d2d1c707ba15458d7dac4f1d2edff8560a51c418/cctbx/eltbx/xray_scattering/wk1995.cpp"
+      ],
+      "file": "wk1995.cpp",
+      "sha256": "e7155952712e8cb3f85f07989bd9935ec67ee74fae6d9029e0da985117dd3f81",
+      "license": "cctbx BSD-style license; used for comparison only, not redistributed."
+    },
+    {
+      "id": "dabax-it1992",
+      "role": "crosscheck",
+      "dataset": "xray-f0-itc-cromer-mann",
+      "description": "DABAX f0_InterTables.dat: ITC Vol. C (1992) Table 6.1.1.4 four-Gaussian coefficients. Source of MATERIA's table (via xrayutilities).",
+      "urls": [
+        "https://ftp.esrf.fr/pub/scisoft/DabaxFiles/f0_InterTables.dat",
+        "https://raw.githubusercontent.com/oasys-kit/DabaxFiles/70ff9039085dafd4eb95d66d64c6880a6a10d9a8/f0_InterTables.dat"
+      ],
+      "file": "f0_InterTables.dat",
+      "sha256": "d8c594a84ce628a613df59ab2a2f509c02a0328f2a784cc4081a28f39eac0e2d",
+      "license": "DABAX library (ESRF); comparison only."
+    },
+    {
+      "id": "cctbx-it1992",
+      "role": "crosscheck",
+      "dataset": "xray-f0-itc-cromer-mann",
+      "description": "cctbx it1992.cpp: transcription of ITC Vol. C (1992) Table 6.1.1.4, pp. 500-502.",
+      "urls": [
+        "https://raw.githubusercontent.com/cctbx/cctbx_project/d2d1c707ba15458d7dac4f1d2edff8560a51c418/cctbx/eltbx/xray_scattering/it1992.cpp"
+      ],
+      "file": "it1992.cpp",
+      "sha256": "7ca28976ff501268a9ce74ef95f35482847d875d19dec1aaa129195b2ff08169",
+      "license": "cctbx BSD-style license; comparison only."
+    },
+    {
+      "id": "gemmi-it92",
+      "role": "crosscheck",
+      "dataset": "xray-f0-itc-cromer-mann",
+      "description": "gemmi it92.hpp: ITC Vol. C (1992 or later) four-Gaussian coefficients.",
+      "urls": [
+        "https://raw.githubusercontent.com/project-gemmi/gemmi/97c808222f468f8188f2ed87266e0d7c5a854ce2/include/gemmi/it92.hpp"
+      ],
+      "file": "it92.hpp",
+      "sha256": "e9c5a0854c098136de2e463bfb175c33d195c518299c602956ed9d782dff21ee",
+      "license": "MPL-2.0; comparison only."
+    },
+    {
+      "id": "gsas2-atmdata",
+      "role": "crosscheck",
+      "dataset": "xray-f0-itc-cromer-mann",
+      "description": "GSAS-II atmdata.py: XrayFF (Cromer & Waber, Int. Tables Vol. IV) and AtmBlens (Rauch & Waschkowski 2003 plus newer measurements; NOT Sears 1992).",
+      "urls": [
+        "https://raw.githubusercontent.com/AdvancedPhotonSource/GSAS-II/f75620dc7e6dfe40b2b193052dc6c524f7e3f72b/GSASII/atmdata.py"
+      ],
+      "file": "atmdata.py",
+      "sha256": "f34011ec9e9f47088b42b840626443e0e4d7ff757de92b303d2be4a0e9f8ce66",
+      "license": "GSAS-II license; comparison only."
+    },
+    {
+      "id": "nist-sears1992",
+      "role": "primary",
+      "dataset": "neutron-b-sears1992",
+      "description": "NCNR/NIST hosted table, manually entered from Sears, Neutron News 3(3) 29-37 (1992). NIST notes possible entry errors. The page carries per-request Cloudflare tokens, so the pinned hash covers the extracted data table (one row per line, tab-separated cells), which is committed under data-sources/snapshots/ because the URL cannot be pinned to a revision.",
+      "urls": [
+        "https://www.ncnr.nist.gov/resources/n-lengths/list.html"
+      ],
+      "file": "nist-sears1992.tsv",
+      "sha256": "dcf8ea74603ceb3ed1ef56ef5017596a7d5bc581fc08f44c1d1c1b21025de914",
+      "license": "US Government work (NIST); underlying data from Sears (1992). Redistribution assessment pending.",
+      "normalize": "nist-n-lengths-table"
+    },
+    {
+      "id": "mantid-neutronatom",
+      "role": "crosscheck",
+      "dataset": "neutron-b-sears1992",
+      "description": "Mantid NeutronAtom.cpp: separate transcription of the Sears (1992) table, isotopes included.",
+      "urls": [
+        "https://raw.githubusercontent.com/mantidproject/mantid/67c2f43ef79ea4ce4f3c92f417f5c74f8fedcf30/Framework/Kernel/src/NeutronAtom.cpp"
+      ],
+      "file": "NeutronAtom.cpp",
+      "sha256": "35081e84d867f6a72b99e8a2341833e9c6f72b89accc5c48982bd1808f39ffd6",
+      "license": "GPL-3.0+; comparison only, never redistributed."
+    },
+    {
+      "id": "gemmi-neutron92",
+      "role": "crosscheck",
+      "dataset": "neutron-b-sears1992",
+      "description": "gemmi neutron92.hpp: natural-element coherent b from the NIST page (same lineage as cctbx).",
+      "urls": [
+        "https://raw.githubusercontent.com/project-gemmi/gemmi/97c808222f468f8188f2ed87266e0d7c5a854ce2/include/gemmi/neutron92.hpp"
+      ],
+      "file": "neutron92.hpp",
+      "sha256": "debe56001c6c8054b302249b3d95ab8765fc753a50d025fb59529f2c88691530",
+      "license": "MPL-2.0; comparison only."
+    },
+    {
+      "id": "dans-sears-itc",
+      "role": "crosscheck",
+      "dataset": "neutron-b-sears1992",
+      "description": "Dans_Diffraction neutron_isotope_scattering_lengths_sears.dat: Sears, ITC Vol. C section 4.4.4. Source of MATERIA's neutron table.",
+      "urls": [
+        "https://raw.githubusercontent.com/DanPorter/Dans_Diffraction/092b63ed70fe7bb49e37b04fb56352103beae5e2/Dans_Diffraction/data/neutron_isotope_scattering_lengths_sears.dat"
+      ],
+      "file": "neutron_isotope_scattering_lengths_sears.dat",
+      "sha256": "3470c0d800d253df7d1a0d89565d380fba649f9361bc00a05e163410012fd21e",
+      "license": "Apache-2.0; comparison only."
+    },
+    {
+      "id": "periodictable-nsf",
+      "role": "crosscheck",
+      "dataset": "neutron-b-sears1992",
+      "description": "periodictable nsf.py: Rauch (2003) ATI table plus newer measurements. A different evaluation, used to flag rows where newer data differ.",
+      "urls": [
+        "https://raw.githubusercontent.com/python-periodictable/periodictable/182ef63a9ec118ef725aae5bb81860f4ba0fb573/periodictable/nsf.py"
+      ],
+      "file": "nsf.py",
+      "sha256": "47c5f841100c91fb1d063be9503d0a1bc35a80ae1e9d0791f387ad05e5589ed9",
+      "license": "Public domain; comparison only."
+    }
+  ]
+}

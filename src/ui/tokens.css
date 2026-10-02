@@ -1,0 +1,217 @@
+/* Design tokens, copied from the RMCProfile Workbench (rmc-toolkits
+   web_app/frontend/src/index.css, 2026-09-30) so ScatterPlan, MATERIA, NEBULA3D
+   and RMCProfile read as one family. Light is the default theme here; dark is
+   opt-in through the header toggle (data-theme on <html>). */
+:root {
+  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: var(--text);
+  background: var(--app-bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv05', 'cv11';
+}
+
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+  --app-bg: #f4f5f7;
+  --panel-bg: #ffffff;
+  --panel-raised: #f9fafb;
+  --panel-soft: #f1f3f6;
+  --canvas-bg: #f8fafc;
+  --text: #344054;
+  --text-strong: #101828;
+  --muted: #667085;
+  --subtle: #98a2b3;
+  --border: #e6e9ee;
+  --border-strong: #d0d5dd;
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
+  --accent-soft: rgba(37, 99, 235, 0.1);
+  --success: #16794c;
+  --danger: #b42318;
+  --danger-soft: rgba(180, 35, 24, 0.07);
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 12px rgba(16, 24, 40, 0.05);
+  --focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.16);
+  --plot-bg: #ffffff;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --app-bg: #0e1116;
+  --panel-bg: #171c24;
+  --panel-raised: #1c222b;
+  --panel-soft: #12161d;
+  --canvas-bg: #10141a;
+  --text: #e8edf4;
+  --text-strong: #ffffff;
+  --muted: #98a4b3;
+  --subtle: #6e7a89;
+  --border: #2a323d;
+  --border-strong: #39434f;
+  --accent: #4c7df0;
+  --accent-strong: #6f9bf5;
+  --accent-soft: rgba(76, 125, 240, 0.18);
+  --success: #5fc28b;
+  --danger: #ef7674;
+  --danger-soft: rgba(239, 118, 116, 0.13);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.32);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 14px rgba(0, 0, 0, 0.22);
+  --focus-ring: 0 0 0 3px rgba(76, 125, 240, 0.32);
+  /* The plot stays light in the dark theme, as in RMCProfile. */
+  --plot-bg: #f8fafc;
+}
+
+:root {
+  --brand: #2563eb;
+  --brand-strong: #1d4ed8;
+  --brand-glow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 2px 6px rgba(29, 78, 216, 0.35);
+  --on-accent: #fff;
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.18);
+  --shadow-tab: 0 1px 3px rgba(16, 24, 40, 0.09);
+  --warning: #b45309;
+  --warn-ink: #8a6100;
+  --warn-line: #d9a13d;
+  --ok: #3ba776;
+  /* Plot series: MATERIA semantics (calc blue, Bragg ticks, phase colours) on RMC chart ink. */
+  --series-calc: #1f4fd8;
+  --series-stick: #0f8a8a;
+  --series-absent: #b42318;
+  --chart-grid: rgba(16, 24, 40, 0.06);
+  --chart-tick: rgba(16, 24, 40, 0.35);
+  --chart-frame: rgba(16, 24, 40, 0.18);
+  --chart-hover: rgba(16, 24, 40, 0.3);
+  --chart-tick-text: #475467;
+  --chart-axis-text: #1d2939;
+  --chart-fs-tick: 0.8rem;
+  --chart-fs-axis: 0.88rem;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23667085' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-pill: 999px;
+  --dur-fast: 120ms;
+  --dur: 140ms;
+  --h-control: 2.05rem;
+  --h-pill: 1.7rem;
+  --h-chip: 1.5rem;
+  --fs-62: 0.62rem;
+  --fs-64: 0.64rem;
+  --fs-66: 0.66rem;
+  --fs-68: 0.68rem;
+  --fs-70: 0.7rem;
+  --fs-72: 0.72rem;
+  --fs-73: 0.73rem;
+  --fs-74: 0.74rem;
+  --fs-76: 0.76rem;
+  --fs-78: 0.78rem;
+  --fs-80: 0.8rem;
+  --fs-84: 0.84rem;
+  --fs-85: 0.85rem;
+  --fs-88: 0.88rem;
+  --fs-90: 0.9rem;
+  --fs-95: 0.95rem;
+  --fs-100: 1rem;
+  --fs-105: 1.05rem;
+  --viewport-h: 100vh;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+@media (pointer: coarse) {
+  :root {
+    --h-control: 2.5rem;
+    --h-pill: 2rem;
+  }
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --viewport-h: 100dvh;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Root type size, as in RMCProfile: 15px to 1080p-class windows, growing to
+   21px at 4K so the UI keeps its physical size on dense monitors. */
+html {
+  font-size: clamp(15px, min(15px + (100vw - 1920px) * 0.003125, 15px + (100vh - 960px) * 0.005714), 21px);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  min-width: 320px;
+  height: 100%;
+  background: var(--app-bg);
+  color: var(--text);
+  line-height: 1.45;
+}
+
+body {
+  overflow: hidden;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.015em;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  border: 1px solid var(--border);
+  background: var(--panel-bg);
+  color: var(--text);
+  border-radius: var(--radius);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur) ease, border-color var(--dur) ease, color var(--dur) ease, box-shadow var(--dur) ease, transform var(--dur) ease;
+}
+
+button:hover:not(:disabled) {
+  background: var(--panel-raised);
+  border-color: var(--border-strong);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.48;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+@media (hover: none) and (pointer: coarse) and (max-width: 1040px) {
+  input,
+  select {
+    font-size: max(16px, 1em) !important;
+  }
+}

@@ -1,0 +1,130 @@
+// Copied from MATERIA (drthyang/web-refinement) src/core/crystal/types.ts @ 0ee9a7e. Do not edit; see scripts/materia-sync.ts.
+/**
+ * Crystallographic structure model: unit cell, symmetry, and atom sites.
+ *
+ * Conventions used throughout the core (documented here once):
+ *  - Lengths in ångström (Å), angles in degrees at the data-model boundary.
+ *  - Fractional coordinates are dimensionless in [0, 1) by convention but not
+ *    forced into that range; symmetry expansion handles wrapping.
+ *  - The reciprocal lattice uses the crystallographic (no-2π) convention:
+ *    a*·a = 1. The 2π factor appears explicitly in phase terms as needed.
+ *  - Neutron scattering lengths `b` are in femtometre (fm); X-ray form factors
+ *    are dimensionless electron counts. The active radiation is recorded on the
+ *    dataset, not the structure.
+ */
+
+import type { Mat3, Vec3 } from "@materia/core/math/types";
+
+/** The six unit-cell parameters. Derived tensors are computed, never stored here. */
+export interface UnitCell {
+  /** Edge length a, in Å. */
+  readonly a: number;
+  /** Edge length b, in Å. */
+  readonly b: number;
+  /** Edge length c, in Å. */
+  readonly c: number;
+  /** Angle α (between b and c), in degrees. */
+  readonly alpha: number;
+  /** Angle β (between a and c), in degrees. */
+  readonly beta: number;
+  /** Angle γ (between a and b), in degrees. */
+  readonly gamma: number;
+}
+
+/**
+ * Isotropic vs anisotropic displacement parameterization for a site. Both are
+ * supported end-to-end: the structure factor applies the matching Debye-Waller
+ * factor, refinement frees the symmetry-allowed U-tensor modes for anisotropic
+ * sites, and `@/core/crystal/adp` converts between the two (U_iso = B_iso/8π²).
+ */
+export type DisplacementParameters =
+  | {
+      readonly kind: "isotropic";
+      /** Isotropic displacement parameter B_iso, in Å². (U_iso = B_iso / 8π².) */
+      readonly bIso: number;
+    }
+  | {
+      readonly kind: "anisotropic";
+      /** Anisotropic U tensor components U11, U22, U33, U12, U13, U23 in Å². */
+      readonly uAniso: readonly [number, number, number, number, number, number];
+    };
+
+/** A single atomic site in the asymmetric unit. */
+export interface AtomSite {
+  /** Unique label within the structure, e.g. "Fe1". */
+  readonly label: string;
+  /** Element symbol, e.g. "Fe", "O". */
+  readonly element: string;
+  /**
+   * Optional isotope mass number for neutron scattering, e.g. 2 for D or 57 for
+   * ⁵⁷Fe. Currently only deuterium (H, mass 2) is isotope-resolved; other
+   * isotopes fall back to natural-abundance b (see neutron.ts).
+   */
+  readonly isotope?: number;
+  /**
+   * Formal oxidation state. Used to pick the magnetic ⟨j0⟩/⟨j2⟩ ion; the X-ray
+   * form factors are neutral-atom Cromer–Mann only (no ionic species yet), so
+   * this does not affect X-ray scattering today.
+   */
+  readonly oxidationState?: number;
+  /** Fractional coordinates [x, y, z] in the crystallographic basis. */
+  readonly position: Vec3;
+  /** Site occupancy in [0, 1]. */
+  readonly occupancy: number;
+  /** Displacement (thermal) parameters. */
+  readonly adp: DisplacementParameters;
+  /**
+   * Optional site symmetry multiplicity (Wyckoff). When absent it is derived
+   * from the space-group operations during structure expansion.
+   */
+  readonly multiplicity?: number;
+}
+
+/**
+ * A single symmetry operation as an affine map on fractional coordinates:
+ * `x' = rotation · x + translation` (mod 1).
+ *
+ * `rotation` entries are integers (or 0/±1) for standard space groups;
+ * `translation` entries are fractions in [0, 1). The Jones-Faithful string
+ * (e.g. "-x, y+1/2, -z") is kept for round-tripping to/from CIF.
+ */
+export interface SymmetryOperation {
+  readonly rotation: Mat3;
+  readonly translation: Vec3;
+  /** Human-/CIF-readable form, e.g. "-x,y+1/2,-z". */
+  readonly xyz: string;
+  /**
+   * Magnetic time-reversal flag: +1 (identity) or −1 (spin flip). Present only
+   * for magnetic (BNS) operations parsed from an mCIF; absent means +1. It does
+   * not affect nuclear/atomic calculations.
+   */
+  readonly timeReversal?: 1 | -1;
+}
+
+/**
+ * Space-group description. The minimal viable model is a list of symmetry
+ * operations (which may be parsed directly from a CIF `_symmetry_equiv_pos`
+ * loop). Number/symbol are optional metadata for display and lookup.
+ */
+export interface SpaceGroup {
+  /** International Tables number, 1–230, if known. */
+  readonly number?: number;
+  /** Hermann–Mauguin symbol, e.g. "P n m a", if known. */
+  readonly hermannMauguin?: string;
+  /** Full symmetry operation list (general positions, incl. centring). */
+  readonly operations: readonly SymmetryOperation[];
+}
+
+/**
+ * A complete crystal structure model: the input to structure-factor
+ * calculation. Magnetic information is layered separately (see MagneticModel)
+ * so nuclear/atomic refinement never depends on magnetic types.
+ */
+export interface StructureModel {
+  readonly id: string;
+  readonly name: string;
+  readonly cell: UnitCell;
+  readonly spaceGroup: SpaceGroup;
+  /** Asymmetric-unit atom sites. Full cell is generated by symmetry expansion. */
+  readonly sites: readonly AtomSite[];
+}

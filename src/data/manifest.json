@@ -1,0 +1,41 @@
+{
+  "description": "Generated scattering datasets. Regenerate with `npm run data:build`; never edit generated files by hand.",
+  "datasets": [
+    {
+      "file": "src/data/xray-f0-wk1995.json",
+      "dataset": "xray-f0-wk1995",
+      "version": "0.1.0",
+      "tier": "crosschecked-not-certified",
+      "sha256": "d3dbf15cb0443e6637255eff71eb240d22c0c6e4c1e440921745a6ab8c3e5ebc",
+      "source": {
+        "id": "dabax-wk1995",
+        "url": "https://ftp.esrf.fr/pub/scisoft/DabaxFiles/f0_WaasKirf.dat",
+        "sha256": "8294958f03aad421c9e65e6fdd0cc943f6f7a13d0d09d6f3f74fd894b5ead1e7"
+      }
+    },
+    {
+      "file": "src/data/neutron-sears1992.json",
+      "dataset": "neutron-b-sears1992",
+      "version": "0.1.0",
+      "tier": "crosschecked-not-certified",
+      "sha256": "e98479152dd6f2861f16ec6b2e60c5fbb306ded4b8c6894f28ce3f5cc8026336",
+      "source": {
+        "id": "nist-sears1992",
+        "url": "https://www.ncnr.nist.gov/resources/n-lengths/list.html",
+        "sha256": "dcf8ea74603ceb3ed1ef56ef5017596a7d5bc581fc08f44c1d1c1b21025de914",
+        "note": "Normalized data-table snapshot; see data-sources/snapshots/"
+      }
+    },
+    {
+      "file": "src/data/space-groups.json",
+      "dataset": "space-groups-gemmi",
+      "version": "0.1.0",
+      "tier": "generated-from-gemmi",
+      "sha256": "64858bfd1ec45fbb9aed1e93bf48a3edc6c99671a37cceeb23b5881efd280912",
+      "source": {
+        "id": "scripts/data/gen_space_groups.py with gemmi 0.7.3",
+        "sha256": ""
+      }
+    }
+  ]
+}

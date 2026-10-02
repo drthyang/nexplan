@@ -1,0 +1,37 @@
+{
+  "name": "scatterplan",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Browser-native X-ray and neutron diffraction calculator, UB workbench and experiment planner",
+  "license": "AGPL-3.0-only",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --noEmit",
+    "data:fetch": "node scripts/data/fetch-sources.ts",
+    "data:build": "node scripts/data/build-tables.ts",
+    "data:check": "node scripts/data/build-tables.ts --check",
+    "materia:sync": "node scripts/materia-sync.ts --update",
+    "materia:check": "node scripts/materia-sync.ts"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vitest": "^2.1.8"
+  }
+}
