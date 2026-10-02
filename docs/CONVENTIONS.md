@@ -162,3 +162,25 @@ F(h) = Σⱼ oⱼ · aⱼ(s) · exp(−Bⱼ s²) · exp(+2πi h·xⱼ)
   - the azimuth is measured from +x toward +y.
 - **Basis change** (ITA): UB′ = UB·P⁻ᵀ and h′ = Pᵀh. A loaded UB in another setting is mapped onto the CIF setting
   by an integer P with entries in {−1, 0, 1} and det P = +1, such that Pᵀ·G_CIF·P ≈ G_UB within 2 %.
+
+## 9. Detector geometry (experimental)
+
+- **Panels** are read from Mantid instrument definition files (IDFs) with `scripts/data/idf.ts`:
+  - `<location>` positions are relative to the parent, in the parent's rotated frame. Spherical (r, t, p) has t from
+    +z toward +x and p the azimuth in the xy-plane.
+  - Nested `<rot>` elements are applied outermost first, about the already-rotated axes, i.e.
+    R = R_outer·R_next·…. A `<rot>` with no axis turns about z.
+  - Rectangular detectors map exactly.
+  - Tube packs (pack → tube → pixel) are fitted with a rectangle: rows along the tubes, columns across them. Every
+    pack in the shipped data is flat to under 0.01 mm.
+- **Pixels** follow the ISAW / Mantid peaks-file convention, col = (x/w + ½)·n_cols + ½, with x measured along
+  `base` from the panel centre (rows likewise along `up`), so pixel centres sit at 1 … n.
+- **Validation** on Mantid's TOPAZ_3007 (`src/core/instrument/detectors.test.ts`):
+  - The reader applied to the IDF valid for that run reproduces the 13 panel geometries Mantid wrote into the peaks
+    file: centres to 0.001 mm, axes to 1.5×10⁻⁴.
+  - Every observed peak lands on its recorded detector within 0.1 pixel.
+  - Peaks predicted from UB and the goniometer land on the right detector, within the UB fit's angular residual
+    (≤ 5.4 pixels).
+- **Instruments:** TOPAZ (2022-11-21), CORELLI, NOMAD (2022-05-05) and POWGEN (2018-05-05) definitions at Mantid
+  commit 67c2f43, generated into `src/data/instruments.json`. They are available only when the experimental flag is
+  on (`src/app/experimental.ts`: dev server, or builds with `VITE_EXPERIMENTAL=1`).

@@ -40,6 +40,7 @@ import {
 } from "./parsers.ts";
 import { REPO_ROOT, readSource, sha256, type SourceEntry } from "./sources.ts";
 import { canonicalSpecies, parseSpeciesLabel } from "./species.ts";
+import { flattenIdf } from "./idf.ts";
 
 const RETRIEVED = "2026-10-02";
 const MATERIA_DIR = process.env.MATERIA_DIR ?? join(REPO_ROOT, "../web-refinement");
@@ -760,9 +761,52 @@ ${n.out.join("\n")}
   emit("docs/data-verification/MATERIA_TABLES.md", md);
 }
 
+// ===================================================================== instruments
+
+/** Detector geometry flattened from Mantid IDFs (experimental feature data). */
+function buildInstruments() {
+  const r6 = (v: readonly number[]) => v.map((x) => Math.round(x * 1e6) / 1e6);
+  const instruments = (["idf-topaz", "idf-corelli", "idf-nomad", "idf-powgen"] as const).map((id) => {
+    const src = readSource(id);
+    const validFrom = /valid-from\s*=\s*"([^"]*)"/.exec(src.text)?.[1] ?? "";
+    const g = flattenIdf(src.text);
+    return {
+      id: g.name === "PG3" ? "POWGEN" : g.name,
+      l1: Math.round(g.l1 * 1e6) / 1e6,
+      idf: { ...sourceRef(src.entry), validFrom },
+      panels: g.panels.map((p) => ({
+        name: p.name,
+        kind: p.kind,
+        center: r6(p.center),
+        base: r6(p.base),
+        up: r6(p.up),
+        width: Math.round(p.width * 1e6) / 1e6,
+        height: Math.round(p.height * 1e6) / 1e6,
+        nCols: p.nCols,
+        nRows: p.nRows,
+        planarity: Math.round(p.planarity * 1e9) / 1e9,
+      })),
+    };
+  });
+  emit(
+    "src/data/instruments.json",
+    json({
+      dataset: "instrument-geometry",
+      version: "0.1.0",
+      tier: "derived-from-mantid-idf",
+      description:
+        "Detector panels in the Mantid lab frame (beam +z, up +y), metres. Rectangular detectors are exact; tube packs are fitted rectangles (planarity = largest pixel distance from the fitted plane). Columns run along 'base', rows along 'up'.",
+      generator: "scripts/data/idf.ts (flattenIdf)",
+      source: { id: "mantid-instrument-definitions", sha256: "" },
+      instruments,
+    }),
+  );
+}
+
 // ===================================================================== main
 
 const xrayStats = buildXray();
+buildInstruments();
 const neutron = buildNeutron();
 const materiaX = existsSync(join(MATERIA_DIR, "src")) ? auditMateriaXray() : undefined;
 if (materiaX) writeMateriaReport(materiaX, auditMateriaNeutron(neutron));

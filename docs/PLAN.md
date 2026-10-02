@@ -38,7 +38,8 @@ Status: implementation started. The data pipeline and verification reports exist
 | Folded reflection families; per-site X-ray ion opt-in (neutral default); energy ↔ λ | done |
 | Structure viewer (ported from MATERIA, RMCProfile export/theming) | done |
 | UB workbench: ISAW I/O, lattice/orientation, setting match, basis change, TOPAZ cryo/ambient + Universal goniometers, 3D Laue view | done; validated on Mantid TOPAZ_3007 peaks |
-| Detector coverage (TOPAZ panels), rotation scans, coverage statistics (M4) | next |
+| Detector geometry from Mantid IDFs (TOPAZ, CORELLI, NOMAD, POWGEN) + real-space instrument view, behind an experimental flag | done; pixel mapping validated on TOPAZ_3007 |
+| Rotation scans, coverage/completeness statistics (M4) | next |
 | CI and Pages workflows | written; repo not yet pushed |
 | Anisotropic Debye–Waller, anomalous X-ray terms | not started |
 | M4 planning: detector coverage, scans, completeness | not started |

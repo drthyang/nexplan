@@ -16,6 +16,7 @@
  *
  * Validated end to end against Mantid's TOPAZ_3007 peaks (src/core/ub/topaz.test.ts).
  */
+import type { DetectorPanel } from "../instrument/detectors.ts";
 import type { GoniometerAxis, GoniometerModel } from "./goniometer.ts";
 
 export interface InstrumentPreset {
@@ -28,11 +29,15 @@ export interface InstrumentPreset {
   /** Moderator–sample distance (m), when known. */
   readonly l1?: number;
   readonly source: string;
+  /** Detector panels (lab frame, m); absent = every direction counts as detected. */
+  readonly detectors?: readonly DetectorPanel[];
+  /** Shown only in experimental builds. */
+  readonly experimental?: true;
 }
 
-const OMEGA: GoniometerAxis = { name: "ω", direction: [0, 1, 0], sense: 1, min: -180, max: 360 };
-const CHI: GoniometerAxis = { name: "χ", direction: [0, 0, 1], sense: 1, min: -180, max: 180 };
-const PHI: GoniometerAxis = { name: "φ", direction: [0, 1, 0], sense: 1, min: -180, max: 360 };
+export const OMEGA: GoniometerAxis = { name: "ω", direction: [0, 1, 0], sense: 1, min: -180, max: 360 };
+export const CHI: GoniometerAxis = { name: "χ", direction: [0, 0, 1], sense: 1, min: -180, max: 180 };
+export const PHI: GoniometerAxis = { name: "φ", direction: [0, 1, 0], sense: 1, min: -180, max: 360 };
 
 export const UNIVERSAL: GoniometerModel = {
   id: "universal",
@@ -41,39 +46,8 @@ export const UNIVERSAL: GoniometerModel = {
   note: "R = R_y(ω)·R_z(χ)·R_y(φ), counter-clockwise; beam +z, up +y.",
 };
 
+/** Always-available presets. Instrument-specific presets live in instrumentsExperimental.ts. */
 export const INSTRUMENTS: readonly InstrumentPreset[] = [
-  {
-    id: "topaz-cryo",
-    label: "TOPAZ · cryogenic goniometer (ω)",
-    goniometer: {
-      id: "topaz-cryo",
-      label: "TOPAZ cryogenic",
-      axes: [{ ...OMEGA, min: 0, max: 360, log: "BL12:Mot:Gonioc:Omega" }],
-      note: "ω about the vertical +y axis, counter-clockwise (χ = φ = 0).",
-    },
-    lambdaMin: 0.4,
-    lambdaMax: 3.5,
-    l1: 18.035,
-    source: "garnet-tools and NeuXtalViz TOPAZ configs; ORNL TOPAZ specification (0.4–3.5 Å); Mantid TOPAZ IDF (L1).",
-  },
-  {
-    id: "topaz-ambient",
-    label: "TOPAZ · ambient goniometer (ω, φ; χ = 135°)",
-    goniometer: {
-      id: "topaz-ambient",
-      label: "TOPAZ ambient",
-      axes: [
-        { ...OMEGA, min: 0, max: 360, log: "BL12:Mot:omega" },
-        { ...CHI, fixed: 135, log: "BL12:Mot:chi" },
-        { ...PHI, min: 0, max: 360, log: "BL12:Mot:phi" },
-      ],
-      note: "Mantid Universal axes with χ fixed at 135°.",
-    },
-    lambdaMin: 0.4,
-    lambdaMax: 3.5,
-    l1: 18.035,
-    source: "garnet-tools and NeuXtalViz TOPAZ configs; ORNL TOPAZ page (χ fixed at 135°); ORNL specification (0.4–3.5 Å).",
-  },
   {
     id: "universal",
     label: "Eulerian ω, χ, φ (Mantid Universal)",

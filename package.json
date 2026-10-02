@@ -19,7 +19,8 @@
     "data:build": "node scripts/data/build-tables.ts",
     "data:check": "node scripts/data/build-tables.ts --check",
     "materia:sync": "node scripts/materia-sync.ts --update",
-    "materia:check": "node scripts/materia-sync.ts"
+    "materia:check": "node scripts/materia-sync.ts",
+    "build:experimental": "tsc -b && VITE_EXPERIMENTAL=1 vite build --outDir dist-experimental"
   },
   "dependencies": {
     "react": "^18.3.1",

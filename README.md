@@ -32,6 +32,18 @@ planning (M4) come next.
   - Unit-area pseudo-Voigt peaks on 2θ, d or Q.
   - Full-precision CSV export with provenance.
 
+## Experimental features
+
+Instrument presets with detector geometry (TOPAZ cryogenic and ambient goniometers, CORELLI, NOMAD, POWGEN) and a
+real-space detector view are compiled in only for testing. They are on in the dev server and in an experimental
+build:
+
+```bash
+npm run build:experimental   # writes dist-experimental/
+```
+
+Regular builds (`npm run build`, the Pages deploy) leave them out entirely.
+
 ## Data you can check
 
 Every table is generated from pinned upstream files (URL, commit and SHA-256 in

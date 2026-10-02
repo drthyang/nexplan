@@ -47,7 +47,7 @@ function readPeaks(text: string): PeakRow[] {
   return rows;
 }
 
-const universal = INSTRUMENTS.find((i) => i.id === "universal")!.goniometer;
+const universal = INSTRUMENTS.find((i) => i.id === "universal")!.goniometer; // R_y(ω)·R_z(χ)·R_y(φ)
 
 describe.skipIf(!existsSync(matPath) || !existsSync(peaksPath))("TOPAZ_3007 (Mantid test data): UB · goniometer · Laue", () => {
   const ub = parseIsawUB(readFileSync(matPath, "utf8"));

@@ -41,10 +41,16 @@ export interface ReciprocalViewProps {
   readonly theme: "light" | "dark";
   readonly showEwald: boolean;
   readonly fileStem: string;
+  /** Per point: 0 cannot diffract in the band, 1 in the band but misses every detector, 2 observed. */
+  readonly status: Uint8Array;
+  /** Per point: wavelength at which it diffracts (NaN if it cannot). */
+  readonly lambdas: Float64Array;
+  /** True when the instrument has detector geometry (status 1 is then possible). */
+  readonly hasDetectors: boolean;
 }
 
 /** Viridis-like ramp for λ (short = purple, long = yellow). */
-function lambdaColor(t: number): THREE.Color {
+export function lambdaColor(t: number): THREE.Color {
   const stops = [
     [0.267, 0.005, 0.329],
     [0.229, 0.322, 0.546],
@@ -65,7 +71,7 @@ export const LAMBDA_RAMP_CSS = "linear-gradient(90deg, #440154, #3b528b, #21918c
 const toMatrix4 = (R: Mat3) => new THREE.Matrix4().set(R[0][0], R[0][1], R[0][2], 0, R[1][0], R[1][1], R[1][2], 0, R[2][0], R[2][1], R[2][2], 0, 0, 0, 0, 1);
 
 export function ReciprocalView(props: ReciprocalViewProps) {
-  const { UB, R, qSign, lambdaMin, lambdaMax, points, frame, selected, onSelect, theme, showEwald, fileStem } = props;
+  const { UB, R, qSign, lambdaMin, lambdaMax, points, frame, selected, onSelect, theme, showEwald, fileStem, status, lambdas, hasDetectors } = props;
   const mountRef = useRef<HTMLDivElement | null>(null);
   const live = useRef<{
     renderer: THREE.WebGLRenderer;
@@ -271,11 +277,10 @@ export function ReciprocalView(props: ReciprocalViewProps) {
     s.labGroup.matrixWorldNeedsUpdate = true;
 
     const grey = new THREE.Color(0x9aa3b0);
-    qs.forEach((q, i) => {
-      const lab = mulVec(R, q);
-      const spot = laueCondition(lab);
-      const ok = spot.lambda >= lambdaMin && spot.lambda <= lambdaMax;
-      s.pointsMesh.setColorAt(i, i === selected ? new THREE.Color(0xff3b5c) : ok ? lambdaColor((spot.lambda - lambdaMin) / (lambdaMax - lambdaMin)) : grey);
+    const missed = new THREE.Color(0xc9b48a);
+    qs.forEach((_q, i) => {
+      const st = status[i] ?? 0;
+      s.pointsMesh.setColorAt(i, i === selected ? new THREE.Color(0xff3b5c) : st === 2 ? lambdaColor((lambdas[i]! - lambdaMin) / (lambdaMax - lambdaMin)) : st === 1 ? missed : grey);
     });
     if (s.pointsMesh.instanceColor) s.pointsMesh.instanceColor.needsUpdate = true;
 
@@ -314,13 +319,18 @@ export function ReciprocalView(props: ReciprocalViewProps) {
     }
     s.triangle.matrix.copy(frame === "lab" ? new THREE.Matrix4() : Rm.clone().transpose());
     s.triangle.matrixWorldNeedsUpdate = true;
-  }, [R, frame, selected, qs, lambdaMin, lambdaMax, resetToken]);
+  }, [R, frame, selected, qs, lambdaMin, lambdaMax, resetToken, status, lambdas]);
 
   return (
     <div className="viewer">
       <div className="viewer-toolbar">
         <span className="lambda-legend">
           λ {lambdaMin} Å <span className="lambda-ramp" style={{ background: LAMBDA_RAMP_CSS }} /> {lambdaMax} Å
+          {hasDetectors && (
+            <>
+              <span className="lambda-legend__grey" style={{ background: "#c9b48a" }} /> in band, misses the detectors
+            </>
+          )}
           <span className="lambda-legend__grey" /> not in band
         </span>
         <span className="viewer-toolbar__end">

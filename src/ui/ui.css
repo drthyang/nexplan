@@ -1359,3 +1359,12 @@ input.ui-range {
 .error-note {
   color: var(--danger);
 }
+
+.dim-note {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.exp-chip {
+  margin-left: 0.4rem;
+}
