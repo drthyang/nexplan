@@ -38,8 +38,8 @@ certified against the printed literature.
 
 ## Pages
 
-The pages follow the work: **Sample** (what the crystal is), **Setup** (how it sits in the beam) and **Simulation**
-(what the instrument records). The instrument in the header sets the beam, goniometer and detectors for every page:
+The pages follow the work: **Sample** (what the crystal is), **Setup** (how it sits in the beam), **Instrument**
+(the detectors and what lands on them) and **Simulation** (what a measurement records). The instrument in the header sets the beam, goniometer and detectors for every page:
 a generic X-ray or neutron beam, or an SNS instrument with its detector geometry from the Mantid instrument
 definition (always neutron scattering).
 
@@ -49,11 +49,12 @@ definition (always neutron scattering).
 - **Setup**
   - *Orientation*: the UB matrix (ISAW/Mantid files in and out, matched to the CIF setting, change of basis) and
     the selected instrument's goniometer, with a 3D reciprocal-space view and the Ewald spheres of the band.
-- **Simulation**
+- **Instrument**
   - *Detectors*: the instrument's detector array in 3D and unrolled. Single crystals: the spots at the current
     setting, or the exact coverage of a chosen reflection over the goniometer ranges, coloured by wavelength (as in
     NeuXtalViz), and the reflections on each panel with pixel, λ and time of flight. Powders: Debye–Scherrer rings on
     the panels in a time-of-flight slice (play sweeps the band), or at Ei for the chopper spectrometers.
+- **Simulation**
   - *Powder*: the pattern for the generic beam (CW or one TOF bank), or for an SNS instrument the pattern of any
     panel (elastic 2θ for ARCS, SEQUOIA, CNCS) and the 2θ–d coverage of the detector array.
   - *Single crystal*: the measurement plan as each instrument is run (TOPAZ: a list of about ten chosen

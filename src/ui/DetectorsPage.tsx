@@ -1,5 +1,5 @@
 /**
- * Detectors page (Simulation): the selected SNS instrument's detector geometry
+ * Detectors page (Instrument): the selected SNS instrument's detector geometry
  * (src/core/instrument/simulate.ts) with what lands on it.
  *
  *  - Single crystal: spots where reflections land at the current goniometer

@@ -43,7 +43,7 @@ Status: implementation started. The data pipeline and verification reports exist
 | CI and Pages workflows | written; repo not yet pushed |
 | Anisotropic Debye–Waller, anomalous X-ray terms | not started |
 | Powder rings on the detectors (TOF slices, ray-traced check); ARCS, SEQUOIA, CNCS (elastic, exact monochromatic scans); Instrument page neutron-only | done |
-| Pages grouped Sample · Setup · Simulation; instrument chosen in the header; Detectors, Powder (per panel) and Single-crystal pages; exact per-pixel coverage; orientation lists (TOPAZ), interleaved scans (CORELLI); reciprocal slices with plan coverage | done |
+| Pages grouped Sample · Setup · Instrument · Simulation; instrument chosen in the header; Detectors, Powder (per panel) and Single-crystal pages; exact per-pixel coverage; orientation lists (TOPAZ), interleaved scans (CORELLI); reciprocal slices with plan coverage | done |
 | M4 planning extras: masks, goniometer limits, orientation optimizer, counting time (flux), calibrated banks | not started |
 
 ## 1. Product objective

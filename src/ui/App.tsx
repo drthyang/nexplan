@@ -14,14 +14,15 @@ import { DEFAULT_GONIO, UbPage, type GonioState, type UbState } from "./UbPage.t
 
 type Tab = "structure" | "reflections" | "orientation" | "detectors" | "powder" | "crystal";
 
-/** Pages, grouped as the work goes: what the sample is, how it is set up, what the instrument records. */
+/** Pages, grouped as the work goes: the sample, its setup, the instrument's detectors, and what a measurement records. */
 const TAB_GROUPS: readonly { readonly label: string; readonly tabs: readonly (readonly [Tab, string])[] }[] = [
   { label: "Sample", tabs: [["structure", "Structure"], ["reflections", "Reflections"]] },
   { label: "Setup", tabs: [["orientation", "Orientation"]] },
-  { label: "Simulation", tabs: [["detectors", "Detectors"], ["powder", "Powder"], ["crystal", "Single crystal"]] },
+  { label: "Instrument", tabs: [["detectors", "Detectors"]] },
+  { label: "Simulation", tabs: [["powder", "Powder"], ["crystal", "Single crystal"]] },
 ];
 
-/** Simulation pages, loaded with the SNS detector geometry only when one is opened. */
+/** Detector and simulation pages, loaded with the SNS detector geometry only when one is opened. */
 const DetectorsPage = lazy(() => import("./DetectorsPage.tsx").then((m) => ({ default: m.DetectorsPage })));
 const InstrumentPowder = lazy(() => import("./InstrumentPowder.tsx").then((m) => ({ default: m.InstrumentPowder })));
 const CrystalPage = lazy(() => import("./CrystalPage.tsx").then((m) => ({ default: m.CrystalPage })));
@@ -451,7 +452,8 @@ export function App() {
                   [
                     ["Sample", "Load a CIF: cell, symmetry, sites and the scattering lengths used, each with its source; every reflection with d, Q and complex F."],
                     ["Setup", "Pick an SNS instrument in the header (or a generic X-ray or neutron beam), then load or build the UB matrix and set the goniometer."],
-                    ["Simulation", "Spots, coverage and powder rings on the real detectors; powder patterns; orientation lists, rotation scans, completeness and reciprocal slices."],
+                    ["Instrument", "The real SNS detector array in 3D and unrolled: where spots land now, everywhere a reflection can reach, powder rings in a time-of-flight slice."],
+                    ["Simulation", "Powder patterns per detector panel; orientation lists, rotation scans, completeness and reciprocal-space slices for single crystals."],
                   ] as [string, string][]
                 ).map(([title, text], i) => (
                   <li key={title}>
