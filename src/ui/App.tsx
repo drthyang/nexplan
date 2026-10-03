@@ -9,10 +9,12 @@ import { Chip, cx, InfoBadge, Segmented, UnitField } from "./components.tsx";
 import { DEMOS } from "./demos.ts";
 import { CATALOG_GROUPS, GENERIC_INSTRUMENT } from "../core/ub/instrumentCatalog.ts";
 import { catalogEntry, chooseInstrument, DEFAULT_EXPERIMENT, limitedGoniometer, sampleKind, withEi, type ExperimentState } from "./experimentState.ts";
+import { clearSession, loadSession, MAX_SAVED_CIF, saveSession, savedChoice, savedNumber, savedObject } from "./session.ts";
 import { PowderPage, ReflectionsPage, StructurePage, type CwProfileSettings } from "./pages.tsx";
 import { DEFAULT_GONIO, UbPage, type GonioState, type UbState } from "./UbPage.tsx";
 
-type Tab = "structure" | "reflections" | "orientation" | "detectors" | "powder" | "crystal";
+const TABS = ["structure", "reflections", "orientation", "detectors", "powder", "crystal"] as const;
+type Tab = (typeof TABS)[number];
 
 /** Pages, grouped as the work goes: the sample, its setup, the instrument's detectors, and what a measurement records. */
 const TAB_GROUPS: readonly { readonly label: string; readonly tabs: readonly (readonly [Tab, string])[] }[] = [
@@ -79,23 +81,43 @@ export function App() {
     }
   };
 
-  const [tab, setTab] = useState<Tab>("structure");
-  const [file, setFile] = useState<{ name: string; text: string } | null>(null);
-  const [blockName, setBlockName] = useState<string | undefined>();
-  const [chosenSetting, setChosenSetting] = useState<string | undefined>();
-  const [overrides, setOverrides] = useState<Record<string, string>>({});
-  const [xrayIons, setXrayIons] = useState<Record<string, string>>({});
-  const [radiation, setRadiation] = useState<Radiation>("neutron");
-  const [neutronMode, setNeutronMode] = useState<"cw" | "tof">("cw");
-  const [wavelength, setWavelength] = useState(1.5);
-  const [tof, setTof] = useState<TofInput>(DEFAULT_TOF);
-  const [dMin, setDMin] = useState(0.8);
-  const [polarization, setPolarization] = useState<Polarization>({ kind: "unpolarized" });
-  const [axis, setAxis] = useState<PowderAxis>("twoTheta");
-  const [cwProfile, setCwProfile] = useState<CwProfileSettings>({ fwhm: 0.1, eta: 0.5 });
-  const [ub, setUb] = useState<UbState>({ warnings: [] });
-  const [gonio, setGonio] = useState<GonioState>(DEFAULT_GONIO);
-  const [experiment, setExperiment] = useState<ExperimentState>(DEFAULT_EXPERIMENT);
+  // The last session in this browser, if any (structure, settings, orientation, plan).
+  const [saved] = useState(loadSession);
+  const [tab, setTab] = useState<Tab>(() => savedChoice(saved?.tab, TABS, "structure"));
+  const [file, setFile] = useState<{ name: string; text: string } | null>(() => (saved?.file && typeof saved.file.text === "string" && typeof saved.file.name === "string" ? saved.file : null));
+  const [blockName, setBlockName] = useState<string | undefined>(() => (typeof saved?.blockName === "string" ? saved.blockName : undefined));
+  const [chosenSetting, setChosenSetting] = useState<string | undefined>(() => (typeof saved?.chosenSetting === "string" ? saved.chosenSetting : undefined));
+  const [overrides, setOverrides] = useState<Record<string, string>>(() => savedObject(saved?.overrides, {}));
+  const [xrayIons, setXrayIons] = useState<Record<string, string>>(() => savedObject(saved?.xrayIons, {}));
+  const [radiation, setRadiation] = useState<Radiation>(() => savedChoice(saved?.radiation, ["xray", "neutron"] as const, "neutron"));
+  const [neutronMode, setNeutronMode] = useState<"cw" | "tof">(() => savedChoice(saved?.neutronMode, ["cw", "tof"] as const, "cw"));
+  const [wavelength, setWavelength] = useState(() => savedNumber(saved?.wavelength, 1.5));
+  const [tof, setTof] = useState<TofInput>(() => savedObject(saved?.tof, DEFAULT_TOF));
+  const [dMin, setDMin] = useState(() => savedNumber(saved?.dMin, 0.8));
+  const [polarization, setPolarization] = useState<Polarization>(() => savedObject(saved?.polarization, { kind: "unpolarized" } as Polarization));
+  const [axis, setAxis] = useState<PowderAxis>(() => savedChoice(saved?.axis, ["twoTheta", "tof", "d", "q"] as const, "twoTheta"));
+  const [cwProfile, setCwProfile] = useState<CwProfileSettings>(() => savedObject(saved?.cwProfile, { fwhm: 0.1, eta: 0.5 }));
+  const [ub, setUb] = useState<UbState>(() => savedObject(saved?.ub, { warnings: [] } as UbState));
+  const [gonio, setGonio] = useState<GonioState>(() => savedObject(saved?.gonio, DEFAULT_GONIO));
+  const [experiment, setExperiment] = useState<ExperimentState>(() => {
+    const e = savedObject(saved?.experiment, DEFAULT_EXPERIMENT);
+    return e.instrumentId === GENERIC_INSTRUMENT || catalogEntry(e.instrumentId) ? e : DEFAULT_EXPERIMENT;
+  });
+  // Save the session (debounced); "Start over" clears it and reloads.
+  const [storageOk, setStorageOk] = useState(true);
+  const cleared = useRef(false);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (!cleared.current) setStorageOk(saveSession({ tab, ...(file ? { file } : {}), ...(blockName ? { blockName } : {}), ...(chosenSetting ? { chosenSetting } : {}), overrides, xrayIons, radiation, neutronMode, wavelength, tof: { ...tof }, dMin, polarization: { ...polarization }, axis, cwProfile: { ...cwProfile }, ub: { ...ub }, gonio: { ...gonio }, experiment: { ...experiment } }));
+    }, 400);
+    return () => clearTimeout(t);
+  }, [tab, file, blockName, chosenSetting, overrides, xrayIons, radiation, neutronMode, wavelength, tof, dMin, polarization, axis, cwProfile, ub, gonio, experiment]);
+  const startOver = () => {
+    if (!window.confirm("Clear the saved session (structure, orientation, plan) and start over?")) return;
+    cleared.current = true;
+    clearSession();
+    window.location.reload();
+  };
   const [result, setResult] = useState<CalcResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState(false);
@@ -515,6 +537,18 @@ export function App() {
 
             <footer className="ui-footer">
               © 2026 Tsung-Han Yang · AGPLv3 · <a href={README} target="_blank" rel="noreferrer">About &amp; documentation</a>
+              {file && (
+                <>
+                  {" · "}
+                  <span title="Structure, settings, orientation and plan are kept in this browser's storage, so a reload resumes them. Nothing is uploaded.">
+                    {!storageOk ? "Session not saved (browser storage unavailable)" : file.text.length > MAX_SAVED_CIF ? "Session saved in this browser, except the CIF (too large)" : "Session saved in this browser"}
+                  </span>
+                  {" · "}
+                  <button type="button" className="ui-link" onClick={startOver}>
+                    Start over
+                  </button>
+                </>
+              )}
             </footer>
           </section>
         </div>

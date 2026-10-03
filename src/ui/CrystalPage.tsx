@@ -22,7 +22,7 @@ import { suggestPlan } from "../workers/client.ts";
 import { goniometerMatrix, type GoniometerModel } from "../core/ub/goniometer.ts";
 import type { InstrumentPreset } from "../core/ub/instruments.ts";
 import { Card, cx, Segmented, UnitField } from "./components.tsx";
-import { fmt, hklText } from "./format.ts";
+import { downloadText, fmt, hklText } from "./format.ts";
 import { ScanChart } from "./ScanChart.tsx";
 import { SliceChart, type SlicePoint } from "./SliceChart.tsx";
 import { DMinNote, findHkl, GoniometerLimits, HklField, InstrumentRequired, lam, useObservations, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
@@ -227,6 +227,24 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
     setFindNote(`Goniometer set: (${hklText(h)}) now lands near the middle of ${best.panel}.${planKind === "list" ? " Add this setting to the list to keep it." : ""}`);
   };
 
+  // Scan presets: the instrument's full-volume scan, or a rocking scan about the current angle (within the limits).
+  const fullPlan = instrument.plan?.kind === "scan" ? instrument.plan : { start: 0, end: 357, step: 3 };
+  const [rockHalf, setRockHalf] = useState(15);
+  // A full-turn axis wraps (−15° is 345°); a narrower range is a hard limit.
+  const clampAxis = (v: number) => {
+    const ax = axes[scanAxis]!;
+    return ax.max - ax.min >= 360 ? v : Math.min(ax.max, Math.max(ax.min, v));
+  };
+  const fullVolume = () => {
+    const ax = axes[scanAxis]!;
+    const start = Math.max(fullPlan.start, ax.min);
+    const end = Math.min(fullPlan.end, ax.max - (ax.max - ax.min >= 360 && fullPlan.end >= ax.max ? fullPlan.step : 0));
+    onExp({ ...exp, scan: { ...exp.scan, axis: scanAxis, start, end, step: fullPlan.step } });
+  };
+  const rocking = () => {
+    const c = exp.angles[scanAxis] ?? 0;
+    onExp({ ...exp, scan: { ...exp.scan, axis: scanAxis, start: Number(clampAxis(c - rockHalf).toFixed(2)), end: Number(clampAxis(c + rockHalf).toFixed(2)) } });
+  };
   const addCurrent = () => onExp({ ...exp, orientations: [...exp.orientations, exp.angles.map((v) => Number(v.toFixed(2)))] });
   const [fillN, setFillN] = useState(10);
   const fillEven = () => {
@@ -310,6 +328,26 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
   };
 
   const freeNames = free.map(({ ax }) => ax.name);
+  // ---------------------------------------------------------------- export
+  const exportPlan = () => {
+    if (!planOk) return;
+    const col = (name: string) => ({ ω: "omega", χ: "chi", φ: "phi", ψ: "psi" })[name] ?? name;
+    const lines = [
+      `# NEXPLAN measurement plan (${planKind === "list" ? "orientation list" : "rotation scan"}); ${instrument.label}; ${new Date().toISOString()}`,
+      `# structure ${result.structure.name || result.blockName} (data_${result.blockName}), input sha256 ${result.provenance.inputSha256}; d_min ${result.provenance.dMin} A`,
+      `# orientation: ${fileUB ? (ub.fileName ?? "loaded UB") : "no UB loaded (U = I with the CIF cell)"}; lambda band ${lam(exp.lambdaMin)}-${lam(exp.lambdaMax)} A`,
+      `# goniometer: ${axes.map((ax) => (ax.fixed !== undefined ? `${col(ax.name)} fixed at ${ax.fixed}` : `${col(ax.name)} ${ax.min} to ${ax.max} deg`)).join("; ")}`,
+      "# a reflection is recorded when its Laue wavelength is in the band and k_f hits a panel; completeness over symmetry families",
+      ["setting", ...axes.map((ax) => `${col(ax.name)}_deg`), "reflections_on_detectors", "families_cumulative", "completeness_pct"].join(","),
+      ...planOk.steps.map((st, k) => [k + 1, ...axes.map((ax, i) => ax.fixed ?? st.angles[i] ?? 0), st.observed, Math.round(st.completeness * planOk.families), (100 * st.completeness).toFixed(2)].join(",")),
+    ];
+    if (planKind === "list" && wantedTargets.length) {
+      lines.push(`# wanted reflections; well placed = lambda in the inner ${Math.round(exp.placement.bandFraction * 100)} % of the band and at least ${Math.round(exp.placement.edgeFraction * 100)} % of a panel from its edges`);
+      lines.push("h,k,l,d_A,settings_recording,settings_well_placed");
+      wantedTargets.forEach((t, k) => lines.push([...t.h, t.d.toFixed(4), wantedSeen[k]?.recorded ?? 0, wantedSeen[k]?.well ?? 0].join(",")));
+    }
+    downloadText(`${result.blockName}-${instrument.id}-plan.csv`, lines.join("\n") + "\n", "text/csv");
+  };
   const outsideLimits = (angles: readonly number[]) => free.some(({ ax, i }) => angles[i]! < ax.min - 1e-9 || angles[i]! > ax.max + 1e-9);
   const nOutside = planKind === "list" ? exp.orientations.filter(outsideLimits).length : 0;
   return (
@@ -318,6 +356,13 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
         <Card
           title={planKind === "list" ? "Orientation list" : "Rotation scan"}
           meta={planOk ? `${planOk.steps.length} setting${planOk.steps.length === 1 ? "" : "s"} · ${fmt(100 * (planOk.steps.at(-1)?.completeness ?? 0), 1)} % of families` : undefined}
+          actions={
+            planOk && planOk.steps.length > 0 ? (
+              <button type="button" className="ui-pill" onClick={exportPlan} title="The settings, what each records, and the wanted reflections, as CSV with the plan's provenance">
+                Export CSV
+              </button>
+            ) : undefined
+          }
           info={
             planKind === "list"
               ? "As TOPAZ is run: a short list of chosen orientations (about ten), each measured for a while. Add the current goniometer setting, use \"Find a setting\" to bring a wanted reflection onto a detector, fill the list evenly, or let Suggest pick settings: a greedy search over a grid of the free axes (within (1 − 1/e) of the best coverage; Nemhauser, Wolsey & Fisher 1978) that records the wanted reflections first, then the most new symmetry families, then second and third recordings (redundancy for scaling and absorption corrections), after the settings already listed. Completeness is the fraction of symmetry families (Friedel mates merged when the amplitudes are real) recorded by the list so far. A setting counts a reflection when its Laue wavelength is in the band and k_f hits a panel; detector gaps, masks and sample-environment shadows are not modelled."
@@ -488,6 +533,18 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
                     <input type="checkbox" checked={exp.scan.interleave ?? false} onChange={(e) => onExp({ ...exp, scan: { ...exp.scan, interleave: e.target.checked } })} /> Interleave
                   </label>
                 )}
+              </div>
+              <div className="ui-controls ui-controls--inline scan-presets">
+                <span className="ui-control-label">Presets</span>
+                <button type="button" className="ui-pill" onClick={fullVolume} title="The instrument's usual full-volume scan, within the goniometer limits">
+                  Full volume ({fullPlan.start}–{fullPlan.end}°, {fullPlan.step}°)
+                </button>
+                <span className="ui-control">
+                  <button type="button" className="ui-pill" onClick={rocking} title="A rocking scan about the current angle, with the current step">
+                    Rocking ±{rockHalf}° about {axes[scanAxis]!.name} = {fmt(exp.angles[scanAxis] ?? 0, 1)}°
+                  </button>
+                  <UnitField label="Rocking half-range" value={rockHalf} unit="°" min={1} max={180} width="3ch" onCommit={setRockHalf} />
+                </span>
               </div>
               {"error" in plan ? (
                 <p className="error-note">{plan.error}</p>

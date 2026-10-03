@@ -2015,3 +2015,8 @@ input.ui-range {
   flex-wrap: wrap;
   gap: 0.3rem;
 }
+
+.scan-presets {
+  margin-top: 0.4rem;
+  font-size: var(--fs-80);
+}

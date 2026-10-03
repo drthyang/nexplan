@@ -5,7 +5,9 @@ you can audit.**
 
 Load a CIF file. NEXPLAN lists every reflection with its d, Q and complex structure factor, flags systematic and
 accidental absences, and draws neutron (or X-ray) powder patterns. It orients the crystal from a UB matrix and
-simulates the measurement on SNS instruments. Nothing is uploaded and there is nothing to install.
+simulates the measurement on SNS instruments. Nothing is uploaded and there is nothing to install; the session
+(structure, orientation, plan) is kept in your browser so a reload resumes it, and "Start over" clears it. Plans
+export as CSV with their provenance.
 
 Status: **public beta.** The scattering tables are cross-checked against independent sources but are not yet
 certified against the printed literature.
