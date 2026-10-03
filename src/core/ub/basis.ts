@@ -56,3 +56,26 @@ export function ratioText(v: number): string {
   }
   return String(Number(v.toPrecision(6)));
 }
+
+/** A linear combination as text: [1, 1, 0] of (a, b, c) → "a + b"; [0, 1/2, 1/2] → "1/2 b + 1/2 c". */
+export function linearText(coeffs: readonly number[], names: readonly string[]): string {
+  let out = "";
+  coeffs.forEach((c, i) => {
+    if (Math.abs(c) < 1e-12) return;
+    const mag = ratioText(Math.abs(c));
+    const term = `${mag === "1" ? "" : `${mag} `}${names[i]}`;
+    out += out ? (c < 0 ? ` − ${term}` : ` + ${term}`) : c < 0 ? `−${term}` : term;
+  });
+  return out || "0";
+}
+
+/**
+ * Mantid TransformHKL's HKLTransform for P: M = Pᵀ (h′ = M·h, UB′ = UB·M⁻¹),
+ * nine numbers row by row (docs.mantidproject.org, TransformHKL v1).
+ */
+export function hklTransformText(P: Mat3): string {
+  const M = [0, 1, 2].map((r) => [0, 1, 2].map((c) => P[c]![r]!));
+  return M.flat()
+    .map((v) => String(Number((Math.abs(v) < 1e-15 ? 0 : v).toPrecision(10))))
+    .join(",");
+}

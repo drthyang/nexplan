@@ -13,7 +13,7 @@ import { UNIVERSAL } from "../core/ub/instruments.ts";
 import type { GoniometerModel } from "../core/ub/goniometer.ts";
 import { axisAngle, directBasisInSample, latticeFromUB, nearestIndices, orientationFromUB, transformUB } from "../core/ub/ub.ts";
 import { formatIsawUB, IsawParseError, parseIsawUB } from "../io/isaw.ts";
-import { BASIS_PRESETS, parseRatio, ratioText, supercell } from "../core/ub/basis.ts";
+import { BASIS_PRESETS, hklTransformText, linearText, parseRatio, ratioText, supercell } from "../core/ub/basis.ts";
 import { Card, Segmented, UnitField } from "./components.tsx";
 import { downloadText, fmt, hklText } from "./format.ts";
 import { presentReflections, useViewUB, type UbState } from "./ubShared.ts";
@@ -21,6 +21,10 @@ import { presentReflections, useViewUB, type UbState } from "./ubShared.ts";
 export type { UbState } from "./ubShared.ts";
 
 const ReciprocalView = lazy(() => import("../views/ReciprocalView.tsx").then((m) => ({ default: m.ReciprocalView })));
+
+const OLD_AXES = ["a", "b", "c"] as const;
+const NEW_AXES = ["a′", "b′", "c′"] as const;
+const NEW_INDICES = ["h′", "k′", "l′"] as const;
 
 const IDENTITY: Mat3 = [
   [1, 0, 0],
@@ -109,7 +113,14 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
   const [selected, setSelected] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [P, setP] = useState<Mat3>(IDENTITY);
-  const [cell, setCell] = useState<[number, number, number]>([2, 2, 2]);
+  const [cell, setCell] = useState<[number, number, number]>([1, 1, 1]);
+  // The supercell fields follow P when P is a diagonal of whole numbers.
+  const diagonal = P.every((r, i) => r.every((v, j) => (i === j ? Number.isInteger(v) && v >= 1 : v === 0)));
+  const shownCell: [number, number, number] = diagonal ? [P[0]![0]!, P[1]![1]!, P[2]![2]!] : cell;
+  const applyCell = (c: [number, number, number]) => {
+    setCell(c);
+    setP(supercell(...c));
+  };
 
   const { viewUB, match, fileUB } = useViewUB(result, ub);
   const orient = useMemo(() => orientationFromUB(viewUB), [viewUB]);
@@ -382,26 +393,28 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
         </Card>
 
         <Card
-          title="Change of basis"
-          info="ITA convention (a′, b′, c′) = (a, b, c)·P: the columns of P are the new axes in the old basis; h′ = Pᵀ·h and UB′ = UB·P⁻ᵀ, so every reflection keeps its q. Any na × nb × nc supercell, a standard transformation (ITA Vol. A Table 5.1.3.1), or your own P: entries take integers, decimals or fractions such as 1/2 or −1/3. Export the result for Mantid or ISAW; the views keep the CIF setting."
+          title="Re-index for another cell"
+          meta="change of basis · the views stay in the CIF cell"
+          info="ITA convention (a′, b′, c′) = (a, b, c)·P. Each new axis and its index use the same coefficients (a′ = a + b goes with h′ = h + k), i.e. h′ = Pᵀ·h and UB′ = UB·P⁻ᵀ, so every reflection keeps its q. The three rows are Mantid TransformHKL's HKLTransform, M = Pᵀ (h′ = M·h, UB′ = UB·M⁻¹; Mantid requires det > 0). Standard transformations from ITA Vol. A (2016) Table 5.1.3.1. Coefficients take integers, decimals or fractions such as 1/2 or −1/3."
           actions={
             <button type="button" className="ui-pill" onClick={() => setP(IDENTITY)}>
-              Identity
+              Reset
             </button>
           }
         >
-          <div className="form-rows" style={{ marginBottom: "0.75rem" }}>
+          <p className="card-lead">
+            Writes the UB for a different unit cell of the same crystal: a supercell to index superlattice or magnetic peaks, the primitive cell, or another program's setting. Reflections stay where they are in reciprocal space; only their indices change.
+          </p>
+          <div className="form-rows">
             <div className="form-row">
               <span className="ui-control-label">Supercell</span>
-              <span className="supercell">
-                <UnitField label="Supercell along a" value={cell[0]} unit="" min={1} max={50} width="2.5ch" onCommit={(v) => setCell([Math.round(v), cell[1], cell[2]])} />
-                <span className="dim-note">×</span>
-                <UnitField label="Supercell along b" value={cell[1]} unit="" min={1} max={50} width="2.5ch" onCommit={(v) => setCell([cell[0], Math.round(v), cell[2]])} />
-                <span className="dim-note">×</span>
-                <UnitField label="Supercell along c" value={cell[2]} unit="" min={1} max={50} width="2.5ch" onCommit={(v) => setCell([cell[0], cell[1], Math.round(v)])} />
-                <button type="button" className="ui-pill" onClick={() => setP(supercell(...cell))}>
-                  Apply
-                </button>
+              <span className={diagonal ? "supercell" : "supercell is-dim"} title={diagonal ? undefined : "P is not a plain supercell; typing here replaces it with one"}>
+                {(["a", "b", "c"] as const).map((axis, k) => (
+                  <span key={axis} className="supercell">
+                    {k > 0 && <span className="dim-note">×</span>}
+                    <UnitField label={`Supercell along ${axis}`} value={shownCell[k]!} unit="" min={1} max={50} width="2.5ch" onCommit={(v) => applyCell(shownCell.map((n, j) => (j === k ? Math.max(1, Math.round(v)) : n)) as [number, number, number])} />
+                  </span>
+                ))}
               </span>
             </div>
             <label className="form-row">
@@ -424,22 +437,29 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
               </select>
             </label>
           </div>
-          <div className="p-matrix">
-            {P.map((row, i) =>
-              row.map((v, j) => (
-                <RatioCell key={`${i}${j}`} label={`P row ${i + 1} column ${j + 1}`} value={v} onCommit={(n) => setP(P.map((r, a) => r.map((x, b) => (a === i && b === j ? n : x))) as unknown as Mat3)} />
-              )),
-            )}
+          <div className="basis-editor" role="group" aria-label="New axes in terms of the old axes">
+            {[0, 1, 2].map((j) => (
+              <div key={j} className="basis-row">
+                <span className="basis-lhs">
+                  <span className="sym">{NEW_AXES[j]}</span> =
+                </span>
+                {[0, 1, 2].map((i) => (
+                  <span key={i} className="basis-term">
+                    <RatioCell label={`${NEW_AXES[j]}: coefficient of ${OLD_AXES[i]}`} value={P[i]![j]!} onCommit={(n) => setP(P.map((r, a) => r.map((x, b) => (a === i && b === j ? n : x))) as unknown as Mat3)} />
+                    <span className="sym">{OLD_AXES[i]}</span>
+                  </span>
+                ))}
+                <span className="basis-index" title="New index in terms of the old ones (same coefficients)">
+                  {NEW_INDICES[j]} = {linearText([P[0]![j]!, P[1]![j]!, P[2]![j]!], ["h", "k", "l"])}
+                </span>
+              </div>
+            ))}
           </div>
           {"error" in transformed ? (
             <p className="error-note">{transformed.error}</p>
           ) : (
             <>
-              <p className="empty-note" style={{ marginTop: "0.6rem" }}>
-                det P = {fmt(transformed.det, 3)}
-                {transformed.det < 0 ? " — changes handedness; Mantid will reject it (U must be a proper rotation)." : Math.abs(transformed.det - 1) > 1e-9 ? ` — a ${Math.abs(transformed.det) > 1 ? "supercell" : "sub-cell"} of volume ×${fmt(Math.abs(transformed.det), 3)}.` : ""}
-              </p>
-              <dl className="ui-stats ui-stats--three">
+              <dl className="ui-stats ui-stats--three" style={{ marginTop: "0.75rem" }}>
                 {(() => {
                   const l = latticeFromUB(transformed.UB!);
                   return (
@@ -454,15 +474,35 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
                   );
                 })()}
               </dl>
-              <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.6rem", flexWrap: "wrap" }}>
+              <p className={transformed.det <= 0 ? "error-note" : "empty-note"} style={{ marginTop: "0.6rem" }}>
+                Volume ×{fmt(transformed.det, 3)} (det P)
+                {transformed.det < 0
+                  ? ": this swaps the handedness of the axes, which Mantid rejects (U must be a proper rotation). Negate one new axis."
+                  : transformed.det > 1 + 1e-9
+                    ? ": a supercell. Every old reflection keeps whole indices, and the new cell adds positions between them for superlattice peaks."
+                    : transformed.det < 1 - 1e-9
+                      ? ": a smaller cell. Old reflections with fractional new indices are not lattice points of the new cell (for centred → primitive, exactly those the centring forbids)."
+                      : "."}
+              </p>
+              <p className="empty-note">
+                {sel ? (
+                  <>
+                    Selected <b>({hklText(sel.h)})</b> becomes <b>({hklText(mulVec(transpose(P), sel.h).map((v) => Number(v.toFixed(4))) as unknown as Vec3)})′</b>.
+                  </>
+                ) : (
+                  "Click a reflection in the table or the 3D view to see its new indices."
+                )}
+              </p>
+              <div className="basis-out">
                 <button type="button" className="ui-btn-brand" disabled={transformed.det <= 0} onClick={() => downloadText(`${result.blockName}-transformed.mat`, formatIsawUB(transformed.UB!))}>
                   Export UB′ (ISAW)
                 </button>
-                {sel && (
-                  <span className="empty-note" style={{ margin: 0 }}>
-                    Selected ({hklText(sel.h)}) → ({hklText(mulVec(transpose(P), sel.h).map((v) => Number(v.toFixed(4))) as unknown as Vec3)})′
-                  </span>
-                )}
+                <span className="basis-mantid" title="The same change in Mantid, applied to a peaks workspace that holds this UB">
+                  <code>TransformHKL(PeaksWorkspace="peaks", HKLTransform="{hklTransformText(P)}")</code>
+                  <button type="button" className="ui-pill" disabled={transformed.det <= 0} onClick={() => void navigator.clipboard?.writeText(`TransformHKL(PeaksWorkspace="peaks", HKLTransform="${hklTransformText(P)}")`)}>
+                    Copy
+                  </button>
+                </span>
               </div>
             </>
           )}

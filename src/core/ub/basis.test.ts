@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Vec3 } from "@materia/core/math/types";
-import { determinant, mulVec, transpose } from "@materia/core/math/mat3";
-import { BASIS_PRESETS, parseRatio, ratioText, supercell } from "./basis.ts";
+import { determinant, inverse, mulMat, mulVec, transpose } from "@materia/core/math/mat3";
+import { BASIS_PRESETS, hklTransformText, linearText, parseRatio, ratioText, supercell } from "./basis.ts";
 import { latticeFromUB, transformUB, ubFromU } from "./ub.ts";
 
 const I: [Vec3, Vec3, Vec3] = [
@@ -72,5 +72,32 @@ describe("P entries as fractions", () => {
     expect(ratioText(4)).toBe("4");
     expect(ratioText(0)).toBe("0");
     expect(ratioText(Math.SQRT2)).toBe("1.41421");
+  });
+});
+
+describe("reading P", () => {
+  const cols = (P: readonly (readonly number[])[], j: number) => P.map((r) => r[j]!);
+  it("each new axis, and each new index, is column j of P: a′ = a + b goes with h′ = h + k", () => {
+    const P = preset("sqrt2");
+    expect([0, 1, 2].map((j) => linearText(cols(P, j), ["a", "b", "c"]))).toEqual(["a + b", "−a + b", "c"]);
+    expect([0, 1, 2].map((j) => linearText(cols(P, j), ["h", "k", "l"]))).toEqual(["h + k", "−h + k", "l"]);
+    // The same as h′ = Pᵀh for (1 1 0) → (2 0 0).
+    expect(mulVec(transpose(P), [1, 1, 0])).toEqual([2, 0, 0]);
+    expect(linearText(cols(preset("F-P"), 0), ["a", "b", "c"])).toBe("1/2 b + 1/2 c");
+    expect(linearText([0, 0, 0], ["a", "b", "c"])).toBe("0");
+    expect(linearText([-2, 0, 1], ["a", "b", "c"])).toBe("−2 a + c");
+  });
+
+  it("Mantid TransformHKL takes M = Pᵀ row by row (h′ = M·h, UB′ = UB·M⁻¹)", () => {
+    // P with new axes as columns: a′ = a + b, b′ = −a + b, c′ = c.
+    expect(hklTransformText(preset("sqrt2"))).toBe("1,1,0,-1,1,0,0,0,1");
+    expect(hklTransformText(supercell(2, 1, 3))).toBe("2,0,0,0,1,0,0,0,3");
+    expect(hklTransformText(preset("F-P"))).toBe("0,0.5,0.5,0.5,0,0.5,0.5,0.5,0");
+    // UB′ = UB·M⁻¹ is the UB·P⁻ᵀ used here.
+    const UB = ubFromU(I, { a: 3, b: 4, c: 5, alpha: 90, beta: 100, gamma: 90 });
+    const M = transpose(preset("sqrt2"));
+    const viaMantid = mulMat(UB, inverse(M));
+    const here = transformUB(UB, preset("sqrt2"));
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) expect(here[i]![j]).toBeCloseTo(viaMantid[i]![j]!, 12);
   });
 });

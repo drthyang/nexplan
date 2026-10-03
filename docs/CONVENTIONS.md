@@ -162,6 +162,10 @@ F(h) = Σⱼ oⱼ · aⱼ(s) · exp(−Bⱼ s²) · exp(+2πi h·xⱼ)
   - the azimuth is measured from +x toward +y.
 - **Basis change** (ITA): UB′ = UB·P⁻ᵀ and h′ = Pᵀh. A loaded UB in another setting is mapped onto the CIF setting
   by an integer P with entries in {−1, 0, 1} and det P = +1, such that Pᵀ·G_CIF·P ≈ G_UB within 2 %.
+  - Because (a′, b′, c′) = (a, b, c)·P and h′ = Pᵀh, a new axis and its new index have the same coefficients
+    (column j of P): a′ = a + b goes with h′ = h + k. The Re-index card edits P in that form, one row per new axis.
+  - Mantid's TransformHKL takes M = Pᵀ, nine numbers row by row, applying h′ = M·h and UB′ = UB·M⁻¹ (= UB·P⁻ᵀ);
+    it rejects det M ≤ 0 (docs.mantidproject.org, TransformHKL v1). Tested on the √2 × √2 × 1 cell.
 
 ## 9. Detector geometry
 

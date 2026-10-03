@@ -34,7 +34,9 @@ certified against the printed literature.
   - Full-precision CSV export with provenance.
 - **UB matrix.**
   - ISAW/Mantid UB files in and out; lattice and orientation from the UB, matched to the CIF setting.
-  - Change of basis; a 3D reciprocal-space view with the Ewald spheres for a wavelength band.
+  - Re-indexing for another cell (supercell, primitive cell or a standard ITA transformation), exported as an
+    ISAW UB or as the equivalent Mantid TransformHKL call; a 3D reciprocal-space view with the Ewald spheres for a
+    wavelength band.
 
 ## Pages
 
@@ -50,7 +52,7 @@ definition (always neutron scattering).
     unit volume, attenuation length, and Bragg line strengths, with an optional TOF weighting (not a counting time).
   - *Reflections*: every signed hkl with d, Q and complex F, folded into symmetry families, absences flagged.
 - **Setup**
-  - *Orientation*: the UB matrix (ISAW/Mantid files in and out, matched to the CIF setting, change of basis) and
+  - *Orientation*: the UB matrix (ISAW/Mantid files in and out, matched to the CIF setting, re-indexing for another cell) and
     the selected instrument's goniometer, with a 3D reciprocal-space view and the Ewald spheres of the band.
 - **Instrument**
   - *Detectors*: the instrument's detector array in 3D and unrolled. Single crystals: the spots at the current
