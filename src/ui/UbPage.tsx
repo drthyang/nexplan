@@ -13,6 +13,7 @@ import { UNIVERSAL } from "../core/ub/instruments.ts";
 import type { GoniometerModel } from "../core/ub/goniometer.ts";
 import { axisAngle, directBasisInSample, latticeFromUB, nearestIndices, orientationFromUB, transformUB } from "../core/ub/ub.ts";
 import { formatIsawUB, IsawParseError, parseIsawUB } from "../io/isaw.ts";
+import { BASIS_PRESETS, parseRatio, ratioText, supercell } from "../core/ub/basis.ts";
 import { Card, Segmented, UnitField } from "./components.tsx";
 import { downloadText, fmt, hklText } from "./format.ts";
 import { presentReflections, useViewUB, type UbState } from "./ubShared.ts";
@@ -108,6 +109,7 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
   const [selected, setSelected] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [P, setP] = useState<Mat3>(IDENTITY);
+  const [cell, setCell] = useState<[number, number, number]>([2, 2, 2]);
 
   const { viewUB, match, fileUB } = useViewUB(result, ub);
   const orient = useMemo(() => orientationFromUB(viewUB), [viewUB]);
@@ -381,36 +383,51 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
 
         <Card
           title="Change of basis"
-          info="ITA convention (a′, b′, c′) = (a, b, c)·P: h′ = Pᵀ·h and UB′ = UB·P⁻ᵀ, so every reflection keeps its q. Integer P with |det P| > 1 makes a supercell. Export the result for Mantid or ISAW; the views keep the CIF setting."
+          info="ITA convention (a′, b′, c′) = (a, b, c)·P: the columns of P are the new axes in the old basis; h′ = Pᵀ·h and UB′ = UB·P⁻ᵀ, so every reflection keeps its q. Any na × nb × nc supercell, a standard transformation (ITA Vol. A Table 5.1.3.1), or your own P: entries take integers, decimals or fractions such as 1/2 or −1/3. Export the result for Mantid or ISAW; the views keep the CIF setting."
           actions={
-            <>
-              <button type="button" className="ui-pill" onClick={() => setP(IDENTITY)}>
-                Identity
-              </button>
-              <button type="button" className="ui-pill" onClick={() => setP([[0, 1, 0], [0, 0, 1], [1, 0, 0]])} title="(a′, b′, c′) = (c, a, b)">
-                Cycle axes
-              </button>
-              <button type="button" className="ui-pill" onClick={() => setP([[2, 0, 0], [0, 2, 0], [0, 0, 2]])}>
-                2×2×2
-              </button>
-            </>
+            <button type="button" className="ui-pill" onClick={() => setP(IDENTITY)}>
+              Identity
+            </button>
           }
         >
+          <div className="form-rows" style={{ marginBottom: "0.75rem" }}>
+            <div className="form-row">
+              <span className="ui-control-label">Supercell</span>
+              <span className="supercell">
+                <UnitField label="Supercell along a" value={cell[0]} unit="" min={1} max={50} width="2.5ch" onCommit={(v) => setCell([Math.round(v), cell[1], cell[2]])} />
+                <span className="dim-note">×</span>
+                <UnitField label="Supercell along b" value={cell[1]} unit="" min={1} max={50} width="2.5ch" onCommit={(v) => setCell([cell[0], Math.round(v), cell[2]])} />
+                <span className="dim-note">×</span>
+                <UnitField label="Supercell along c" value={cell[2]} unit="" min={1} max={50} width="2.5ch" onCommit={(v) => setCell([cell[0], cell[1], Math.round(v)])} />
+                <button type="button" className="ui-pill" onClick={() => setP(supercell(...cell))}>
+                  Apply
+                </button>
+              </span>
+            </div>
+            <label className="form-row">
+              <span className="ui-control-label">Standard</span>
+              <select
+                className="ui-select"
+                aria-label="Standard transformation"
+                value={BASIS_PRESETS.find((b) => b.P.every((r, i) => r.every((v, j) => Math.abs(v - P[i]![j]!) < 1e-12)))?.id ?? ""}
+                onChange={(e) => {
+                  const b = BASIS_PRESETS.find((x) => x.id === e.target.value);
+                  if (b) setP(b.P);
+                }}
+              >
+                <option value="">Choose a transformation…</option>
+                {BASIS_PRESETS.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           <div className="p-matrix">
             {P.map((row, i) =>
               row.map((v, j) => (
-                <input
-                  key={`${i}${j}`}
-                  className="p-cell"
-                  inputMode="decimal"
-                  aria-label={`P row ${i + 1} column ${j + 1}`}
-                  value={String(v)}
-                  onChange={(e) => {
-                    const n = Number(e.target.value);
-                    if (!Number.isFinite(n)) return;
-                    setP(P.map((r, a) => r.map((x, b) => (a === i && b === j ? n : x))) as unknown as Mat3);
-                  }}
-                />
+                <RatioCell key={`${i}${j}`} label={`P row ${i + 1} column ${j + 1}`} value={v} onCommit={(n) => setP(P.map((r, a) => r.map((x, b) => (a === i && b === j ? n : x))) as unknown as Mat3)} />
               )),
             )}
           </div>
@@ -452,5 +469,33 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
         </Card>
       </div>
     </div>
+  );
+}
+
+/** One entry of P: keeps what is typed and commits on Enter or blur (integers, decimals or fractions). */
+function RatioCell({ label, value, onCommit }: { label: string; value: number; onCommit: (v: number) => void }) {
+  const shown = ratioText(value);
+  const [text, setText] = useState(shown);
+  useEffect(() => setText(shown), [shown]);
+  const parsed = parseRatio(text);
+  const commit = () => {
+    if (parsed === undefined) return setText(shown);
+    if (Math.abs(parsed - value) > 1e-15) onCommit(parsed);
+    else setText(shown);
+  };
+  return (
+    <input
+      className={`p-cell${parsed === undefined ? " is-invalid" : ""}`}
+      inputMode="text"
+      aria-label={label}
+      title="An integer, decimal or fraction (e.g. 1/2, −1/3)"
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit();
+        if (e.key === "Escape") setText(shown);
+      }}
+    />
   );
 }

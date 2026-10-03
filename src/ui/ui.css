@@ -1793,3 +1793,14 @@ input.ui-range {
 .slice-key.is-never {
   border: 1.4px solid #8d96a8;
 }
+
+.supercell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.p-cell.is-invalid {
+  border-color: var(--danger);
+}
