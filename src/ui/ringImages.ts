@@ -108,83 +108,30 @@ const GREY: readonly [number, number, number] = [188, 194, 204];
 
 /** A cell coloured by wavelength on the shared λ ramp. */
 function lambdaPixel(lambda: number, lambdaMin: number, lambdaMax: number): [number, number, number] {
-  const [r, g, b] = lambdaRgb((lambda - lambdaMin) / (lambdaMax - lambdaMin || 1));
-  return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
+  const [rr, g, b] = lambdaRgb((lambda - lambdaMin) / (lambdaMax - lambdaMin || 1));
+  return [Math.round(rr * 255), Math.round(g * 255), Math.round(b * 255)];
 }
 
-/**
- * Coverage of one reflection (or its equivalents) on the panel images: grey
- * detectors, and every pixel it can reach coloured by the wavelength it is
- * recorded at. Each point fills a square about one goniometer step across
- * (`stepDeg`; 0 for isolated points), so a stepped sweep reads as an area.
- */
-export function paintCoveragePanels(
-  grids: readonly PanelGrid[],
-  panels: readonly DetectorPanel[],
-  points: readonly { readonly lambda: number; readonly hit: { readonly panel: number; readonly col: number; readonly row: number } }[],
-  lambdaMin: number,
-  lambdaMax: number,
-  stepDeg = 0,
-): PanelImage[] {
-  // Half-width in cells: half a step at the panel's distance, at least one cell.
-  const reach = panels.map((p, k) => Math.max(1, Math.ceil(((stepDeg * Math.PI) / 360) * Math.hypot(...p.center) / (p.width / grids[k]!.nx))));
-  const images = grids.map(({ nx, ny }) => {
+/** Coverage on the panel images: grey detectors, each reachable cell coloured by its λ (NaN = not reachable). */
+export function paintLambdaPanels(grids: readonly { readonly nx: number; readonly ny: number }[], lambdas: readonly Float32Array[], lambdaMin: number, lambdaMax: number): PanelImage[] {
+  return grids.map(({ nx, ny }, k) => {
     const data = new Uint8Array(nx * ny * 4);
-    for (let c = 0; c < nx * ny; c++) data.set([...GREY, 255], 4 * c);
+    const lam = lambdas[k]!;
+    for (let c = 0; c < nx * ny; c++) data.set([...(Number.isNaN(lam[c]!) ? GREY : lambdaPixel(lam[c]!, lambdaMin, lambdaMax)), 255], 4 * c);
     return { width: nx, height: ny, data };
   });
-  for (const p of points) {
-    const img = images[p.hit.panel]!;
-    const panel = panels[p.hit.panel]!;
-    const i = Math.floor(((p.hit.col - 0.5) / panel.nCols) * img.width);
-    const j = Math.floor(((p.hit.row - 0.5) / panel.nRows) * img.height);
-    const rgb = lambdaPixel(p.lambda, lambdaMin, lambdaMax);
-    const r = Math.min(8, reach[p.hit.panel]!);
-    for (let dj = -r; dj <= r; dj++)
-      for (let di = -r; di <= r; di++) {
-        const x = i + di;
-        const y = j + dj;
-        if (x < 0 || y < 0 || x >= img.width || y >= img.height) continue;
-        img.data.set([...rgb, 255], 4 * (y * img.width + x));
-      }
-  }
-  return images;
 }
 
-/** The same coverage on the unrolled map raster (cells from mapCells, top row first), as a PNG data URL. */
-export function paintCoverageMap(
-  cells: ElementCells & { readonly panel: Int16Array },
-  width: number,
-  height: number,
-  nuMax: number,
-  points: readonly { readonly lambda: number; readonly hit: { readonly position: readonly [number, number, number] } }[],
-  lambdaMin: number,
-  lambdaMax: number,
-  stepDeg = 0,
-): string {
+/** The same on the unrolled-map raster (top row first) as a PNG data URL; off the detectors stays transparent. */
+export function paintLambdaMap(panelOf: Int16Array, lambdas: Float32Array, width: number, height: number, lambdaMin: number, lambdaMax: number): string {
   canvas ??= document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d")!;
   const img = ctx.createImageData(width, height);
-  const d = img.data;
-  for (let c = 0; c < width * height; c++) if (cells.panel[c]! >= 0) d.set([...GREY, 255], 4 * c);
-  const r = Math.min(8, Math.max(1, Math.ceil((stepDeg * width) / 360 / 2)));
-  for (const p of points) {
-    const [x, y, z] = p.hit.position;
-    const gamma = (Math.atan2(x, z) * 180) / Math.PI;
-    const nu = (Math.atan2(y, Math.hypot(x, z)) * 180) / Math.PI;
-    const i = Math.floor(((gamma + 180) / 360) * width);
-    const j = Math.floor(((nuMax - nu) / (2 * nuMax)) * height);
-    const rgb = lambdaPixel(p.lambda, lambdaMin, lambdaMax);
-    for (let dj = -r; dj <= r; dj++)
-      for (let di = -r; di <= r; di++) {
-        const u = i + di;
-        const v = j + dj;
-        // Only on the detectors: a dot must not spill into the gaps between panels.
-        if (u < 0 || v < 0 || u >= width || v >= height || cells.panel[v * width + u]! < 0) continue;
-        d.set([...rgb, 255], 4 * (v * width + u));
-      }
+  for (let c = 0; c < width * height; c++) {
+    if (panelOf[c]! < 0) continue;
+    img.data.set([...(Number.isNaN(lambdas[c]!) ? GREY : lambdaPixel(lambdas[c]!, lambdaMin, lambdaMax)), 255], 4 * c);
   }
   ctx.putImageData(img, 0, 0);
   return canvas.toDataURL("image/png");

@@ -17,8 +17,9 @@ import type { CalcSuccess } from "../app/compute.ts";
 import { cwPeaks } from "../core/diffraction/powder.ts";
 import { NEUTRON_MASS_OVER_H, synthesizeTof, tofFromWavelength, tofPeaks, type TofBank } from "../core/diffraction/tof.ts";
 import { rayHit, type DetectorHit } from "../core/instrument/detectors.ts";
-import { elasticPattern, mapCells, ringProfile, ringTrace, type RingSlice } from "../core/instrument/powderRings.ts";
-import { braggCrossings, coveredTwoTheta, crossingsToScan, dRangeAt, panelAngles, panelDifc, panelsSeeing, reflectionCoverage, simulateScan, twoThetaRangeForD, type CoveragePoint, type PanelAngles } from "../core/instrument/simulate.ts";
+import { coverageMapLambdas, coveragePanelLambdas, coverageSolver, type CoverageSolver } from "../core/instrument/coverage.ts";
+import { elasticPattern, mapCells, panelCells, ringProfile, ringTrace, type RingSlice } from "../core/instrument/powderRings.ts";
+import { braggCrossings, coveredTwoTheta, crossingsToScan, dRangeAt, panelAngles, panelDifc, panelsSeeing, simulateScan, twoThetaRangeForD, type PanelAngles } from "../core/instrument/simulate.ts";
 import { neutronWavelengthA } from "../core/physics/energy.ts";
 import { goniometerMatrix, laueCondition } from "../core/ub/goniometer.ts";
 import type { InstrumentPreset } from "../core/ub/instruments.ts";
@@ -32,7 +33,7 @@ import { fmt, hklText } from "./format.ts";
 import { PowderPlot } from "./PowderPlot.tsx";
 import { ScanChart } from "./ScanChart.tsx";
 import { GoniometerControls } from "./UbPage.tsx";
-import { flightPathRange, paintCoverageMap, paintCoveragePanels, paintMap, paintPanels, panelGrids } from "./ringImages.ts";
+import { flightPathRange, paintLambdaMap, paintLambdaPanels, paintMap, paintPanels, panelGrids } from "./ringImages.ts";
 import { presentReflections, useViewUB, type UbState } from "./ubShared.ts";
 
 const InstrumentView = lazy(() => import("../views/InstrumentView.tsx").then((m) => ({ default: m.InstrumentView })));
@@ -252,15 +253,17 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, onOpenUb, inst
   const selObs = sim.obs.find((o) => o.index === selected);
   const sel = selected !== null ? points[selected] : undefined;
 
-  // Reflection coverage (NeuXtalViz "individual peak"): everywhere the selected reflection (or its
-  // equivalents) can be recorded as the free goniometer axes sweep their ranges, coloured by λ.
+  // Reflection coverage: every detector pixel the selected reflection (or its equivalents) can reach
+  // as the free goniometer axes sweep their ranges, coloured by λ, solved exactly per pixel
+  // (src/core/instrument/coverage.ts; the stepped NeuXtalViz-style sweep left sampling gaps).
   const [show, setShow] = useState<"spots" | "coverage">("spots");
   const [equivalents, setEquivalents] = useState(false);
   // Tagged with the reflection list and selection it was computed for, so a stale result is never shown.
-  type Coverage = ({ points: CoveragePoint[]; settings: number; step: number; targets: number } | { error: string }) & { readonly of: typeof points; readonly index: number };
+  type Coverage = ({ solver: CoverageSolver; lambdas: Float32Array[]; targets: number } | { error: string }) & { readonly of: typeof points; readonly index: number };
   const [coverageState, setCoverage] = useState<Coverage | null>(null);
   const coverage = coverageState && coverageState.of === points && coverageState.index === selected && show === "coverage" ? coverageState : null;
   const [covBusy, setCovBusy] = useState(false);
+  const grids = useMemo(() => panelGrids(panels), [panels]);
   useEffect(() => {
     if (show !== "coverage" || selected === null) {
       setCoverage(null);
@@ -273,17 +276,9 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, onOpenUb, inst
       const target = points[selected]!;
       const targets = equivalents ? points.filter((p) => p.family === target.family) : [target];
       try {
-        let out: { points: CoveragePoint[]; settings: number; step: number };
-        if (instrument.incident) {
-          // Monochromatic: exact Bragg crossings along the rotation (a grid would miss the narrow band).
-          const k = free[0]?.i;
-          if (k === undefined) throw new Error("This goniometer has no free axis.");
-          const ax = axes[k]!;
-          const lambda = (exp.lambdaMin + exp.lambdaMax) / 2;
-          const cr = braggCrossings(instrument.goniometer, k, exp.angles, { start: ax.min, end: Math.min(ax.max, ax.min + 360) - 1e-9 }, viewUB, targets.map((p) => ({ h: p.h, family: 0 })), panels, lambda);
-          out = { points: cr.filter((c) => c.hit).map((c) => ({ index: c.index, angles: exp.angles.map((v, i) => (i === k ? c.angle : v)), lambda, hit: c.hit! })), settings: 0, step: 0 };
-        } else out = reflectionCoverage(instrument.goniometer, exp.angles, viewUB, targets, panels, exp.lambdaMin, exp.lambdaMax, 1);
-        if (alive) setCoverage({ ...out, targets: targets.length, of: points, index: selected });
+        const solver = coverageSolver(instrument.goniometer, viewUB, targets.map((p) => p.h), exp.lambdaMin, exp.lambdaMax);
+        const lambdas = coveragePanelLambdas(panels, grids, solver);
+        if (alive) setCoverage({ solver, lambdas, targets: targets.length, of: points, index: selected });
       } catch (e) {
         if (alive) setCoverage({ error: (e as Error).message, of: points, index: selected });
       }
@@ -293,30 +288,39 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, onOpenUb, inst
       alive = false;
       clearTimeout(t);
     };
-    // exp.angles only fixes the non-swept axes, which goniometerMatrix takes from the model.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [show, selected, equivalents, points, instrument, viewUB, panels, exp.lambdaMin, exp.lambdaMax]);
-  const covOn = coverage !== null && "points" in coverage && selected !== null;
-  const grids = useMemo(() => panelGrids(panels), [panels]);
-  const covImages = useMemo(() => (covOn ? paintCoveragePanels(grids, panels, (coverage as { points: CoveragePoint[] }).points, exp.lambdaMin, exp.lambdaMax, (coverage as { step: number }).step) : undefined), [covOn, coverage, grids, panels, exp.lambdaMin, exp.lambdaMax]);
+  }, [show, selected, equivalents, points, instrument, viewUB, panels, grids, exp.lambdaMin, exp.lambdaMax]);
+  const covOn = coverage !== null && "lambdas" in coverage && selected !== null;
+  const covImages = useMemo(() => (covOn ? paintLambdaPanels(grids, (coverage as { lambdas: Float32Array[] }).lambdas, exp.lambdaMin, exp.lambdaMax) : undefined), [covOn, coverage, grids, exp.lambdaMin, exp.lambdaMax]);
   const mapCache = useRef<{ key: string; cells: ReturnType<typeof mapCells> } | null>(null);
   const covRaster = useCallback(
     (w: number, h: number, nuMax: number) => {
-      if (!coverage || !("points" in coverage)) return undefined;
+      if (!coverage || !("solver" in coverage)) return undefined;
       const key = `${w}x${h}x${nuMax}`;
       if (mapCache.current?.key !== key) mapCache.current = { key, cells: mapCells(panels, w, h, nuMax) };
-      return paintCoverageMap(mapCache.current.cells, w, h, nuMax, coverage.points, exp.lambdaMin, exp.lambdaMax, coverage.step);
+      const panelOf = mapCache.current.cells.panel;
+      return paintLambdaMap(panelOf, coverageMapLambdas(panelOf, w, h, nuMax, coverage.solver), w, h, exp.lambdaMin, exp.lambdaMax);
     },
     [coverage, panels, exp.lambdaMin, exp.lambdaMax],
   );
-  const sweep = instrument.incident
-    ? `exact Bragg crossings over ${free.map(({ ax }) => `${ax.name} ${ax.min}–${Math.min(ax.max, ax.min + 360)}°`).join(", ")}`
-    : coverage && "step" in coverage
-      ? `${coverage.settings.toLocaleString()} settings: ${free.map(({ ax }) => `${ax.name} ${ax.min}–${Math.min(ax.max, ax.min + 360)}°`).join(", ")} in ${coverage.step}° steps`
-      : "";
   // Bragg window: a spacing d lands only at 2 asin(λmin/2d) ≤ 2θ ≤ 2 asin(min(1, λmax/2d)), whatever the orientation.
   const covWindow = covOn ? twoThetaRangeForD(points[selected!]!.d, exp.lambdaMin, exp.lambdaMax) : undefined;
   const covRings = useMemo<MapRing[]>(() => (covWindow ? [covWindow.min, covWindow.max].filter((t) => t > 0.5 && t < 179.5).map((t) => ({ twoTheta: t, emphasis: true })) : []), [covWindow?.min, covWindow?.max]);
+  const covStats = useMemo(() => {
+    if (!covOn) return undefined;
+    const lam = (coverage as { lambdas: Float32Array[] }).lambdas;
+    const reached = lam.filter((l) => l.some((v) => !Number.isNaN(v))).length;
+    let cells = 0;
+    let inWindow = 0;
+    grids.forEach((g, k) => {
+      const tt = panelCells(panels[k]!, g.nx, g.ny).twoTheta;
+      tt.forEach((t, c) => {
+        if (covWindow && t >= covWindow.min && t <= covWindow.max) inWindow++;
+        if (!Number.isNaN(lam[k]![c]!)) cells++;
+      });
+    });
+    return { reached, fraction: inWindow ? cells / inWindow : 0 };
+  }, [covOn, coverage, grids, panels, covWindow]);
+  const sweep = free.map(({ ax }) => `${ax.name} ${ax.min}–${Math.min(ax.max, ax.min + 360)}°`).join(", ");
   const covStatus =
     selected === null
       ? "Select a reflection (type hkl, or pick it in the table, map or 3D view) to see everywhere it can be recorded."
@@ -324,8 +328,8 @@ function SingleCrystalExperiment({ result, theme, ub, exp, onExp, onOpenUb, inst
         ? "Calculating…"
         : coverage && "error" in coverage
           ? coverage.error
-          : coverage
-            ? `(${hklText(points[selected]!.h)}) d ${fmt(points[selected]!.d, 4)} Å${coverage.targets > 1 ? ` + ${coverage.targets - 1} equivalents` : ""}: ${coverage.points.length.toLocaleString()} landing positions on ${new Set(coverage.points.map((p) => p.hit.panel)).size} panels, inside the Bragg window 2θ ${fmt(covWindow?.min ?? NaN, 1)}–${fmt(covWindow?.max ?? NaN, 1)}° · ${sweep}`
+          : coverage && covStats
+            ? `(${hklText(points[selected]!.h)}) d ${fmt(points[selected]!.d, 4)} Å${coverage.targets > 1 ? ` + ${coverage.targets - 1} equivalents` : ""}: reachable on ${covStats.reached} of ${panels.length} panels, ${fmt(100 * covStats.fraction, 1)} % of the detector pixels inside its Bragg window 2θ ${fmt(covWindow?.min ?? NaN, 1)}–${fmt(covWindow?.max ?? NaN, 1)}° · solved exactly for ${sweep}`
             : "";
   const pickHkl = (text: string) => {
     const v = text.trim().split(/[\s,]+/).map(Number);
