@@ -16,6 +16,8 @@ export interface ExperimentState {
   readonly scan: { readonly axis: number; readonly start: number; readonly end: number; readonly step: number; readonly interleave?: boolean };
   /** Orientation list (single crystal, e.g. TOPAZ's ~10 chosen settings): goniometer angles per setting. */
   readonly orientations: readonly (readonly number[])[];
+  /** Wanted reflections (hkl) that an orientation list should record: TOPAZ's "chosen peaks". Kept across instruments. */
+  readonly wanted: readonly (readonly number[])[];
   /** Powder: the panel whose pattern is simulated (null = the one nearest 2θ = 90°). */
   readonly panel: number | null;
   /** Relative resolution Δd/d (FWHM) of simulated peaks and rings. */
@@ -34,6 +36,7 @@ export const DEFAULT_EXPERIMENT: ExperimentState = {
   lambdaMax: 3.5,
   scan: { axis: 0, start: 0, end: 360, step: 5 },
   orientations: [],
+  wanted: [],
   panel: null,
   dOverD: 0.005,
   sample: "single-crystal",

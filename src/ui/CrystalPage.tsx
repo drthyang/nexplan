@@ -9,14 +9,19 @@
  *    each reflection marked as on a detector now, recorded in the plan, or never.
  *  - "Find a setting": goniometer angles that put a chosen reflection near the
  *    middle of a panel at a mid-band wavelength (to build a TOPAZ-style list).
+ *  - Wanted reflections and "Suggest settings" (lists): a greedy search over a
+ *    grid of goniometer settings for the ones that record the wanted
+ *    reflections first, then the most new families (src/core/instrument/plan.ts).
  */
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { Mat3, Vec3 } from "@materia/core/math/types";
 import { mulVec } from "@materia/core/math/mat3";
+import { familyCounts, targetCoverage } from "../core/instrument/plan.ts";
 import { braggCrossings, crossingsToScan, pointCoverage, reflectionCoverage, scanSettings, simulateSettings, type ScanResult } from "../core/instrument/simulate.ts";
+import { suggestPlan } from "../workers/client.ts";
 import { goniometerMatrix } from "../core/ub/goniometer.ts";
 import type { InstrumentPreset } from "../core/ub/instruments.ts";
-import { Card, Segmented, UnitField } from "./components.tsx";
+import { Card, cx, Segmented, UnitField } from "./components.tsx";
 import { fmt, hklText } from "./format.ts";
 import { ScanChart } from "./ScanChart.tsx";
 import { SliceChart, type SlicePoint } from "./SliceChart.tsx";
@@ -89,6 +94,12 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
   }, [planKind, exp.orientations, deferredBase, scanAxis, exp.scan, model, viewUB, points, panels, exp.lambdaMin, exp.lambdaMax, mono, lambdaMid]);
   const planOk = "steps" in plan ? plan : undefined;
   const reach90 = planOk?.steps.find((s) => s.completeness >= 0.9);
+  // Lists: families recorded in two or more settings (redundancy for scaling and absorption corrections).
+  const twice = useMemo(() => {
+    if (planKind !== "list" || !planOk || !planOk.settings.length) return undefined;
+    const counts = familyCounts(model, planOk.settings, viewUB, points.map((p) => ({ h: p.h as Vec3, family: p.family })), panels, exp.lambdaMin, exp.lambdaMax);
+    return [...counts.values()].filter((c) => c >= 2).length;
+  }, [planKind, planOk, model, viewUB, points, panels, exp.lambdaMin, exp.lambdaMax]);
 
   // ---------------------------------------------------------------- reciprocal slice
   const [planeId, setPlaneId] = useState<PlaneId>("hk0");
@@ -227,6 +238,77 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
     onExp({ ...exp, orientations: Array.from({ length: n }, (_, j) => exp.angles.map((v, i) => (i === k ? Number((ax.min + j * step).toFixed(2)) : v))) });
   };
 
+  // ---------------------------------------------------------------- wanted reflections and suggested settings
+  const wantedTargets = useMemo(
+    () =>
+      exp.wanted.map((h, k) => {
+        const i = points.findIndex((p) => p.h[0] === h[0] && p.h[1] === h[1] && p.h[2] === h[2]);
+        const q = mulVec(viewUB, h as Vec3);
+        const d = 1 / Math.hypot(...q);
+        if (i < 0) return { h: h as Vec3, d, index: undefined, family: -(k + 1), members: [h as Vec3] };
+        const family = points[i]!.family;
+        return { h: h as Vec3, d, index: i, family, members: points.filter((p) => p.family === family).map((p) => p.h as Vec3) };
+      }),
+    [exp.wanted, points, viewUB],
+  );
+  // Settings of the list that record each wanted reflection (any symmetry equivalent in the list).
+  const wantedSeen = useMemo(
+    () =>
+      wantedTargets.map((t) =>
+        planKind !== "list" || !planOk ? 0 : planOk.settings.filter((s) => targetCoverage(model, [s], viewUB, t.members.map((h) => ({ h, family: 0 })), panels, exp.lambdaMin, exp.lambdaMax).some((c) => c > 0)).length,
+      ),
+    [wantedTargets, planKind, planOk, model, viewUB, panels, exp.lambdaMin, exp.lambdaMax],
+  );
+  const addWanted = (h: readonly number[]) => {
+    if (exp.wanted.some((w) => w[0] === h[0] && w[1] === h[1] && w[2] === h[2])) return;
+    onExp({ ...exp, wanted: [...exp.wanted, [...h]] });
+  };
+  const [suggestN, setSuggestN] = useState(10);
+  const [search, setSearch] = useState<{ done: number; total: number; cancel: () => void } | null>(null);
+  const [suggestNote, setSuggestNote] = useState<string | null>(null);
+  // Stop a running search when the page closes (not on progress updates).
+  const cancelSearch = useRef<(() => void) | undefined>(undefined);
+  useEffect(() => () => cancelSearch.current?.(), []);
+  const runSuggest = () => {
+    const n = Math.max(1, Math.round(suggestN));
+    const job = suggestPlan(
+      {
+        model,
+        base: exp.angles,
+        UB: viewUB,
+        reflections: points.map((p) => ({ h: p.h as Vec3, family: p.family })),
+        wantedFamilies: wantedTargets.map((t) => t.family),
+        extra: wantedTargets.filter((t) => t.index === undefined).map((t) => ({ h: t.h, family: t.family })),
+        existing: exp.orientations,
+        panels,
+        lambdaMin: exp.lambdaMin,
+        lambdaMax: exp.lambdaMax,
+        n,
+      },
+      (done, total) => setSearch((s) => (s ? { ...s, done, total } : s)),
+    );
+    setSuggestNote(null);
+    cancelSearch.current = job.cancel;
+    setSearch({ done: 0, total: 0, cancel: job.cancel });
+    job.result.then(
+      (res) => {
+        cancelSearch.current = undefined;
+        setSearch(null);
+        onExp({ ...exp, orientations: [...exp.orientations, ...res.settings.map((a) => a.map((v) => Number(v.toFixed(2))))] });
+        const wantedText = res.wantedTotal ? ` Wanted reflections recorded: ${res.wantedAfter} of ${res.wantedTotal}${res.wantedBefore ? ` (${res.wantedBefore} before)` : ""}.` : "";
+        const full = res.picks.findIndex((p) => p.wanted === 0 && p.families === 0);
+        const redundancy = full >= 0 ? ` Every reachable family is recorded after ${full}; the other ${res.picks.length - full} add second and third recordings.` : "";
+        const stopped = res.settings.length < n ? (full >= 0 ? ` Stopped after ${res.settings.length}: every reachable family is already recorded three times.` : ` Stopped after ${res.settings.length}: more settings would record nothing new with this goniometer and band.`) : "";
+        setSuggestNote(`Added ${res.settings.length} setting${res.settings.length === 1 ? "" : "s"}, chosen from ${res.candidates.toLocaleString()} on a ${res.step}° grid of ${freeNames.join(", ")}.${wantedText}${redundancy}${stopped}`);
+      },
+      (e: Error) => {
+        cancelSearch.current = undefined;
+        setSearch(null);
+        if (e.message !== "cancelled") setSuggestNote(e.message);
+      },
+    );
+  };
+
   const freeNames = free.map(({ ax }) => ax.name);
   return (
     <div className="ui-stack">
@@ -236,7 +318,7 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
           meta={planOk ? `${planOk.steps.length} setting${planOk.steps.length === 1 ? "" : "s"} · ${fmt(100 * (planOk.steps.at(-1)?.completeness ?? 0), 1)} % of families` : undefined}
           info={
             planKind === "list"
-              ? "As TOPAZ is run: a short list of chosen orientations (about ten), each measured for a while. Add the current goniometer setting, use \"Find a setting\" to bring a wanted reflection onto a detector, or fill the list evenly to start. Completeness is the fraction of symmetry families (Friedel mates merged when the amplitudes are real) recorded by the list so far."
+              ? "As TOPAZ is run: a short list of chosen orientations (about ten), each measured for a while. Add the current goniometer setting, use \"Find a setting\" to bring a wanted reflection onto a detector, fill the list evenly, or let Suggest pick settings: a greedy search over a grid of the free axes (within (1 − 1/e) of the best coverage; Nemhauser, Wolsey & Fisher 1978) that records the wanted reflections first, then the most new symmetry families, then second and third recordings (redundancy for scaling and absorption corrections), after the settings already listed. Completeness is the fraction of symmetry families (Friedel mates merged when the amplitudes are real) recorded by the list so far. A setting counts a reflection when its Laue wavelength is in the band and k_f hits a panel; detector gaps, masks and sample-environment shadows are not modelled."
               : mono
                 ? "Rotate one axis through a range (the others stay where they are). With a monochromatic beam each reflection diffracts only where it crosses the Ewald sphere; those angles are solved exactly and binned into the steps, so nothing is missed between steps. Completeness is the fraction of symmetry families recorded so far. Click the chart to move the goniometer there."
                 : "As CORELLI is run: a rocking or full-volume scan of one axis in fixed steps (3° by default); interleave adds the half-way steps, a second pass in between. Completeness is the fraction of symmetry families (Friedel mates merged when the amplitudes are real) recorded so far. Click the chart to move the goniometer there."
@@ -250,7 +332,7 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
                 </button>
                 <span className="ui-control">
                   <span className="ui-control-label">Fill</span>
-                  <UnitField label="Number of evenly spaced settings" value={fillN} unit={`× ${free[0]!.ax.name}`} min={1} max={72} width="3ch" onCommit={setFillN} />
+                  <UnitField label="Number of evenly spaced settings" value={fillN} unit={`× ${free[0]!.ax.name}`} min={1} max={72} width="4ch" onCommit={setFillN} />
                   <button type="button" className="ui-pill" onClick={fillEven}>
                     Fill evenly
                   </button>
@@ -260,6 +342,66 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
                     Clear
                   </button>
                 )}
+              </div>
+              <div className="wanted-box">
+                <div className="wanted-head">
+                  <span className="ui-control-label">Wanted reflections</span>
+                  <HklAdder onAdd={addWanted} />
+                </div>
+                {wantedTargets.length === 0 ? (
+                  <p className="empty-note">The peaks this measurement is for. Add them here or with "Add to wanted" on a selected reflection; the list below shows which settings record them, and Suggest puts them first.</p>
+                ) : (
+                  <div className="wanted-list">
+                    {wantedTargets.map((t, k) => {
+                      const seen = wantedSeen[k] ?? 0;
+                      const unreachable = t.d < exp.lambdaMin / 2;
+                      return (
+                        <span
+                          key={t.h.join(",")}
+                          className={cx("ui-chip", seen > 0 ? "ui-chip--success" : unreachable ? "ui-chip--danger" : "ui-chip--warn", t.index !== undefined && "is-clickable")}
+                          title={`(${hklText(t.h)}) d ${fmt(t.d, 4)} Å${t.index === undefined ? " · not in the reflection list (absent, weak or beyond d_min): targeted as this exact hkl" : ` · any of its ${t.members.length} symmetry equivalents counts`}${unreachable ? ` · d < λmin/2 = ${fmt(exp.lambdaMin / 2, 3)} Å: no setting can record it` : ""}`}
+                          onClick={() => {
+                            if (t.index === undefined) return;
+                            setSelected(t.index);
+                            setLayer(t.h[plane.fixed]!);
+                          }}
+                        >
+                          ({hklText(t.h)}) {seen > 0 ? `✓ ${seen}×` : unreachable ? "unreachable" : "not recorded"}
+                          <button
+                            type="button"
+                            className="chip-x"
+                            aria-label={`Remove (${hklText(t.h)}) from the wanted reflections`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onExp({ ...exp, wanted: exp.wanted.filter((_, j) => j !== k) });
+                            }}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="ui-controls ui-controls--inline" style={{ marginTop: "0.55rem" }}>
+                  <span className="ui-control">
+                    <span className="ui-control-label">Suggest</span>
+                    <UnitField label="Number of settings to suggest" value={suggestN} unit="settings" min={1} max={40} width="4ch" onCommit={setSuggestN} />
+                  </span>
+                  {search ? (
+                    <>
+                      <span className="dim-note">Searching{search.total ? ` ${Math.round((100 * search.done) / search.total)} %` : "…"}</span>
+                      <button type="button" className="ui-pill" onClick={() => search.cancel()}>
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" className="ui-btn-brand" onClick={runSuggest} title="Search a grid of goniometer settings for the ones that record the wanted reflections first, then the most new families; they are added after the settings already in the list">
+                      {exp.orientations.length ? "Add suggested settings" : "Suggest settings"}
+                    </button>
+                  )}
+                </div>
+                {suggestNote && <p className="empty-note">{suggestNote}</p>}
               </div>
               {"error" in plan ? (
                 <p className="error-note">{plan.error}</p>
@@ -347,7 +489,8 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
           {planOk && (
             <p className="plot-hint">
               {planOk.observedFamilies.toLocaleString()} of {planOk.families.toLocaleString()} families recorded
-              {planOk.steps.length ? (reach90 ? `; 90 % after ${planOk.steps.indexOf(reach90) + 1} setting${planOk.steps.indexOf(reach90) ? "s" : ""}` : "; 90 % is not reached") : ""}.
+              {planOk.steps.length ? (reach90 ? `; 90 % after ${planOk.steps.indexOf(reach90) + 1} setting${planOk.steps.indexOf(reach90) ? "s" : ""}` : "; 90 % is not reached") : ""}
+              {twice !== undefined && planOk.families ? `; ${fmt((100 * twice) / planOk.families, 0)} % in two or more settings` : ""}.
             </p>
           )}
         </Card>
@@ -472,9 +615,16 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
                     ? `Now on ${selObs.hit.name} (col ${fmt(selObs.hit.col, 0)}, row ${fmt(selObs.hit.row, 0)}) at λ ${fmt(selObs.lambda, 3)} Å, TOF ${fmt(tofOf(selObs), 0)} µs.`
                     : "Not on a detector at the current setting."}
                 </p>
-                <button type="button" className="ui-btn-brand" style={{ marginTop: "0.5rem" }} onClick={findSetting}>
-                  Find a setting that records it
-                </button>
+                <div className="ui-controls ui-controls--inline" style={{ marginTop: "0.5rem" }}>
+                  <button type="button" className="ui-btn-brand" onClick={findSetting}>
+                    Find a setting that records it
+                  </button>
+                  {planKind === "list" && (
+                    <button type="button" className="ui-pill" disabled={exp.wanted.some((w) => w.every((v, i) => v === sel.h[i]))} onClick={() => addWanted(sel.h)}>
+                      {exp.wanted.some((w) => w.every((v, i) => v === sel.h[i])) ? "Wanted" : "Add to wanted"}
+                    </button>
+                  )}
+                </div>
                 {findNote && <p className="empty-note">{findNote}</p>}
               </>
             ) : (
@@ -484,5 +634,30 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
         </div>
       </div>
     </div>
+  );
+}
+
+/** "h k l" entry that adds to a list: any whole-number indices (absent or weak reflections can be wanted too). */
+function HklAdder({ onAdd }: { onAdd: (h: number[]) => void }) {
+  const [text, setText] = useState("");
+  const [bad, setBad] = useState(false);
+  // Enter reads the field itself, so a keystroke not yet rendered is not lost.
+  const commit = (raw = text) => {
+    const v = raw.trim().split(/[\s,]+/).map(Number);
+    if (v.length !== 3 || v.some((x) => !Number.isInteger(x)) || v.every((x) => x === 0)) return setBad(raw.trim() !== "");
+    onAdd(v);
+    setText("");
+    setBad(false);
+  };
+  return (
+    <span className="ui-controls ui-controls--inline">
+      <span className={cx("ui-unit-field", bad && "is-invalid")} title="Miller indices, e.g. 1 1 3">
+        <input className="ui-unit-field__input" aria-label="Wanted reflection h k l" placeholder="h k l" value={text} style={{ width: "7ch" }} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && commit(e.currentTarget.value)} />
+        <span className="ui-unit-field__unit">hkl</span>
+      </span>
+      <button type="button" className="ui-pill" onClick={() => commit()}>
+        Add
+      </button>
+    </span>
   );
 }

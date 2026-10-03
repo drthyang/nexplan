@@ -63,7 +63,8 @@ definition (always neutron scattering).
   - *Powder*: the pattern for the generic beam (CW or one TOF bank), or for an SNS instrument the pattern of any
     panel (elastic 2θ for ARCS, SEQUOIA, CNCS) and the 2θ–d coverage of the detector array.
   - *Single crystal*: the measurement plan as each instrument is run (TOPAZ: a list of about ten chosen
-    orientations, with "find a setting" to put a wanted reflection on a detector; CORELLI: rotation scans in 3°
+    orientations, built from wanted reflections with "suggest settings" (a greedy search over the goniometer that
+    records the wanted peaks first, then completeness, then redundancy) or "find a setting" for one reflection; CORELLI: rotation scans in 3°
     steps, optionally interleaved; ARCS, SEQUOIA, CNCS: ψ scans with exact Bragg crossings), its symmetry-family
     completeness, and reciprocal-space slices shaded by what the plan records.
 

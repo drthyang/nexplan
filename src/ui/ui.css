@@ -1951,3 +1951,45 @@ input.ui-range {
 .supercell.is-dim:focus-within {
   opacity: 1;
 }
+
+/* Wanted reflections (orientation lists) */
+.wanted-box {
+  margin-top: 0.75rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--border);
+}
+
+.wanted-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 0.75rem;
+  margin-bottom: 0.45rem;
+}
+
+.wanted-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.wanted-list .is-clickable {
+  cursor: pointer;
+}
+
+.chip-x {
+  margin-left: 0.1rem;
+  padding: 0 0.15rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  line-height: 1;
+  opacity: 0.6;
+  cursor: pointer;
+}
+
+.chip-x:hover {
+  opacity: 1;
+}

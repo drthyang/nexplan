@@ -221,6 +221,21 @@ neutron scattering); code in
   interleaved with the half-way steps; chopper spectrometers with exact crossings). Completeness is cumulative over
   the plan. The reciprocal slice shades each point of a lattice plane by the number of settings that record it
   (λ in the band and k_f on a panel).
+- **Suggested orientation lists** (`src/core/instrument/plan.ts`, TOPAZ):
+  - Candidates: a grid over the free axes within their ranges (one turn at most), with the smallest step from
+    1°, 2°, 3°, 4°, 5°, 6°, 8°, 10°, … that keeps it under 6000 settings: 1° for ω alone, 5° for TOPAZ ambient ω and φ.
+  - Each candidate records the families of the reflections whose Laue λ is in the band and whose k_f hits a panel (the
+    single-crystal test above; each panel's angular extent is checked first, exactly, from its corners). Tested
+    reflection by reflection against `observeAt` on the real TOPAZ panels.
+  - Greedy selection: each pick maximises the new wanted reflections, then the new families, then the families it
+    records a second and a third time, then the families it records. Settings already in the list count as measured.
+    Greedy maximum coverage is within (1 − 1/e) of the best for the same number of settings (Nemhauser, Wolsey &
+    Fisher, Math. Program. 14, 265 (1978)).
+  - A wanted reflection counts when any symmetry equivalent in the reflection list is recorded. An hkl outside the
+    list (absent, weak, or beyond the 6000 strongest) is targeted as that exact hkl.
+  - Not modelled: detector gaps inside a panel, masks, sample-environment shadows, and counting statistics.
+  - Test: for P-1 families to d = 0.78 Å on a 5.431 Å cell, the suggestions record all 364 families after 8 settings,
+    against 295 for ten settings evenly spaced in ω.
 - **Time of flight of a spot:** t = (m_n/h)·(L1 + L2)·λ, with L2 to the pixel. This is Mantid's TOF ↔ λ relation,
   with no emission-time offset (T0_SHIFT = 0 in the TOPAZ_3007 peaks file).
 - **Powder (sample fixed):** a pixel at 2θ records d from λ_min/(2 sin θ) to λ_max/(2 sin θ). A spacing d reaches

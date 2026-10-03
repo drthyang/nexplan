@@ -5,7 +5,9 @@
  * leaving the UI waiting.
  */
 import type { CalcInput, CalcResult } from "../app/compute.ts";
+import type { SuggestInput, SuggestResult } from "../core/instrument/plan.ts";
 import type { CalcResponse } from "./calc.worker.ts";
+import type { PlanMessage } from "./plan.worker.ts";
 
 let worker: Worker | undefined;
 let seq = 0;
@@ -81,4 +83,42 @@ export function calculateIsolated(input: CalcInput): Promise<CalcResult> {
     };
     w.postMessage({ id: 0, input });
   });
+}
+
+/**
+ * Suggested orientation list (src/core/instrument/plan.ts) on its own worker:
+ * the search over goniometer settings can take a second or two.
+ */
+export function suggestPlan(input: SuggestInput, onProgress: (done: number, total: number) => void): { readonly result: Promise<SuggestResult>; readonly cancel: () => void } {
+  let w: Worker | undefined;
+  let settle: ((e: Error) => void) | undefined;
+  const result = new Promise<SuggestResult>((resolve, reject) => {
+    settle = reject;
+    try {
+      w = new Worker(new URL("./plan.worker.ts", import.meta.url), { type: "module" });
+    } catch (e) {
+      reject(new Error(`Could not start the search: ${(e as Error).message}`));
+      return;
+    }
+    w.onmessage = (ev: MessageEvent<PlanMessage>) => {
+      const m = ev.data;
+      if (m.kind === "progress") return onProgress(m.done, m.total);
+      w?.terminate();
+      if (m.kind === "done") resolve(m.result);
+      else reject(new Error(m.message));
+    };
+    w.onerror = (ev) => {
+      ev.preventDefault();
+      w?.terminate();
+      reject(new Error(ev.message || "The search worker could not be loaded. Reload the page."));
+    };
+    w.postMessage(input);
+  });
+  return {
+    result,
+    cancel: () => {
+      w?.terminate();
+      settle?.(new Error("cancelled"));
+    },
+  };
 }
