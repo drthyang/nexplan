@@ -187,7 +187,8 @@ F(h) = Σⱼ oⱼ · aⱼ(s) · exp(−Bⱼ s²) · exp(+2πi h·xⱼ)
 
 ## 10. Instrument simulations
 
-On the Instrument page, for SNS neutron instruments only (the page always uses neutron scattering); code in
+On the simulation pages (Detectors, Powder, Single crystal) for the SNS instrument chosen in the header (always
+neutron scattering); code in
 `src/core/instrument/simulate.ts` and `src/core/instrument/powderRings.ts`.
 
 - **Detector map:** directions are unrolled onto a cylinder about the vertical axis, as in Mantid's instrument
@@ -206,6 +207,16 @@ On the Instrument page, for SNS neutron instruments only (the page always uses n
     turn. A setting counts when λ = −2q_z/|q|² is in the band and k_f hits a panel.
   - Chopper spectrometers use the exact Bragg crossings instead.
   - Tested: every point satisfies λ = 2d sin θ at the pixel it hits, and lies in the band.
+- **Exact coverage** (`src/core/instrument/coverage.ts`): per detector pixel, the pixel fixes q̂ ∝ u − ẑ and
+  λ = 2d sin θ; with R = M₀·Rot(n₁, s₁a)·M₁·Rot(n₂, s₂b)·M₂ (fixed axes in the M's), the component of the rotated
+  reflection along n₁ is a sinusoid in b, giving at most two b per turn, each with one a; both are checked against
+  the axis ranges, within the pixel's angular half-size (q̂ turns half as fast as k_f). Tested by rotating forward to
+  the returned angles, against the stepped sweep, and against the ω-only and χ = 135° analytic cases. It replaced the
+  stepped sweep for display, which left gaps because the beam turns twice as fast as the crystal.
+- **Measurement plans:** an orientation list (TOPAZ) or a rotation scan of one axis (CORELLI, optionally
+  interleaved with the half-way steps; chopper spectrometers with exact crossings). Completeness is cumulative over
+  the plan. The reciprocal slice shades each point of a lattice plane by the number of settings that record it
+  (λ in the band and k_f on a panel).
 - **Time of flight of a spot:** t = (m_n/h)·(L1 + L2)·λ, with L2 to the pixel. This is Mantid's TOF ↔ λ relation,
   with no emission-time offset (T0_SHIFT = 0 in the TOPAZ_3007 peaks file).
 - **Powder (sample fixed):** a pixel at 2θ records d from λ_min/(2 sin θ) to λ_max/(2 sin θ). A spacing d reaches

@@ -1012,35 +1012,34 @@ details.ui-fold > .ui-fold__body {
 }
 
 /* ---------------------------------------------------------------- responsive */
-/* Up to laptop widths the header has two rows: brand and actions, then the page tabs. */
-@media (max-width: 1240px) {
-  .app-header {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .header-primary {
-    display: contents;
-  }
-
-  .brand-row {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .header-actions {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .page-tabs {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    overflow-x: auto;
-    justify-self: start;
-    max-width: 100%;
-  }
+/* The header has two rows at every width: brand and actions, then the grouped page tabs. */
+.app-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
+
+.header-primary {
+  display: contents;
+}
+
+.brand-row {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.header-actions {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.page-tabs {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  overflow-x: auto;
+  justify-self: start;
+  max-width: 100%;
+}
+
 
 @media (max-width: 760px) {
   /* Three header rows, as RMCProfile on phones: brand, actions, tabs. */
@@ -1639,4 +1638,158 @@ input.ui-range {
 
 .ui-link:hover {
   color: var(--accent-strong, var(--accent));
+}
+
+/* Page tabs in labelled groups: Sample · Setup · Simulation. */
+.page-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tab-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: none;
+}
+
+.tab-group + .tab-group {
+  padding-left: 0.65rem;
+  border-left: 1px solid var(--border);
+}
+
+.tab-group__label {
+  font-size: var(--fs-62);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--subtle);
+}
+
+/* The instrument picker in the header: the context every page works in. */
+.instrument-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.instrument-pick .ui-select {
+  max-width: 15rem;
+  font-weight: 600;
+}
+
+/* A page waiting for an instrument choice. */
+.empty-state {
+  display: grid;
+  gap: 0.7rem;
+  padding: 1.4rem 1.5rem;
+}
+
+.empty-state h2 {
+  margin: 0;
+  font-size: var(--fs-100);
+  color: var(--text-strong);
+}
+
+.empty-state p {
+  margin: 0;
+  max-width: 46rem;
+  color: var(--muted);
+  font-size: var(--fs-84);
+}
+
+.empty-state__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.empty-state__row .ui-control-label {
+  flex: 0 0 15.5rem;
+}
+
+.ring-controls__end {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+/* Reciprocal slice markers. */
+.slice-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.slice-point {
+  cursor: pointer;
+  stroke-width: 1.2;
+}
+
+.slice-point.is-now {
+  stroke: rgba(0, 0, 0, 0.45);
+}
+
+.slice-point.is-scan {
+  fill: #2f3b52;
+  stroke: #2f3b52;
+}
+
+.slice-point.is-never {
+  fill: var(--plot-bg);
+  stroke: #8d96a8;
+}
+
+.slice-point.is-selected {
+  stroke: #ff3b5c;
+  stroke-width: 2.4;
+}
+
+.slice-limit {
+  fill: none;
+  stroke: var(--chart-tick);
+  stroke-dasharray: 4 4;
+}
+
+.slice-axis {
+  stroke: #d98a2b;
+  stroke-width: 1.6;
+}
+
+.slice-axis-label {
+  fill: #b86e15;
+  font-size: var(--fs-74);
+  font-weight: 650;
+}
+
+.slice-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+}
+
+.slice-key {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  margin-left: 0.4rem;
+}
+
+.slice-key.is-now {
+  background: linear-gradient(90deg, #3b528b, #5ec962);
+}
+
+.slice-key.is-scan {
+  background: #2f3b52;
+}
+
+.slice-key.is-never {
+  border: 1.4px solid #8d96a8;
 }

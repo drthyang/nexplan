@@ -36,28 +36,33 @@ certified against the printed literature.
   - ISAW/Mantid UB files in and out; lattice and orientation from the UB, matched to the CIF setting.
   - Change of basis; a 3D reciprocal-space view with the Ewald spheres for a wavelength band.
 
-## SNS instruments (Instrument page)
+## Pages
 
-The **Instrument** page simulates neutron measurements on the detector geometry of SNS instruments, taken from the
-Mantid instrument definitions. It always uses neutron scattering.
+The pages follow the work: **Sample** (what the crystal is), **Setup** (how it sits in the beam) and **Simulation**
+(what the instrument records). The instrument in the header sets the beam, goniometer and detectors for every page:
+a generic X-ray or neutron beam, or an SNS instrument with its detector geometry from the Mantid instrument
+definition (always neutron scattering).
 
-- **Single crystal** (TOPAZ cryogenic and ambient goniometers, CORELLI): the goniometer turns the crystal.
-  - Spots on a 3D detector view and an unrolled detector map.
-  - Reflection coverage, as in NeuXtalViz: everywhere a chosen reflection (and its equivalents) can be recorded over
-    the goniometer range, coloured by wavelength.
-  - Rotation scans with symmetry-family completeness.
-  - The reflections on each panel, with pixel coordinates and time of flight.
-- **Powder** (NOMAD, POWGEN; the sample is fixed):
-  - Debye–Scherrer rings painted on the panels for a time-of-flight slice, with a play control that sweeps through
-    the band.
-  - A 2θ–d coverage chart for the wavelength band.
-  - The panels that record each reflection.
-  - A simulated TOF pattern for any panel.
-- **Chopper spectrometers** (ARCS, SEQUOIA, CNCS), elastic scattering at a chosen Ei:
-  - Single crystals on a vertical rotation ψ, with exact rotation scans.
-  - Powders, with fixed elastic rings on the detectors and an elastic 2θ pattern.
+- **Sample**
+  - *Structure*: cell, symmetry, sites, the scattering lengths used and their sources, a 3D view.
+  - *Reflections*: every signed hkl with d, Q and complex F, folded into symmetry families, absences flagged.
+- **Setup**
+  - *Orientation*: the UB matrix (ISAW/Mantid files in and out, matched to the CIF setting, change of basis) and
+    the selected instrument's goniometer, with a 3D reciprocal-space view and the Ewald spheres of the band.
+- **Simulation**
+  - *Detectors*: the instrument's detector array in 3D and unrolled. Single crystals: the spots at the current
+    setting, or the exact coverage of a chosen reflection over the goniometer ranges, coloured by wavelength (as in
+    NeuXtalViz), and the reflections on each panel with pixel, λ and time of flight. Powders: Debye–Scherrer rings on
+    the panels in a time-of-flight slice (play sweeps the band), or at Ei for the chopper spectrometers.
+  - *Powder*: the pattern for the generic beam (CW or one TOF bank), or for an SNS instrument the pattern of any
+    panel (elastic 2θ for ARCS, SEQUOIA, CNCS) and the 2θ–d coverage of the detector array.
+  - *Single crystal*: the measurement plan as each instrument is run (TOPAZ: a list of about ten chosen
+    orientations, with "find a setting" to put a wanted reflection on a detector; CORELLI: rotation scans in 3°
+    steps, optionally interleaved; ARCS, SEQUOIA, CNCS: ψ scans with exact Bragg crossings), its symmetry-family
+    completeness, and reciprocal-space slices shaded by what the plan records.
 
-The page and its detector geometry load only when the tab is opened.
+Instruments: TOPAZ (cryogenic and ambient goniometers), CORELLI, NOMAD, POWGEN, ARCS, SEQUOIA, CNCS. The detector
+geometry loads only when a simulation page is opened.
 
 ## Data you can check
 

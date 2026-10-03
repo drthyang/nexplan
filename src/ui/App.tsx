@@ -7,14 +7,24 @@ import { neutronEnergyMeV, neutronWavelengthA, xrayEnergyKeV, xrayWavelengthA } 
 import { calculate } from "../workers/client.ts";
 import { Chip, cx, InfoBadge, Segmented, UnitField } from "./components.tsx";
 import { DEMOS } from "./demos.ts";
-import { DEFAULT_EXPERIMENT, type ExperimentState } from "./experimentState.ts";
+import { CATALOG_GROUPS, GENERIC_INSTRUMENT } from "../core/ub/instrumentCatalog.ts";
+import { catalogEntry, chooseInstrument, DEFAULT_EXPERIMENT, sampleKind, withEi, type ExperimentState } from "./experimentState.ts";
 import { PowderPage, ReflectionsPage, StructurePage, type CwProfileSettings } from "./pages.tsx";
 import { DEFAULT_GONIO, UbPage, type GonioState, type UbState } from "./UbPage.tsx";
 
-type Tab = "structure" | "reflections" | "powder" | "ub" | "experiment";
+type Tab = "structure" | "reflections" | "orientation" | "detectors" | "powder" | "crystal";
 
-/** Instrument simulations, loaded with their detector geometry only when the page is opened. */
-const ExperimentPage = lazy(() => import("./ExperimentPage.tsx").then((m) => ({ default: m.ExperimentPage })));
+/** Pages, grouped as the work goes: what the sample is, how it is set up, what the instrument records. */
+const TAB_GROUPS: readonly { readonly label: string; readonly tabs: readonly (readonly [Tab, string])[] }[] = [
+  { label: "Sample", tabs: [["structure", "Structure"], ["reflections", "Reflections"]] },
+  { label: "Setup", tabs: [["orientation", "Orientation"]] },
+  { label: "Simulation", tabs: [["detectors", "Detectors"], ["powder", "Powder"], ["crystal", "Single crystal"]] },
+];
+
+/** Simulation pages, loaded with the SNS detector geometry only when one is opened. */
+const DetectorsPage = lazy(() => import("./DetectorsPage.tsx").then((m) => ({ default: m.DetectorsPage })));
+const InstrumentPowder = lazy(() => import("./InstrumentPowder.tsx").then((m) => ({ default: m.InstrumentPowder })));
+const CrystalPage = lazy(() => import("./CrystalPage.tsx").then((m) => ({ default: m.CrystalPage })));
 type Theme = "light" | "dark";
 type Radiation = "xray" | "neutron";
 
@@ -161,14 +171,18 @@ export function App() {
     setAxis(m === "tof" ? "tof" : "twoTheta");
   };
 
-  // The Instrument page simulates SNS neutron instruments: it always uses neutron scattering.
-  const onExperiment = tab === "experiment";
+  // An SNS instrument in the header means neutron scattering with that instrument's beam.
+  const entry = catalogEntry(experiment.instrumentId);
+  const sns = entry !== undefined;
   useEffect(() => {
-    if (onExperiment && radiation !== "neutron") changeRadiation("neutron");
+    if (sns && radiation !== "neutron") changeRadiation("neutron");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onExperiment, radiation]);
+  }, [sns, radiation]);
 
   const ok: CalcSuccess | undefined = result?.ok ? result : undefined;
+  // SNS simulations need the neutron calculation (the switch to neutrons above may still be running).
+  const simReady = ok !== undefined && (!sns || ok.provenance.settings.radiation === "neutron");
+  const simProps = ok ? { result: ok, theme, ub, exp: experiment, onExp: setExperiment, onDMin: setDMin, onOpenOrientation: () => setTab("orientation") } : undefined;
   const preset = WAVELENGTHS.find((w) => w.value === wavelength && w.radiation === radiation);
   const difc = tof.difcOverride ?? difcFromGeometry(tof.flightPathM, tof.twoThetaDeg);
 
@@ -198,23 +212,37 @@ export function App() {
                 beta<span className="ver">v{APP_VERSION}</span>
               </span>
             </div>
-            <nav className="ui-seg ui-seg--nav page-tabs" aria-label="Pages">
-              {(
-                [
-                  ["structure", "Structure"],
-                  ["reflections", "Reflections"],
-                  ["powder", "Powder"],
-                  ["ub", "UB matrix"],
-                  ["experiment", "Instrument"],
-                ] as const
-              ).map(([id, label]) => (
-                <button key={id} type="button" className={cx(tab === id && "is-active")} aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}>
-                  {label}
-                </button>
+            <nav className="page-tabs" aria-label="Pages">
+              {TAB_GROUPS.map((g) => (
+                <div key={g.label} className="tab-group" role="group" aria-label={g.label}>
+                  <span className="tab-group__label">{g.label}</span>
+                  <div className="ui-seg ui-seg--nav">
+                    {g.tabs.map(([id, label]) => (
+                      <button key={id} type="button" className={cx(tab === id && "is-active")} aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ))}
             </nav>
           </div>
           <div className="header-actions">
+            <label className="instrument-pick" title="The instrument sets the beam, goniometer and detectors used on every page">
+              <span className="ui-control-label">Instrument</span>
+              <select className="ui-select" aria-label="Instrument" value={experiment.instrumentId} onChange={(e) => setExperiment(chooseInstrument(experiment, e.target.value))}>
+                <option value={GENERIC_INSTRUMENT}>Generic beam</option>
+                {CATALOG_GROUPS.map((g) => (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.list.map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
             <select
               className="ui-select"
               aria-label="Load a demo structure"
@@ -259,13 +287,50 @@ export function App() {
         <div className="workspace">
           <section className="ui-page">
             <div className="ui-controls" aria-label="Calculation settings">
-              {onExperiment ? (
-                <span className="ui-control">
-                  <span className="ui-control-label">Radiation</span>
-                  <Chip tone="accent" title="The Instrument page simulates SNS neutron instruments; the incident beam comes from the instrument.">
-                    Neutrons · SNS instruments
-                  </Chip>
-                </span>
+              {entry ? (
+                <>
+                  <span className="ui-control">
+                    <span className="ui-control-label">Beam</span>
+                    <Chip tone="accent" title={entry.source}>
+                      Neutrons · {entry.label}
+                    </Chip>
+                    {(entry.modes?.length ?? 0) > 1 && (
+                      <Segmented label="Sample" value={sampleKind(experiment)} onChange={(v) => setExperiment({ ...experiment, sample: v })} options={[{ value: "single-crystal", label: "Single crystal" }, { value: "powder", label: "Powder" }]} />
+                    )}
+                  </span>
+                  {entry.incident ? (
+                    <span className="ui-control">
+                      <span className="ui-control-label">
+                        <span className="sym">E</span>
+                        <sub>i</sub>
+                      </span>
+                      <UnitField label="Incident energy" value={Number(experiment.eiMeV.toPrecision(6))} unit="meV" min={entry.incident.eiMin} max={entry.incident.eiMax} width="5ch" onCommit={(v) => setExperiment(withEi(experiment, v, experiment.eRes))} />
+                      <span className="dim-note">
+                        <span className="sym">λ</span> {Number(((experiment.lambdaMin + experiment.lambdaMax) / 2).toPrecision(5))} Å
+                      </span>
+                      <span className="ui-control-label">
+                        Δ<span className="sym">E</span>/<span className="sym">E</span>
+                      </span>
+                      <UnitField label="Elastic resolution (FWHM)" value={Number((100 * experiment.eRes).toPrecision(6))} unit="%" min={0.01} max={50} width="4ch" onCommit={(v) => setExperiment(withEi(experiment, experiment.eiMeV, v / 100))} />
+                    </span>
+                  ) : (
+                    <span className="ui-control">
+                      <span className="ui-control-label">
+                        <span className="sym">λ</span> band
+                        <InfoBadge>The wavelength band reaching the sample (white beam, time of flight). Defaults from the instrument; POWGEN's depends on the chopper setting.</InfoBadge>
+                      </span>
+                      <UnitField label="Minimum wavelength" value={Number(experiment.lambdaMin.toPrecision(4))} unit="Å" min={0.05} width="5ch" onCommit={(v) => setExperiment({ ...experiment, lambdaMin: Math.min(v, experiment.lambdaMax - 0.01) })} />
+                      <UnitField label="Maximum wavelength" value={Number(experiment.lambdaMax.toPrecision(4))} unit="Å" min={0.06} width="5ch" onCommit={(v) => setExperiment({ ...experiment, lambdaMax: Math.max(v, experiment.lambdaMin + 0.01) })} />
+                    </span>
+                  )}
+                  <span className="ui-control">
+                    <span className="ui-control-label">
+                      Δ<span className="sym">d</span>/<span className="sym">d</span>
+                      <InfoBadge>Relative resolution (FWHM) of simulated powder peaks and rings. Real banks vary with angle and are calibrated.</InfoBadge>
+                    </span>
+                    <UnitField label="Relative resolution (FWHM)" value={Number((100 * experiment.dOverD).toPrecision(6))} unit="%" min={0.01} max={20} width="4ch" onCommit={(v) => setExperiment({ ...experiment, dOverD: v / 100 })} />
+                  </span>
+                </>
               ) : (
                 <>
                   <span className="ui-control">
@@ -333,7 +398,7 @@ export function App() {
                 </span>
                 <UnitField label="Minimum d-spacing" value={dMin} unit="Å" min={0.05} onCommit={setDMin} />
               </span>
-              {radiation === "xray" && !onExperiment && (
+              {radiation === "xray" && !sns && (
                 <span className="ui-control">
                   <span className="ui-control-label">Polarization</span>
                   <select
@@ -384,10 +449,9 @@ export function App() {
               <ol className="workflow" aria-label="How NEXPLAN works">
                 {(
                   [
-                    ["Structure", "Load a CIF: cell, symmetry, sites and the scattering lengths used, each with its source."],
-                    ["Reflections & powder", "Every reflection with d, Q and complex F; absences; CW or time-of-flight powder patterns."],
-                    ["UB matrix", "Load or build the orientation (ISAW/Mantid), compare it with the CIF cell, change the basis."],
-                    ["Instrument", "Simulate the measurement on TOPAZ, CORELLI, NOMAD, POWGEN, ARCS, SEQUOIA or CNCS detectors."],
+                    ["Sample", "Load a CIF: cell, symmetry, sites and the scattering lengths used, each with its source; every reflection with d, Q and complex F."],
+                    ["Setup", "Pick an SNS instrument in the header (or a generic X-ray or neutron beam), then load or build the UB matrix and set the goniometer."],
+                    ["Simulation", "Spots, coverage and powder rings on the real detectors; powder patterns; orientation lists, rotation scans, completeness and reciprocal slices."],
                   ] as [string, string][]
                 ).map(([title, text], i) => (
                   <li key={title}>
@@ -424,15 +488,27 @@ export function App() {
                 }
               />
             )}
-            {ok && tab === "reflections" && <ReflectionsPage result={ok} wavelength={wavelength} radiation={radiation} />}
-            {ok && tab === "ub" && <UbPage result={ok} theme={theme} ub={ub} onUb={setUb} gonio={gonio} onGonio={setGonio} />}
-            {ok && onExperiment && ok.provenance.settings.radiation === "neutron" && (
-              <Suspense fallback={<p className="empty-note">Loading the experiment page…</p>}>
-                <ExperimentPage result={ok} theme={theme} ub={ub} onDMin={setDMin} onOpenUb={() => setTab("ub")} exp={experiment} onExp={setExperiment} />
-              </Suspense>
+            {ok && tab === "reflections" && <ReflectionsPage result={ok} wavelength={wavelength} radiation={radiation} positions={!sns} />}
+            {ok && tab === "orientation" && (
+              <UbPage
+                result={ok}
+                theme={theme}
+                ub={ub}
+                onUb={setUb}
+                gonio={gonio}
+                onGonio={setGonio}
+                instrument={entry ? { name: entry.label, goniometer: entry.goniometer, angles: experiment.angles, onAngles: (angles) => setExperiment({ ...experiment, angles }), lambdaMin: experiment.lambdaMin, lambdaMax: experiment.lambdaMax } : undefined}
+              />
             )}
-            {ok && tab === "powder" && (
+            {ok && tab === "powder" && !sns && (
               <PowderPage result={ok} axis={axis} onAxis={changeAxis} cwProfile={cwProfile} onCwProfile={setCwProfile} tofShape={tof.shape} onTofShape={(shape: TofShape) => setTof({ ...tof, shape })} />
+            )}
+            {simReady && (tab === "detectors" || tab === "crystal" || (tab === "powder" && sns)) && (
+              <Suspense fallback={<p className="empty-note">Loading the detector geometry…</p>}>
+                {tab === "detectors" && simProps && <DetectorsPage {...simProps} />}
+                {tab === "powder" && simProps && <InstrumentPowder {...simProps} />}
+                {tab === "crystal" && simProps && <CrystalPage {...simProps} />}
+              </Suspense>
             )}
 
             <footer className="ui-footer">

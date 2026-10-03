@@ -199,7 +199,7 @@ interface FamilyRow {
   readonly members: number[];
 }
 
-export function ReflectionsPage({ result, wavelength, radiation }: { result: CalcSuccess; wavelength: number; radiation: "xray" | "neutron" }) {
+export function ReflectionsPage({ result, wavelength, radiation, positions = true }: { result: CalcSuccess; wavelength: number; radiation: "xray" | "neutron"; /** Show 2θ (or TOF, λ) for the generic beam; off for a white-beam instrument, where they vary with orientation. */ positions?: boolean }) {
   const r = result.reflections;
   const bank = result.bank;
   const [hideAbsent, setHideAbsent] = useState(true);
@@ -236,6 +236,7 @@ export function ReflectionsPage({ result, wavelength, radiation }: { result: Cal
 
   /** Position columns: 2θ for CW; TOF and λ at the bank for TOF. */
   const positionCells = (i: number) => {
+    if (!positions) return null;
     const d = r.d[i]!;
     if (bank) {
       const lam = 2 * d * sinT;
@@ -355,7 +356,7 @@ export function ReflectionsPage({ result, wavelength, radiation }: { result: Cal
               <th className="left">{fold ? "Family" : "h k l"}</th>
               {fold && <th>m</th>}
               <th>d (Å)</th>
-              {bank ? (
+              {!positions ? null : bank ? (
                 <>
                   <th>TOF (µs)</th>
                   <th>λ (Å)</th>

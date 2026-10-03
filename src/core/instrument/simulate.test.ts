@@ -7,7 +7,7 @@ import { UNIVERSAL } from "../ub/instruments.ts";
 import { mulMat, mulVec } from "@materia/core/math/mat3";
 import { ubFromU } from "../ub/ub.ts";
 import type { DetectorPanel } from "./detectors.ts";
-import { braggCrossings, crossingsToScan, reflectionCoverage, coneDirections, coveredTwoTheta, cylinderAngles, dRangeAt, directionAngles, observeAt, panelAngles, panelDifc, panelsSeeing, simulateScan, twoThetaRangeForD } from "./simulate.ts";
+import { braggCrossings, crossingsToScan, reflectionCoverage, scanSettings, simulateSettings, coneDirections, coveredTwoTheta, cylinderAngles, dRangeAt, directionAngles, observeAt, panelAngles, panelDifc, panelsSeeing, simulateScan, twoThetaRangeForD } from "./simulate.ts";
 
 const I: [Vec3, Vec3, Vec3] = [
   [1, 0, 0],
@@ -339,5 +339,27 @@ describe("reflection coverage: independent checks", () => {
     }
     expect(max).toBeLessThanOrEqual(Math.SQRT1_2 + 1e-9);
     expect(max).toBeGreaterThan(0.6); // the bound is approached: the check is not vacuous
+  });
+});
+
+describe("measurement plans", () => {
+  it("interleaved scans add the half-way steps (CORELLI: 3° plus a pass in between)", () => {
+    expect(scanSettings(0, [0, 135, 7], { start: 0, end: 9, step: 3 }).map((a) => a[0])).toEqual([0, 3, 6, 9]);
+    const both = scanSettings(0, [0, 135, 7], { start: 0, end: 9, step: 3 }, true);
+    expect(both.map((a) => a[0])).toEqual([0, 1.5, 3, 4.5, 6, 7.5, 9]);
+    expect(both.every((a) => a[1] === 135 && a[2] === 7)).toBe(true);
+  });
+
+  it("an orientation list counts each setting once and its completeness never falls", () => {
+    const UB = ubFromU(I, { a: 4, b: 4, c: 4, alpha: 90, beta: 90, gamma: 90 });
+    const back: DetectorPanel = { name: "back", kind: "rectangular", center: [0, 0, -0.5], base: [1, 0, 0], up: [0, 1, 0], width: 0.2, height: 0.2, nCols: 100, nRows: 100 };
+    const refl = [
+      { h: [0, 0, -1] as Vec3, family: 0 },
+      { h: [1, 0, 0] as Vec3, family: 1 },
+    ];
+    const plan = simulateSettings(UNIVERSAL, [[0, 0, 0], [90, 0, 0], [0, 0, 0]], UB, refl, [back], 1, 10); // ω = 90° turns (1 0 0) to −z
+    expect(plan.steps.map((s) => s.observed)).toEqual([1, 1, 1]);
+    expect([...plan.measured].sort()).toEqual([0, 1]);
+    expect(plan.steps.map((s) => s.completeness)).toEqual([0.5, 1, 1]);
   });
 });

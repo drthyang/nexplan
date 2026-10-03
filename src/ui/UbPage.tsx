@@ -10,6 +10,7 @@ import { determinant, mulMat, mulVec, transpose } from "@materia/core/math/mat3"
 import type { CalcSuccess } from "../app/compute.ts";
 import { goniometerMatrix, laueCondition } from "../core/ub/goniometer.ts";
 import { UNIVERSAL } from "../core/ub/instruments.ts";
+import type { GoniometerModel } from "../core/ub/goniometer.ts";
 import { axisAngle, directBasisInSample, latticeFromUB, nearestIndices, orientationFromUB, transformUB } from "../core/ub/ub.ts";
 import { formatIsawUB, IsawParseError, parseIsawUB } from "../io/isaw.ts";
 import { Card, Segmented, UnitField } from "./components.tsx";
@@ -87,7 +88,21 @@ export function GoniometerControls({ axes, angles, onAngles }: { axes: readonly 
   );
 }
 
-export function UbPage({ result, theme, ub, onUb, gonio, onGonio }: { result: CalcSuccess; theme: "light" | "dark"; ub: UbState; onUb: (u: UbState) => void; gonio: GonioState; onGonio: (g: GonioState) => void }) {
+/** An SNS instrument's goniometer and band, overriding the generic Eulerian goniometer. */
+export interface OrientationInstrument {
+  readonly name: string;
+  readonly goniometer: GoniometerModel;
+  readonly angles: readonly number[];
+  readonly onAngles: (a: number[]) => void;
+  readonly lambdaMin: number;
+  readonly lambdaMax: number;
+}
+
+export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: { result: CalcSuccess; theme: "light" | "dark"; ub: UbState; onUb: (u: UbState) => void; gonio: GonioState; onGonio: (g: GonioState) => void; instrument?: OrientationInstrument | undefined }) {
+  const model = instrument?.goniometer ?? UNIVERSAL;
+  const angles = instrument?.angles ?? gonio.angles;
+  const lambdaMin = instrument?.lambdaMin ?? gonio.lambdaMin;
+  const lambdaMax = instrument?.lambdaMax ?? gonio.lambdaMax;
   const cifCell = result.structure.cell;
   const fileInput = useRef<HTMLInputElement>(null);
   const [selected, setSelected] = useState<number | null>(null);
@@ -96,7 +111,7 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio }: { result: Ca
 
   const { viewUB, match, fileUB } = useViewUB(result, ub);
   const orient = useMemo(() => orientationFromUB(viewUB), [viewUB]);
-  const R = useMemo(() => goniometerMatrix(UNIVERSAL, gonio.angles), [gonio.angles]);
+  const R = useMemo(() => goniometerMatrix(model, angles), [model, angles]);
   const points = useMemo(() => presentReflections(result), [result]);
   useEffect(() => setSelected(null), [points]);
 
@@ -108,12 +123,12 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio }: { result: Ca
     points.forEach((p, i) => {
       const s = laueCondition(mulVec(RUB, p.h));
       lambdas[i] = s.lambda;
-      if (!(s.lambda >= gonio.lambdaMin && s.lambda <= gonio.lambdaMax)) return;
+      if (!(s.lambda >= lambdaMin && s.lambda <= lambdaMax)) return;
       status[i] = 2;
       rows.push({ i, lambda: s.lambda, twoTheta: s.twoTheta, azimuth: s.azimuth });
     });
     return { status, lambdas, rows };
-  }, [points, R, viewUB, gonio.lambdaMin, gonio.lambdaMax]);
+  }, [points, R, viewUB, lambdaMin, lambdaMax]);
 
   const along = useMemo(() => {
     const RUB = mulMat(R, viewUB);
@@ -166,8 +181,8 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio }: { result: Ca
               UB={viewUB}
               R={R}
               qSign={1}
-              lambdaMin={gonio.lambdaMin}
-              lambdaMax={gonio.lambdaMax}
+              lambdaMin={lambdaMin}
+              lambdaMax={lambdaMax}
               points={points}
               frame={gonio.frame}
               selected={selected}
@@ -183,7 +198,7 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio }: { result: Ca
           {sel && (
             <p className="selection-note">
               <b>({hklText(sel.h)})</b> d {fmt(sel.d, 4)} Å · |F|² {sel.f2.toPrecision(4)} ·{" "}
-              {selSpot && Number.isFinite(selSpot.lambda) ? `λ ${fmt(selSpot.lambda, 4)} Å, 2θ ${fmt(selSpot.twoTheta, 2)}°, azimuth ${fmt(selSpot.azimuth, 1)}°${selSpot.lambda < gonio.lambdaMin || selSpot.lambda > gonio.lambdaMax ? " (outside the band)" : ""}` : "cannot diffract at this setting (q points along the beam)"}
+              {selSpot && Number.isFinite(selSpot.lambda) ? `λ ${fmt(selSpot.lambda, 4)} Å, 2θ ${fmt(selSpot.twoTheta, 2)}°, azimuth ${fmt(selSpot.azimuth, 1)}°${selSpot.lambda < lambdaMin || selSpot.lambda > lambdaMax ? " (outside the band)" : ""}` : "cannot diffract at this setting (q points along the beam)"}
               <span className="dim"> · Mantid's default Inelastic convention labels this reflection ({hklText([-sel.h[0], -sel.h[1], -sel.h[2]])}).</span>
             </p>
           )}
@@ -296,9 +311,23 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio }: { result: Ca
             </dl>
           </Card>
 
-          <Card title="Goniometer" info={`${UNIVERSAL.note} Instrument-specific goniometers and detectors are on the Instrument page.`}>
+          <Card
+            title="Goniometer"
+            meta={instrument ? instrument.name : "generic Eulerian (choose an instrument in the header)"}
+            info={instrument ? model.note : `${UNIVERSAL.note} Choose an SNS instrument in the header to use its goniometer, band and detectors.`}
+          >
             <div className="form-rows">
-              <GoniometerControls axes={UNIVERSAL.axes} angles={gonio.angles} onAngles={(angles) => onGonio({ ...gonio, angles })} />
+              <GoniometerControls axes={model.axes} angles={angles} onAngles={(a) => (instrument ? instrument.onAngles(a) : onGonio({ ...gonio, angles: a }))} />
+              {instrument ? (
+                <div className="form-row">
+                  <span className="ui-control-label">
+                    <span className="sym">λ</span> band
+                  </span>
+                  <span className="dim-note">
+                    {Number(lambdaMin.toPrecision(4))}–{Number(lambdaMax.toPrecision(4))} Å, set in the bar above
+                  </span>
+                </div>
+              ) : (
               <div className="form-row">
                 <span className="ui-control-label">
                   <span className="sym">λ</span> band
@@ -306,8 +335,9 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio }: { result: Ca
                 <UnitField label="Minimum wavelength" value={gonio.lambdaMin} unit="Å" min={0.05} width="4.5ch" onCommit={(v) => onGonio({ ...gonio, lambdaMin: v })} />
                 <UnitField label="Maximum wavelength" value={gonio.lambdaMax} unit="Å" min={0.06} width="4.5ch" onCommit={(v) => onGonio({ ...gonio, lambdaMax: v })} />
               </div>
+              )}
             </div>
-            <p className="empty-note">Lab frame: beam +z, up +y. q_lab = R·UB·h with R = R_y(ω)·R_z(χ)·R_y(φ) (Mantid Universal).</p>
+            <p className="empty-note">Lab frame: beam +z, up +y. q_lab = R·UB·h{instrument ? `, R from the ${instrument.name} goniometer.` : " with R = R_y(ω)·R_z(χ)·R_y(φ) (Mantid Universal)."}</p>
           </Card>
         </div>
       </div>

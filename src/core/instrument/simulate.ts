@@ -203,19 +203,56 @@ export function simulateScan(
   panels: readonly DetectorPanel[],
   lambdaMin: number,
   lambdaMax: number,
-): { steps: ScanStep[]; families: number; observedFamilies: number } {
+): ScanResult {
+  return simulateSettings(model, scanSettings(axisIndex, baseAngles, range), UB, refl, panels, lambdaMin, lambdaMax);
+}
+
+/** The goniometer settings of a rotation scan; `interleave` adds the half-way steps (a second pass offset by step/2). */
+export function scanSettings(axisIndex: number, baseAngles: readonly number[], range: { start: number; end: number; step: number }, interleave = false): number[][] {
+  const n = Math.max(1, Math.floor((range.end - range.start) / range.step + 1e-9) + 1);
+  if (n * (interleave ? 2 : 1) > 3600) throw new Error("A scan is limited to 3600 orientations; use a larger step.");
+  const out: number[][] = [];
+  for (let k = 0; k < n; k++) {
+    out.push(baseAngles.map((v, i) => (i === axisIndex ? range.start + k * range.step : v)));
+    if (interleave && k < n - 1) out.push(baseAngles.map((v, i) => (i === axisIndex ? range.start + (k + 0.5) * range.step : v)));
+  }
+  return out;
+}
+
+/**
+ * A list of goniometer settings measured in order (an orientation list such as
+ * TOPAZ's ~10 settings, or the steps of a scan): reflections recorded at each,
+ * and the cumulative family completeness.
+ */
+export function simulateSettings(
+  model: GoniometerModel,
+  settings: readonly (readonly number[])[],
+  UB: Mat3,
+  refl: readonly ScanReflection[],
+  panels: readonly DetectorPanel[],
+  lambdaMin: number,
+  lambdaMax: number,
+): ScanResult {
   const families = new Set(refl.map((r) => r.family)).size;
   const seen = new Set<number>();
-  const steps: ScanStep[] = [];
-  const n = Math.max(1, Math.floor((range.end - range.start) / range.step + 1e-9) + 1);
-  if (n > 3600) throw new Error("A scan is limited to 3600 orientations; use a larger step.");
-  for (let k = 0; k < n; k++) {
-    const angles = baseAngles.map((v, i) => (i === axisIndex ? range.start + k * range.step : v));
+  const measured = new Set<number>();
+  const steps: ScanStep[] = settings.map((angles) => {
     const obs = observeAt(goniometerMatrix(model, angles), UB, refl, panels, lambdaMin, lambdaMax);
-    for (const o of obs) seen.add(refl[o.index]!.family);
-    steps.push({ angles, observed: obs.length, completeness: families ? seen.size / families : 0 });
-  }
-  return { steps, families, observedFamilies: seen.size };
+    for (const o of obs) {
+      seen.add(refl[o.index]!.family);
+      measured.add(o.index);
+    }
+    return { angles, observed: obs.length, completeness: families ? seen.size / families : 0 };
+  });
+  return { steps, families, observedFamilies: seen.size, measured };
+}
+
+export interface ScanResult {
+  readonly steps: ScanStep[];
+  readonly families: number;
+  readonly observedFamilies: number;
+  /** Indices of the reflections recorded at least once. */
+  readonly measured: ReadonlySet<number>;
 }
 
 export interface BraggCrossing {
@@ -281,7 +318,7 @@ export function crossingsToScan(
   axisIndex: number,
   baseAngles: readonly number[],
   range: { start: number; end: number; step: number },
-): { steps: ScanStep[]; families: number; observedFamilies: number } {
+): ScanResult {
   const families = new Set(refl.map((r) => r.family)).size;
   const n = Math.max(1, Math.floor((range.end - range.start) / range.step + 1e-9) + 1);
   if (n > 3600) throw new Error("A scan is limited to 3600 steps; use a larger step.");
@@ -289,6 +326,7 @@ export function crossingsToScan(
   const steps: ScanStep[] = [];
   let k = 0;
   const hits = crossings.filter((c) => c.hit);
+  const measured = new Set(hits.map((c) => c.index));
   for (let s = 0; s < n; s++) {
     const centre = range.start + s * range.step;
     const upper = s === n - 1 ? Infinity : centre + range.step / 2;
@@ -300,7 +338,24 @@ export function crossingsToScan(
     }
     steps.push({ angles: baseAngles.map((v, i) => (i === axisIndex ? centre : v)), observed, completeness: families ? seen.size / families : 0 });
   }
-  return { steps, families, observedFamilies: seen.size };
+  return { steps, families, observedFamilies: seen.size, measured };
+}
+
+/**
+ * Coverage of reciprocal-space points (sample frame, 1/Å, no 2π) by a set of
+ * goniometer settings: for each point, the number of settings at which it
+ * diffracts in the band onto a panel. Monochromatic beams pass the exact
+ * crossings instead (braggCrossings with UB = I and the points as "h").
+ */
+export function pointCoverage(settings: readonly Mat3[], points: readonly Vec3[], panels: readonly DetectorPanel[], lambdaMin: number, lambdaMax: number): Uint16Array {
+  const counts = new Uint16Array(points.length);
+  for (const R of settings)
+    points.forEach((q, i) => {
+      const l = laueCondition(mulVec(R, q));
+      if (!(l.lambda >= lambdaMin && l.lambda <= lambdaMax)) return;
+      if (rayHit(panels, l.kf)) counts[i]!++;
+    });
+  return counts;
 }
 
 export interface CoveragePoint {

@@ -39,6 +39,12 @@ export interface InstrumentPreset {
    * Absent = white beam (time-of-flight Laue) over [lambdaMin, lambdaMax].
    */
   readonly incident?: { readonly eiMeV: number; readonly eiMin: number; readonly eiMax: number; readonly elasticFwhm: number };
+  /**
+   * How a single-crystal measurement is usually planned: a short list of chosen
+   * orientations (TOPAZ: about ten, picked for the peaks wanted) or a rotation
+   * scan of one axis (CORELLI: rocking or full-volume scans in 3° steps).
+   */
+  readonly plan?: { readonly kind: "list" } | { readonly kind: "scan"; readonly start: number; readonly end: number; readonly step: number };
 }
 
 export const OMEGA: GoniometerAxis = { name: "ω", direction: [0, 1, 0], sense: 1, min: -180, max: 360 };
