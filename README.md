@@ -45,7 +45,8 @@ definition (always neutron scattering).
 
 - **Sample**
   - *Structure*: cell, symmetry, sites, the scattering lengths used and their sources, a 3D view, and the
-    neutron scattering power against a reference material: coherent, incoherent and absorption cross-sections per
+    neutron scattering power against a reference material (V, diamond, Si, CeO₂, corundum or a demo structure):
+    coherent, incoherent and absorption cross-sections per
     unit volume, attenuation length, and Bragg line strengths, with an optional TOF weighting (not a counting time).
   - *Reflections*: every signed hkl with d, Q and complex F, folded into symmetry families, absences flagged.
 - **Setup**

@@ -1015,7 +1015,7 @@ details.ui-fold > .ui-fold__body {
 /* The header has two rows at every width: brand and actions, then the grouped page tabs. */
 .app-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
 }
 
 .header-primary {
@@ -1030,6 +1030,17 @@ details.ui-fold > .ui-fold__body {
 .header-actions {
   grid-column: 2;
   grid-row: 1;
+  justify-content: flex-end;
+}
+
+/* Tablet widths: the brand and actions share one row, and the tabs fit without scrolling. The tab groups keep
+   their dividers (and aria labels); the beta pill and the text labels return on wider screens. */
+@media (max-width: 980px) {
+  .beta-pill,
+  .instrument-pick > .ui-control-label,
+  .tab-group__label {
+    display: none;
+  }
 }
 
 .page-tabs {
@@ -1056,6 +1067,18 @@ details.ui-fold > .ui-fold__body {
 
   .header-actions select.ui-select {
     flex: 1 1 10rem;
+  }
+
+  .header-actions {
+    justify-content: flex-start;
+  }
+
+  .instrument-pick {
+    flex: 1 1 100%;
+  }
+
+  .header-actions .instrument-pick .ui-select {
+    max-width: none;
   }
 
   .page-tabs {
@@ -1813,11 +1836,11 @@ input.ui-range {
 
 .power-stick {
   stroke: var(--accent);
-  stroke-width: 1.6;
+  stroke-width: 2;
 }
 
 .power-stick.is-ref {
-  stroke: #8d96a8;
+  stroke: var(--muted);
 }
 
 .power-window {
@@ -1842,5 +1865,10 @@ input.ui-range {
 }
 
 .power-key.is-ref {
-  fill: #8d96a8;
+  fill: var(--muted);
+}
+
+.power-grid .form-row {
+  grid-template-columns: 8.5rem auto;
+  justify-content: start;
 }

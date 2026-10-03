@@ -271,5 +271,17 @@ flux, detector or counting-time model enters, and a powder's packing fraction sc
 - **TOF weighting:** j|F|²d⁴/v_c² (fm²/Å²). At a fixed detector angle the TOF Lorentz factor λ⁴/sin²θ is ∝ d⁴ (§10).
   Ranking lines by it matches a measured TOF pattern apart from the source spectrum. Unweighted, the
   high-multiplicity silicon (4 2 2) line is the strongest; weighted, (1 1 1) is, as measured. Both cases are tested.
+- **Reference standards** (COD CIFs in `fixtures/cif/`, fetched only when chosen). The tests pin each cell
+  against a certified or literature value, the cell contents, and Σ against hand sums of the Sears values:
+  - Vanadium, COD 9012770 (James & Straumanis 1960, via AMCSD): a = 3.0241 Å, 0.11% below NBS Monograph 25
+    (3.0274 Å; vanadium's cell depends on dissolved O, N and H). No ADPs (B = 0); its Bragg lines are negligible
+    (Σ_inc/Σ_coh ≈ 280).
+  - Diamond, COD 2300702 (Houben et al. 2023, neutron TOF on POWGEN): a = 3.566636(7) Å, −98 ppm from Hom et al.
+    (1975).
+  - Silicon, COD 2104737 (Elliot 2010): a = 5.43096(6) Å.
+  - CeO₂, COD 4343161 (Artini et al. 2015, synchrotron): a = 5.40972(11) Å, −334 ppm from NIST SRM 674b
+    (5.41153 Å).
+  - Corundum, COD 9007496 (Lewis, Schwarzenbach & Flack 1982): a = 4.7602, c = 12.9933 Å, +178 and +76 ppm from
+    NIST SRM 676a; anisotropic ADPs enter as U_eq.
 - **Not a counting time.** Flux, detector efficiency, background and sample environment vary by instrument and
   experiment. The comparison only says how a sample scatters relative to a known material.

@@ -9,7 +9,7 @@ import type { CalcInput, CalcSuccess } from "../app/compute.ts";
 import { braggStrengths, braggSummary, LAMBDA_2200, scatteringPower, type BraggLine, type BraggWeight, type ScatteringPower } from "../core/scattering/power.ts";
 import { calculateIsolated } from "../workers/client.ts";
 import { Card, Segmented, UnitField } from "./components.tsx";
-import { DEMOS } from "./demos.ts";
+import { DEMO_REFERENCES, REFERENCES, STANDARDS } from "./standards.ts";
 import { fmt } from "./format.ts";
 
 interface Material {
@@ -39,7 +39,7 @@ const WEIGHTS: Record<BraggWeight, { label: string; formula: string; unit: strin
 const ratio = (a: number, b: number) => (b > 0 && Number.isFinite(a / b) ? `×${sig(a / b, 3)}` : "—");
 
 export function ScatteringPowerCard({ result }: { result: CalcSuccess }) {
-  const [refId, setRefId] = useState<string>(DEMOS[0]!.id);
+  const [refId, setRefId] = useState<string>("si");
   const [pinned, setPinned] = useState<{ name: string; result: CalcSuccess } | null>(null);
   const [lambda, setLambda] = useState(LAMBDA_2200);
   const [win, setWin] = useState<[number, number]>([1, 4]);
@@ -51,13 +51,13 @@ export function ScatteringPowerCard({ result }: { result: CalcSuccess }) {
   // The reference is calculated with neutrons and the sample's d_min, on its own worker.
   useEffect(() => {
     if (refId === "pinned") return;
-    const demo = DEMOS.find((d) => d.id === refId);
-    if (!demo || (refResult && refResult.id === refId && refResult.dMin === dMin)) return;
+    const material = REFERENCES.find((d) => d.id === refId);
+    if (!material || (refResult && refResult.id === refId && refResult.dMin === dMin)) return;
     let alive = true;
     const settings = result.provenance.settings;
-    const input: CalcInput = {
-      cifText: demo.text,
-      fileName: demo.file,
+    const input = (cifText: string): CalcInput => ({
+      cifText,
+      fileName: material.file,
       radiation: "neutron",
       wavelength: 1.5,
       dMin,
@@ -65,11 +65,14 @@ export function ScatteringPowerCard({ result }: { result: CalcSuccess }) {
       profile: { axis: "d", fwhm: 0.002, eta: 0.5 },
       neutronMode: "cw",
       tof: settings.tof,
-    };
-    void calculateIsolated(input).then((r) => {
-      if (!alive) return;
-      setRefResult(r.ok ? { id: refId, dMin, result: r } : { id: refId, dMin, error: r.message });
     });
+    void material
+      .load()
+      .then((text) => calculateIsolated(input(text)))
+      .then(
+        (r) => alive && setRefResult(r.ok ? { id: refId, dMin, result: r } : { id: refId, dMin, error: r.message }),
+        (e: unknown) => alive && setRefResult({ id: refId, dMin, error: e instanceof Error ? e.message : String(e) }),
+      );
     return () => {
       alive = false;
     };
@@ -105,11 +108,20 @@ export function ScatteringPowerCard({ result }: { result: CalcSuccess }) {
           <span className="ui-control">
             <span className="ui-control-label">Reference</span>
             <select className="ui-select" aria-label="Reference material" value={refId} onChange={(e) => setRefId(e.target.value)}>
-              {DEMOS.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.label}
-                </option>
-              ))}
+              <optgroup label="Standards">
+                {STANDARDS.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.label}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Demo structures">
+                {DEMO_REFERENCES.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.label}
+                  </option>
+                ))}
+              </optgroup>
               {pinned && <option value="pinned">{pinned.name} (kept)</option>}
             </select>
           </span>
@@ -223,6 +235,9 @@ export function ScatteringPowerCard({ result }: { result: CalcSuccess }) {
         </div>
       </div>
       {sample.lines && <LineMirror sample={sample.lines} reference={refOk?.lines} sampleName={sample.name} refName={refOk?.name ?? "reference"} window={win} dMin={dMin} weight={weight} />}
+      <p className="plot-hint">
+        Reference: {refId === "pinned" ? `${pinned?.name ?? ""}, kept from this session.` : REFERENCES.find((d) => d.id === refId)?.source}
+      </p>
       <p className="plot-hint">Per unit volume of material; equal sample volumes and similar d assumed for the line ratios. Not a counting time: flux, detector efficiency and background vary by instrument.</p>
     </Card>
   );

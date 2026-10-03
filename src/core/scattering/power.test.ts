@@ -75,3 +75,52 @@ describe("Bragg line strength j|F|²/v_c²", () => {
     expect(l111.tof).toBeCloseTo(l111.strength * l111.d ** 4, 12);
   });
 });
+
+describe("reference standards (fixtures/cif)", () => {
+  const load = (file: string) => {
+    const model = buildModel(readCifStructure(readFileSync(new URL(`../../../fixtures/cif/${file}`, import.meta.url), "utf8")));
+    const m = expandModel(model).multiplicities;
+    const sites = model.sites.map((s, i) => ({ label: s.label, multiplicity: m[i]!, occupancy: s.occupancy, xs: neutronCrossSections(s.species) }));
+    return { model, m, power: scatteringPower(sites, model.volume) };
+  };
+  // Sears (1992) σ_coh and σ_abs(2200 m/s), barn.
+  const C = { coh: 5.551, abs: 0.0035 };
+  const V = { coh: 0.0184, inc: 5.08, abs: 5.08 };
+  const Ce = { coh: 2.94, abs: 0.63 };
+  const O = { coh: 4.232, abs: 0.00019 };
+  const Al = { coh: 1.495, abs: 0.231 };
+
+  it("diamond, COD 2300702: C₈ in Fd-3m, a within 200 ppm of Hom et al. (1975), Σ_coh ≈ 0.98 cm⁻¹", () => {
+    const { model, m, power } = load("cod-2300702.cif");
+    expect(m).toEqual([8]);
+    expect(Math.abs(model.cell.a / 3.566986 - 1)).toBeLessThan(2e-4);
+    expect(power.coh).toBeCloseTo((8 * C.coh) / model.volume, 3);
+    expect(power.abs).toBeCloseTo((8 * C.abs) / model.volume, 5);
+  });
+
+  it("vanadium, COD 9012770: V₂ in Im-3m, a within 0.2% of NBS Monograph 25 (3.0274 Å); incoherent ≈ absorbing ≫ coherent", () => {
+    const { model, m, power } = load("cod-9012770.cif");
+    expect(m).toEqual([2]);
+    expect(Math.abs(model.cell.a / 3.0274 - 1)).toBeLessThan(2e-3);
+    expect(power.inc).toBeCloseTo((2 * V.inc) / model.volume, 3);
+    expect(power.abs).toBeCloseTo((2 * V.abs) / model.volume, 3);
+    expect(power.inc / power.coh).toBeGreaterThan(200);
+  });
+
+  it("CeO₂, COD 4343161: Ce₄O₈ in Fm-3m, a within 500 ppm of NIST SRM 674b (5.41153 Å)", () => {
+    const { model, m, power } = load("cod-4343161.cif");
+    expect(m).toEqual([4, 8]);
+    expect(Math.abs(model.cell.a / 5.41153 - 1)).toBeLessThan(5e-4);
+    expect(power.coh).toBeCloseTo((4 * Ce.coh + 8 * O.coh) / model.volume, 3);
+    expect(power.abs).toBeCloseTo((4 * Ce.abs + 8 * O.abs) / model.volume, 4);
+  });
+
+  it("corundum, COD 9007496: Al₁₂O₁₈ in R-3c (hexagonal axes), a and c within 300 ppm of NIST SRM 676a", () => {
+    const { model, m, power } = load("cod-9007496.cif");
+    expect(m).toEqual([12, 18]);
+    expect(Math.abs(model.cell.a / 4.759355 - 1)).toBeLessThan(3e-4);
+    expect(Math.abs(model.cell.c / 12.99231 - 1)).toBeLessThan(3e-4);
+    expect(power.coh).toBeCloseTo((12 * Al.coh + 18 * O.coh) / model.volume, 3);
+    expect(power.abs).toBeCloseTo((12 * Al.abs + 18 * O.abs) / model.volume, 4);
+  });
+});
