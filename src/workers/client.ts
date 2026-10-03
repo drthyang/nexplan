@@ -56,3 +56,29 @@ export function calculate(input: CalcInput): Promise<CalcResult | undefined> {
     }
   });
 }
+
+/**
+ * A calculation on its own short-lived worker, for side results such as a
+ * reference material: it neither cancels nor is cancelled by `calculate`.
+ */
+export function calculateIsolated(input: CalcInput): Promise<CalcResult> {
+  return new Promise((resolve) => {
+    let w: Worker;
+    try {
+      w = new Worker(new URL("./calc.worker.ts", import.meta.url), { type: "module" });
+    } catch (e) {
+      resolve({ ok: false, stage: "input", message: `Could not start the calculation: ${(e as Error).message}` });
+      return;
+    }
+    const done = (r: CalcResult) => {
+      w.terminate();
+      resolve(r);
+    };
+    w.onmessage = (ev: MessageEvent<CalcResponse>) => done(ev.data.result);
+    w.onerror = (ev) => {
+      ev.preventDefault();
+      done({ ok: false, stage: "input", message: ev.message ? `The calculation worker failed: ${ev.message}` : "The calculation engine could not be loaded. Reload the page." });
+    };
+    w.postMessage({ id: 0, input });
+  });
+}

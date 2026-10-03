@@ -254,3 +254,22 @@ neutron scattering); code in
     - ARCS: −28° to 135°, −27° to 26°.
     - SEQUOIA: −30° to 60°, and ±18° for rows B–D; the A row reaches −30° vertically.
     - CNCS: ±16° vertically. ORNL quotes −50° to +140° horizontally; the current IDF spans −53.6° to 132.6°.
+
+## 11. Scattering power (comparing materials)
+
+On the Structure page; code in `src/core/scattering/power.ts`. Everything is per unit volume of material, so no
+flux, detector or counting-time model enters, and a powder's packing fraction scales all values equally.
+
+- **Macroscopic cross-sections:** Σ = (1/v_c)·Σ_sites m·o·σ for the coherent, incoherent and absorption cross-sections
+  of Sears (1992), in barn. With v_c in Å³, 1 b/Å³ = 10⁻²⁴ cm²/10⁻²⁴ cm³ = 1 cm⁻¹. The 1/e attenuation length is
+  1/(Σ_coh + Σ_inc + Σ_abs). Absorption follows the 1/v law, σ_abs(λ) = σ_abs(2200 m/s)·λ/1.798 Å. Resonant
+  absorbers (Gd, Sm, Cd, …) are flagged, because the law does not hold for them away from 1.798 Å.
+- **Bragg line strength:** j|F|²/v_c² (fm²/Å⁶), with j|F|² the sum of |F|² over the line's signed hkl. It is the
+  sample's factor in a line's integrated intensity per unit volume. The Lorentz, flux and detector factors depend only
+  on d at a given detector, so at similar d the ratio of strengths is the ratio of line intensities for equal sample
+  volumes.
+- **TOF weighting:** j|F|²d⁴/v_c² (fm²/Å²). At a fixed detector angle the TOF Lorentz factor λ⁴/sin²θ is ∝ d⁴ (§10).
+  Ranking lines by it matches a measured TOF pattern apart from the source spectrum. Unweighted, the
+  high-multiplicity silicon (4 2 2) line is the strongest; weighted, (1 1 1) is, as measured. Both cases are tested.
+- **Not a counting time.** Flux, detector efficiency, background and sample environment vary by instrument and
+  experiment. The comparison only says how a sample scatters relative to a known material.

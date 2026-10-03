@@ -1804,3 +1804,43 @@ input.ui-range {
 .p-cell.is-invalid {
   border-color: var(--danger);
 }
+
+/* Scattering power */
+.power-table td,
+.power-table th {
+  white-space: nowrap;
+}
+
+.power-stick {
+  stroke: var(--accent);
+  stroke-width: 1.6;
+}
+
+.power-stick.is-ref {
+  stroke: #8d96a8;
+}
+
+.power-window {
+  fill: var(--accent-soft);
+  opacity: 0.6;
+}
+
+.power-grid {
+  display: grid;
+  gap: 1rem 1.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+}
+
+.power-scroll {
+  overflow-x: auto;
+}
+
+.power-key {
+  fill: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.power-key.is-ref {
+  fill: #8d96a8;
+}

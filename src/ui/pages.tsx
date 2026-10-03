@@ -5,6 +5,7 @@ import { tofFromD, type TofShape } from "../core/diffraction/tof.ts";
 import type { Diagnostic } from "../io/cif/structure.ts";
 import { Card, Chip, InfoBadge, Segmented, TierChip, UnitField } from "./components.tsx";
 import { downloadText, exact, fmt, hklText, withSu } from "./format.ts";
+import { ScatteringPowerCard } from "./ScatteringPowerCard.tsx";
 import { PowderPlot } from "./PowderPlot.tsx";
 import { toMateriaModel } from "./materiaModel.ts";
 
@@ -181,6 +182,7 @@ export function StructurePage({ result, radiation, theme, onXrayIon }: { result:
             </div>
           </details>
         </Card>
+      <ScatteringPowerCard result={result} />
     </div>
   );
 }

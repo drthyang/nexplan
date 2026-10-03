@@ -39,6 +39,8 @@ export interface NeutronRow {
   readonly status: Tier;
   readonly problems?: readonly string[];
   readonly checks: Readonly<Record<string, string>>;
+  /** Sears (1992) cross-sections (barn): coherent, incoherent, total scattering, absorption at 2200 m/s. */
+  readonly xs?: { readonly coh?: { readonly value: number }; readonly inc?: { readonly value: number }; readonly scatt?: { readonly value: number }; readonly abs2200?: { readonly value: number } };
 }
 
 export const XRAY_DATASET = { id: xrayTable.dataset, version: xrayTable.version, citation: xrayTable.citation, sMax: xrayTable.domain.sMax };
@@ -119,6 +121,19 @@ export function neutronB(sp: Species, opts: { validatedOnly?: boolean } = {}): N
   if (row.status === "discrepant") warnings.push(`${id}: table row is discrepant (${row.problems?.join("; ")}).`);
   if (row.complex) warnings.push(`${id}: complex b = ${row.bCoh.raw} fm (absorbing nucleus); valid near 2200 m/s (λ ≈ 1.8 Å) only.`);
   return { row, b: { re: row.bCoh.re, im: row.bCoh.im }, warnings };
+}
+
+/** Sears (1992) cross-sections (barn) for a species, by the same row lookup as neutronB; undefined values are not tabulated. */
+export function neutronCrossSections(sp: Species): { readonly id: string; readonly coh?: number; readonly inc?: number; readonly abs2200?: number; readonly resonant: boolean } {
+  const id = sp.isotope !== undefined ? `${sp.isotope}${sp.element}` : sp.element;
+  const xs = NEUTRON_ROWS.get(id)?.xs;
+  return {
+    id,
+    ...(xs?.coh ? { coh: xs.coh.value } : {}),
+    ...(xs?.inc ? { inc: xs.inc.value } : {}),
+    ...(xs?.abs2200 ? { abs2200: xs.abs2200.value } : {}),
+    resonant: NEUTRON_ROWS.get(id)?.complex ?? false,
+  };
 }
 
 export function neutronIsotopesFor(element: string): NeutronRow[] {

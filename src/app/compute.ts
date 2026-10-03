@@ -8,7 +8,7 @@ import { classify, enumerateReflections, hasComplexAmplitudes, ReflectionLimitEr
 import { cwPeaks, familyRepresentative, groupByD, synthesizeProfile, type PeakGroup, type Polarization, type PowderAxis, type PowderPeak } from "../core/diffraction/powder.ts";
 import { bankDRange, difcFromGeometry, synthesizeTof, tofPeaks, type TofBank, type TofShape } from "../core/diffraction/tof.ts";
 import { parseTypeSymbol, speciesKey } from "../core/scattering/species.ts";
-import { NEUTRON_DATASET, ScatteringLookupError, XRAY_DATASET, xrayIonsFor, type Tier } from "../core/scattering/tables.ts";
+import { NEUTRON_DATASET, neutronCrossSections, ScatteringLookupError, XRAY_DATASET, xrayIonsFor, type Tier } from "../core/scattering/tables.ts";
 import { buildModel, cellContent, expandModel, ModelBuildError } from "../core/structure/model.ts";
 import { formatSymOp } from "../core/symmetry/ops.ts";
 import { CifStructureError, readCifStructure, summarizeBlocks, type CifBlockSummary, type Diagnostic } from "../io/cif/structure.ts";
@@ -60,6 +60,8 @@ export interface SiteRow {
   readonly y: number;
   readonly z: number;
   readonly occupancy: number;
+  /** Sears (1992) cross-sections (barn) of the site's neutron species; absent values are not tabulated. */
+  readonly neutronXs: { readonly id: string; readonly coh?: number; readonly inc?: number; readonly abs2200?: number; readonly resonant: boolean };
   readonly bIso: number;
   readonly multiplicity: number;
   readonly amplitudeSource: string;
@@ -345,6 +347,7 @@ export async function runCalculation(input: CalcInput): Promise<CalcResult> {
         y: s.fract[1],
         z: s.fract[2],
         occupancy: s.occupancy,
+        neutronXs: neutronCrossSections(s.species),
         bIso: s.bIso,
         multiplicity: expansion.multiplicities[j]!,
         amplitudeSource: sf.amplitudes[j]!.source,

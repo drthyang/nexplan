@@ -44,7 +44,9 @@ a generic X-ray or neutron beam, or an SNS instrument with its detector geometry
 definition (always neutron scattering).
 
 - **Sample**
-  - *Structure*: cell, symmetry, sites, the scattering lengths used and their sources, a 3D view.
+  - *Structure*: cell, symmetry, sites, the scattering lengths used and their sources, a 3D view, and the
+    neutron scattering power against a reference material: coherent, incoherent and absorption cross-sections per
+    unit volume, attenuation length, and Bragg line strengths, with an optional TOF weighting (not a counting time).
   - *Reflections*: every signed hkl with d, Q and complex F, folded into symmetry families, absences flagged.
 - **Setup**
   - *Orientation*: the UB matrix (ISAW/Mantid files in and out, matched to the CIF setting, change of basis) and
