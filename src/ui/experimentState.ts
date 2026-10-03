@@ -3,6 +3,7 @@
  * It holds no detector geometry: that loads with the simulation pages.
  */
 import { neutronWavelengthA } from "../core/physics/energy.ts";
+import type { GoniometerModel } from "../core/ub/goniometer.ts";
 import { GENERIC_INSTRUMENT, SNS_CATALOG, type CatalogEntry } from "../core/ub/instrumentCatalog.ts";
 
 export interface ExperimentState {
@@ -18,6 +19,10 @@ export interface ExperimentState {
   readonly orientations: readonly (readonly number[])[];
   /** Wanted reflections (hkl) that an orientation list should record: TOPAZ's "chosen peaks". Kept across instruments. */
   readonly wanted: readonly (readonly number[])[];
+  /** When a recording of a wanted reflection is well placed: λ in the inner bandFraction of the band, edgeFraction of a panel from its edges. */
+  readonly placement: { readonly bandFraction: number; readonly edgeFraction: number };
+  /** Goniometer limits set by the user, per instrument id: axis index → [min, max] (deg), replacing the catalog range. */
+  readonly limits: Readonly<Record<string, Readonly<Record<number, readonly [number, number]>>>>;
   /** Powder: the panel whose pattern is simulated (null = the one nearest 2θ = 90°). */
   readonly panel: number | null;
   /** Relative resolution Δd/d (FWHM) of simulated peaks and rings. */
@@ -37,6 +42,8 @@ export const DEFAULT_EXPERIMENT: ExperimentState = {
   scan: { axis: 0, start: 0, end: 360, step: 5 },
   orientations: [],
   wanted: [],
+  placement: { bandFraction: 0.5, edgeFraction: 0.1 },
+  limits: {},
   panel: null,
   dOverD: 0.005,
   sample: "single-crystal",
@@ -75,4 +82,21 @@ export function chooseInstrument(exp: ExperimentState, id: string): ExperimentSt
 export function sampleKind(exp: ExperimentState): "single-crystal" | "powder" {
   const modes = catalogEntry(exp.instrumentId)?.modes ?? ["single-crystal"];
   return modes.includes(exp.sample) ? exp.sample : modes[0]!;
+}
+
+/** The goniometer with the user's limits in place of the catalog ranges. */
+export function limitedGoniometer(model: GoniometerModel, limits: Readonly<Record<number, readonly [number, number]>> | undefined): GoniometerModel {
+  if (!limits || !Object.keys(limits).length) return model;
+  return { ...model, axes: model.axes.map((ax, i) => (limits[i] ? { ...ax, min: limits[i]![0], max: limits[i]![1] } : ax)) };
+}
+
+/** Set (or with null, clear) the current instrument's limits on one axis; the angle is kept inside them. */
+export function withLimits(exp: ExperimentState, axis: number, range: readonly [number, number] | null): ExperimentState {
+  const id = exp.instrumentId;
+  const current = { ...(exp.limits[id] ?? {}) };
+  if (range) current[axis] = range[0] <= range[1] ? [range[0], range[1]] : [range[1], range[0]];
+  else delete current[axis];
+  const r = current[axis] ?? (catalogEntry(id)?.goniometer.axes[axis] && [catalogEntry(id)!.goniometer.axes[axis]!.min, catalogEntry(id)!.goniometer.axes[axis]!.max]);
+  const angles = r ? exp.angles.map((v, i) => (i === axis ? Math.min(r[1]!, Math.max(r[0]!, v)) : v)) : exp.angles;
+  return { ...exp, angles, limits: { ...exp.limits, [id]: current } };
 }

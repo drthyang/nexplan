@@ -26,7 +26,8 @@ import { Card, Segmented } from "./components.tsx";
 import { DetectorMap, type MapRing, type MapSpot } from "./DetectorMap.tsx";
 import { fmt, hklText } from "./format.ts";
 import { flightPathRange, paintLambdaMap, paintLambdaPanels, paintMap, paintPanels, panelGrids } from "./ringImages.ts";
-import { DMinNote, defaultPanel, findHkl, HklField, InstrumentRequired, lam, useObservations, usePowderGroups, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
+import { DMinNote, defaultPanel, findHkl, GoniometerLimits, HklField, InstrumentRequired, lam, useObservations, usePowderGroups, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
+import type { GoniometerModel } from "../core/ub/goniometer.ts";
 import { GoniometerControls } from "./UbPage.tsx";
 
 const InstrumentView = lazy(() => import("../views/InstrumentView.tsx").then((m) => ({ default: m.InstrumentView })));
@@ -43,6 +44,7 @@ interface ModeProps extends SimPageProps {
   readonly panels: NonNullable<InstrumentPreset["detectors"]>;
   readonly info: readonly PanelAngles[];
   readonly l1: number;
+  readonly catalogGoniometer: GoniometerModel;
 }
 
 export function DetectorsPage(props: SimPageProps) {
@@ -53,14 +55,14 @@ export function DetectorsPage(props: SimPageProps) {
         The Detectors page shows a real SNS detector array (from the Mantid instrument definition) with the spots, coverage or powder rings of this structure. Pick an instrument here or in the header.
       </InstrumentRequired>
     );
-  const mode: ModeProps = { ...props, instrument: sns.instrument, panels: sns.panels, info: sns.info, l1: sns.l1 };
+  const mode: ModeProps = { ...props, instrument: sns.instrument, catalogGoniometer: sns.catalogGoniometer!, panels: sns.panels, info: sns.info, l1: sns.l1 };
   const key = `${sns.instrument.id}-${sns.sample}`;
   return sns.sample === "powder" ? <PowderDetectors key={key} {...mode} /> : <CrystalDetectors key={key} {...mode} />;
 }
 
 /* ------------------------------------------------------------------ single crystal */
 
-function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrientation, instrument, panels, info }: ModeProps) {
+function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrientation, instrument, catalogGoniometer, panels, info }: ModeProps) {
   const { viewUB, fileUB, points, R, sim, tofOf } = useObservations(result, ub, exp, instrument);
   const [selected, setSelected] = useState<number | null>(null);
   const [panelFilter, setPanelFilter] = useState<number | null>(null);
@@ -265,6 +267,7 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
           <Card title="Goniometer" meta={instrument.label} info={`${instrument.goniometer.note} ${instrument.source}`}>
             <div className="form-rows">
               <GoniometerControls axes={axes} angles={exp.angles} onAngles={(angles) => onExp({ ...exp, angles })} />
+              <GoniometerLimits catalog={catalogGoniometer} exp={exp} onExp={onExp} />
             </div>
             <dl className="ui-stats ui-stats--three" style={{ marginTop: "0.6rem" }}>
               <div>

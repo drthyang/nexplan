@@ -8,7 +8,7 @@ import { calculate } from "../workers/client.ts";
 import { Chip, cx, InfoBadge, Segmented, UnitField } from "./components.tsx";
 import { DEMOS } from "./demos.ts";
 import { CATALOG_GROUPS, GENERIC_INSTRUMENT } from "../core/ub/instrumentCatalog.ts";
-import { catalogEntry, chooseInstrument, DEFAULT_EXPERIMENT, sampleKind, withEi, type ExperimentState } from "./experimentState.ts";
+import { catalogEntry, chooseInstrument, DEFAULT_EXPERIMENT, limitedGoniometer, sampleKind, withEi, type ExperimentState } from "./experimentState.ts";
 import { PowderPage, ReflectionsPage, StructurePage, type CwProfileSettings } from "./pages.tsx";
 import { DEFAULT_GONIO, UbPage, type GonioState, type UbState } from "./UbPage.tsx";
 
@@ -499,7 +499,7 @@ export function App() {
                 onUb={setUb}
                 gonio={gonio}
                 onGonio={setGonio}
-                instrument={entry ? { name: entry.label, goniometer: entry.goniometer, angles: experiment.angles, onAngles: (angles) => setExperiment({ ...experiment, angles }), lambdaMin: experiment.lambdaMin, lambdaMax: experiment.lambdaMax } : undefined}
+                instrument={entry ? { name: entry.label, goniometer: limitedGoniometer(entry.goniometer, experiment.limits[entry.id]), angles: experiment.angles, onAngles: (angles) => setExperiment({ ...experiment, angles }), lambdaMin: experiment.lambdaMin, lambdaMax: experiment.lambdaMax } : undefined}
               />
             )}
             {ok && tab === "powder" && !sns && (

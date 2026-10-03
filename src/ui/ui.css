@@ -1993,3 +1993,25 @@ input.ui-range {
 .chip-x:hover {
   opacity: 1;
 }
+
+.ui-table tr.is-warn > * {
+  background: color-mix(in srgb, var(--warn-line) 10%, transparent);
+}
+
+.warn-inline {
+  color: var(--warn-ink);
+}
+
+:root[data-theme='dark'] .warn-inline {
+  color: var(--warn-line);
+}
+
+.placement-row {
+  margin-top: 0.5rem;
+  font-size: var(--fs-80);
+}
+
+.placement-row .ui-control {
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}

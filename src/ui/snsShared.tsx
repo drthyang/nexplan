@@ -13,7 +13,9 @@ import { goniometerMatrix, laueCondition } from "../core/ub/goniometer.ts";
 import { CATALOG_GROUPS } from "../core/ub/instrumentCatalog.ts";
 import type { InstrumentPreset } from "../core/ub/instruments.ts";
 import { SNS_INSTRUMENTS } from "../core/ub/instrumentsSns.ts";
-import { chooseInstrument, sampleKind, type ExperimentState } from "./experimentState.ts";
+import type { GoniometerModel } from "../core/ub/goniometer.ts";
+import { UnitField } from "./components.tsx";
+import { chooseInstrument, limitedGoniometer, sampleKind, withLimits, type ExperimentState } from "./experimentState.ts";
 import { fmt } from "./format.ts";
 import { presentReflections, useViewUB, type UbState } from "./ubShared.ts";
 
@@ -33,10 +35,13 @@ export const lam = (x: number) => Number(x.toPrecision(4));
 
 /** The selected SNS instrument with detectors, or undefined for the generic beam. */
 export function useSnsInstrument(exp: ExperimentState) {
-  const instrument: InstrumentPreset | undefined = SNS_INSTRUMENTS.find((i) => i.id === exp.instrumentId);
+  const catalog: InstrumentPreset | undefined = SNS_INSTRUMENTS.find((i) => i.id === exp.instrumentId);
+  // The user's goniometer limits replace the catalog ranges everywhere the goniometer is used.
+  const limits = exp.limits[exp.instrumentId];
+  const instrument = useMemo(() => catalog && { ...catalog, goniometer: limitedGoniometer(catalog.goniometer, limits) }, [catalog, limits]);
   const panels = useMemo(() => instrument?.detectors ?? [], [instrument]);
   const info = useMemo(() => panels.map(panelAngles), [panels]);
-  return { instrument, panels, info, l1: instrument?.l1 ?? 0, sample: sampleKind(exp) };
+  return { instrument, catalogGoniometer: catalog?.goniometer, panels, info, l1: instrument?.l1 ?? 0, sample: sampleKind(exp) };
 }
 
 export interface Observed {
@@ -155,3 +160,39 @@ export function usePowderGroups(result: CalcSuccess) {
 
 /** The panel nearest 2θ = 90°: the default for single-panel patterns. */
 export const defaultPanel = (info: readonly { twoThetaCenter: number }[]) => info.reduce((best, a, i) => (Math.abs(a.twoThetaCenter - 90) < Math.abs(info[best]!.twoThetaCenter - 90) ? i : best), 0);
+
+/**
+ * Limits of the free goniometer axes for the current instrument, which the
+ * user can narrow (collisions, sample environment): the catalog range unless
+ * changed. Every simulation, search and slider uses them.
+ */
+export function GoniometerLimits({ catalog, exp, onExp }: { catalog: GoniometerModel; exp: ExperimentState; onExp: (e: ExperimentState) => void }) {
+  const lim = exp.limits[exp.instrumentId] ?? {};
+  return (
+    <>
+      {catalog.axes.map((ax, i) => {
+        if (ax.fixed !== undefined) return null;
+        const [lo, hi] = lim[i] ?? [ax.min, ax.max];
+        return (
+          <div key={i} className="form-row limits-row">
+            <span className="ui-control-label">
+              <span className="sym">{ax.name}</span> limits
+            </span>
+            <span className="supercell">
+              <UnitField label={`${ax.name} lower limit`} value={lo} unit="°" min={-360} max={720} width="4.5ch" onCommit={(v) => onExp(withLimits(exp, i, [v, hi]))} />
+              <span className="dim-note">to</span>
+              <UnitField label={`${ax.name} upper limit`} value={hi} unit="°" min={-360} max={720} width="4.5ch" onCommit={(v) => onExp(withLimits(exp, i, [lo, v]))} />
+              {lim[i] ? (
+                <button type="button" className="ui-pill" title={`Back to the catalog range, ${ax.min}° to ${ax.max}°`} onClick={() => onExp(withLimits(exp, i, null))}>
+                  Reset
+                </button>
+              ) : (
+                <span className="dim-note">catalog range</span>
+              )}
+            </span>
+          </div>
+        );
+      })}
+    </>
+  );
+}

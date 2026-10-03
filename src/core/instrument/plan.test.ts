@@ -3,7 +3,7 @@ import type { Vec3 } from "@materia/core/math/types";
 import { goniometerMatrix } from "../ub/goniometer.ts";
 import { SNS_INSTRUMENTS } from "../ub/instrumentsSns.ts";
 import { ubFromU } from "../ub/ub.ts";
-import { candidateGrid, familyCounts, greedyCover, suggestSettings, targetCoverage, type PlanTarget } from "./plan.ts";
+import { candidateGrid, familyCounts, greedyCover, landingOf, suggestSettings, targetCoverage, wantedStatus, type PlanTarget } from "./plan.ts";
 import { observeAt, simulateSettings } from "./simulate.ts";
 
 const topaz = (id: string) => SNS_INSTRUMENTS.find((i) => i.id === id)!;
@@ -74,18 +74,25 @@ describe("recorded targets: same test as observeAt (λ in the band, k_f on a pan
 });
 
 describe("greedy maximum coverage", () => {
-  it("takes wanted targets first, then the most new families, then second recordings, and stops when nothing is gained", () => {
-    const sets = [Int32Array.from([0, 1, 2]), Int32Array.from([2, 3]), Int32Array.from([3, 4, 5, 6]), Int32Array.from([-1])];
-    const picks = greedyCover(sets, 10, { wanted: new Set([-1]) });
+  it("places wanted reflections well first, then records them, then new families, then second recordings; stops when nothing is gained", () => {
+    const sets = [Int32Array.from([0, 1, 2]), Int32Array.from([2, 3]), Int32Array.from([3, 4, 5, 6]), Int32Array.from([])];
+    // One wanted reflection: recorded near an edge by set 0, well placed by set 3.
+    const wanted = [Uint8Array.of(1), Uint8Array.of(0), Uint8Array.of(0), Uint8Array.of(2)];
+    const picks = greedyCover(sets, 10, { wanted });
     expect(picks.map((p) => p.index)).toEqual([3, 2, 0, 1]);
-    expect(picks.map((p) => [p.wanted, p.families, p.second])).toEqual([
-      [1, 0, 0],
-      [0, 4, 0],
-      [0, 3, 0],
-      [0, 0, 2], // all covered: {2, 3} records two families a second time
+    expect(picks.map((p) => [p.wellPlaced, p.wanted, p.families, p.second])).toEqual([
+      [1, 1, 0, 0],
+      [0, 0, 4, 0],
+      [0, 0, 3, 0],
+      [0, 0, 0, 2], // all covered: {2, 3} records two families a second time
     ]);
-    // Already-measured families are not counted as new.
+    // Recording a wanted reflection at all beats more families.
+    expect(greedyCover(sets, 1, { wanted: [Uint8Array.of(1), Uint8Array.of(0), Uint8Array.of(0), Uint8Array.of(0)] })[0]!.index).toBe(0);
+    // Placing one wanted reflection well beats recording two of them poorly.
+    expect(greedyCover([Int32Array.from([0]), Int32Array.from([1])], 1, { wanted: [Uint8Array.of(1, 1), Uint8Array.of(2, 0)] })[0]!.index).toBe(1);
+    // Already-measured families and placements are not counted again.
     expect(greedyCover(sets, 1, { covered: [3, 4, 5, 6] })[0]!.index).toBe(0);
+    expect(greedyCover(sets, 1, { wanted, wantedBefore: Uint8Array.of(2) })[0]!.index).toBe(2);
     // Redundancy prefers the set with more once-recorded families.
     const r = greedyCover([Int32Array.from([0, 1]), Int32Array.from([0]), Int32Array.from([0, 1, 2])], 2, { covered: [0, 1, 2] });
     expect(r.map((p) => p.index)).toEqual([2, 0]);
@@ -96,11 +103,34 @@ describe("greedy maximum coverage", () => {
   });
 });
 
+describe("wanted placement", () => {
+  it("counts a setting as well placed exactly when λ is near mid band and the hit is away from the panel edges", () => {
+    const h: Vec3 = [2, -1, 1];
+    const settings = candidateGrid(ambient.goniometer, [0, 135, 0], 400).settings;
+    const placement = { bandFraction: 0.4, edgeFraction: 0.15 };
+    const status = wantedStatus(ambient.goniometer, settings, UB, [[h]], panels, 0.4, 3.5, placement)[0]!;
+    let recorded = 0;
+    let well = 0;
+    for (const s of settings) {
+      const hit = landingOf(ambient.goniometer, s, UB, h, panels, 0.4, 3.5);
+      if (!hit) continue;
+      recorded++;
+      if (Math.abs(hit.lambda - 1.95) <= 0.4 * 1.55 && hit.offset <= 0.7) well++;
+    }
+    expect(recorded).toBeGreaterThan(5);
+    expect(well).toBeGreaterThan(0);
+    expect(well).toBeLessThan(recorded);
+    expect(status).toEqual({ recorded, well });
+    // Recorded counts agree with observeAt.
+    expect(recorded).toBe(settings.filter((s) => observeAt(goniometerMatrix(ambient.goniometer, s), UB, [{ h, family: 0 }], panels, 0.4, 3.5).length === 1).length);
+  });
+});
+
 describe("suggested TOPAZ orientation lists", () => {
   const completeness = (settings: (readonly number[])[]) => simulateSettings(ambient.goniometer, settings, UB, refl, panels, 0.4, 3.5);
 
   it("up to ten suggested settings record more families than ten evenly spaced ω settings, and each adds no more than the one before", () => {
-    const res = suggestSettings({ model: ambient.goniometer, base: [0, 135, 0], UB, reflections: refl, wantedFamilies: [], extra: [], existing: [], panels, lambdaMin: 0.4, lambdaMax: 3.5, n: 10 });
+    const res = suggestSettings({ model: ambient.goniometer, base: [0, 135, 0], UB, reflections: refl, wanted: [], existing: [], panels, lambdaMin: 0.4, lambdaMax: 3.5, n: 10 });
     expect(res.settings.length).toBeLessThanOrEqual(10);
     const even = Array.from({ length: 10 }, (_, k) => [k * 36, 135, 0]);
     const suggested = completeness(res.settings);
@@ -121,18 +151,22 @@ describe("suggested TOPAZ orientation lists", () => {
     expect([...counts.values()].filter((c) => c >= 2).length).toBe(res.picks.reduce((n, p) => n + p.second, 0));
   });
 
-  it("a wanted hkl outside the reflection list is recorded by the first suggestion; an existing list is kept and extended", () => {
+  it("a wanted hkl outside the reflection list is placed well by the first suggestion (mid band, away from the edges); an existing list is kept and extended", () => {
     const wantedH: Vec3 = [1, 0, 0]; // e.g. absent in an F-centred crystal, so not in its reflection list, but still a target
     const target = [{ h: wantedH, family: -1 }];
     // An existing setting that does not record it.
     const existing = candidateGrid(ambient.goniometer, [0, 135, 0]).settings.find((s) => targetCoverage(ambient.goniometer, [s], UB, target, panels, 0.4, 3.5)[0] === 0)!;
-    const res = suggestSettings({ model: ambient.goniometer, base: [0, 135, 0], UB, reflections: refl, wantedFamilies: [-1], extra: target, existing: [existing], panels, lambdaMin: 0.4, lambdaMax: 3.5, n: 3 });
+    const res = suggestSettings({ model: ambient.goniometer, base: [0, 135, 0], UB, reflections: refl, wanted: [[wantedH]], existing: [existing], panels, lambdaMin: 0.4, lambdaMax: 3.5, n: 3 });
     expect(res.wantedTotal).toBe(1);
-    expect(res.wantedBefore).toBe(0);
-    expect(res.wantedAfter).toBe(1);
-    expect(res.picks[0]!.wanted).toBe(1);
+    expect([res.recordedBefore, res.wellBefore]).toEqual([0, 0]);
+    expect([res.recordedAfter, res.wellAfter]).toEqual([1, 1]);
+    expect([res.picks[0]!.wellPlaced, res.picks[0]!.wanted]).toEqual([1, 1]);
     const R = goniometerMatrix(ambient.goniometer, res.settings[0]!);
     expect(observeAt(R, UB, [{ h: wantedH, family: 0 }], panels, 0.4, 3.5)).toHaveLength(1);
+    // Well placed by the default criteria: within half of the half-band of 1.95 Å, and inside the central 80 % of the panel.
+    const hit = landingOf(ambient.goniometer, res.settings[0]!, UB, wantedH, panels, 0.4, 3.5)!;
+    expect(Math.abs(hit.lambda - 1.95)).toBeLessThanOrEqual(0.5 * 1.55 + 1e-12);
+    expect(hit.offset).toBeLessThanOrEqual(0.8 + 1e-12);
     // The existing setting counts as measured: no suggestion repeats it.
     expect(res.settings.some((s) => s.join() === existing.join())).toBe(false);
   });

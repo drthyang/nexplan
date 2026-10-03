@@ -224,11 +224,18 @@ neutron scattering); code in
 - **Suggested orientation lists** (`src/core/instrument/plan.ts`, TOPAZ):
   - Candidates: a grid over the free axes within their ranges (one turn at most), with the smallest step from
     1°, 2°, 3°, 4°, 5°, 6°, 8°, 10°, … that keeps it under 6000 settings: 1° for ω alone, 5° for TOPAZ ambient ω and φ.
+    The ranges are the catalog's unless the user sets goniometer limits (per instrument and axis; e.g. collisions or
+    the sample environment). The limits apply everywhere the goniometer is used: sliders, Suggest, Fill evenly,
+    Find a setting and the exact coverage. Listed settings outside them are flagged.
   - Each candidate records the families of the reflections whose Laue λ is in the band and whose k_f hits a panel (the
     single-crystal test above; each panel's angular extent is checked first, exactly, from its corners). Tested
     reflection by reflection against `observeAt` on the real TOPAZ panels.
-  - Greedy selection: each pick maximises the new wanted reflections, then the new families, then the families it
-    records a second and a third time, then the families it records. Settings already in the list count as measured.
+  - A recording of a wanted reflection is **well placed** when |λ − λ_mid| ≤ f·(λ_max − λ_min)/2 and the hit lies at
+    least m of the panel's width and height from every edge (|x| ≤ (1 − 2m)·w/2, |y| ≤ (1 − 2m)·h/2); f = 0.5 and
+    m = 0.1 by default, both editable. This is how TOPAZ users choose settings for wanted peaks.
+  - Greedy selection: each pick maximises the wanted reflections it places well for the first time, then those it
+    records for the first time, then the new families, then the families it records a second and a third time, then
+    the families it records. Settings already in the list count as measured.
     Greedy maximum coverage is within (1 − 1/e) of the best for the same number of settings (Nemhauser, Wolsey &
     Fisher, Math. Program. 14, 265 (1978)).
   - A wanted reflection counts when any symmetry equivalent in the reflection list is recorded. An hkl outside the

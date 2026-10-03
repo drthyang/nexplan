@@ -16,16 +16,16 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { Mat3, Vec3 } from "@materia/core/math/types";
 import { mulVec } from "@materia/core/math/mat3";
-import { familyCounts, targetCoverage } from "../core/instrument/plan.ts";
+import { familyCounts, wantedStatus } from "../core/instrument/plan.ts";
 import { braggCrossings, crossingsToScan, pointCoverage, reflectionCoverage, scanSettings, simulateSettings, type ScanResult } from "../core/instrument/simulate.ts";
 import { suggestPlan } from "../workers/client.ts";
-import { goniometerMatrix } from "../core/ub/goniometer.ts";
+import { goniometerMatrix, type GoniometerModel } from "../core/ub/goniometer.ts";
 import type { InstrumentPreset } from "../core/ub/instruments.ts";
 import { Card, cx, Segmented, UnitField } from "./components.tsx";
 import { fmt, hklText } from "./format.ts";
 import { ScanChart } from "./ScanChart.tsx";
 import { SliceChart, type SlicePoint } from "./SliceChart.tsx";
-import { DMinNote, findHkl, HklField, InstrumentRequired, lam, useObservations, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
+import { DMinNote, findHkl, GoniometerLimits, HklField, InstrumentRequired, lam, useObservations, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
 import { GoniometerControls } from "./UbPage.tsx";
 
 const I3: Mat3 = [
@@ -57,10 +57,10 @@ export function CrystalPage(props: SimPageProps) {
         The Single-crystal page plans the measurement (an orientation list or a rotation scan), reports the completeness, and shows reciprocal-space slices of what the plan records. It needs an instrument that turns the crystal.
       </InstrumentRequired>
     );
-  return <CrystalPlan key={ins.id} {...props} instrument={ins} panels={sns.panels} info={sns.info} />;
+  return <CrystalPlan key={ins.id} {...props} instrument={ins} catalogGoniometer={sns.catalogGoniometer!} panels={sns.panels} info={sns.info} />;
 }
 
-function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instrument, panels, info }: SimPageProps & { instrument: InstrumentPreset; panels: NonNullable<InstrumentPreset["detectors"]>; info: readonly { twoThetaMax: number }[] }) {
+function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instrument, catalogGoniometer, panels, info }: SimPageProps & { instrument: InstrumentPreset; catalogGoniometer: GoniometerModel; panels: NonNullable<InstrumentPreset["detectors"]>; info: readonly { twoThetaMax: number }[] }) {
   const { viewUB, fileUB, points, sim, tofOf } = useObservations(result, ub, exp, instrument);
   const model = instrument.goniometer;
   const axes = model.axes;
@@ -252,12 +252,10 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
     [exp.wanted, points, viewUB],
   );
   // Settings of the list that record each wanted reflection (any symmetry equivalent in the list).
+  // Settings of the list that record each wanted reflection (any equivalent in the list), and that place it well.
   const wantedSeen = useMemo(
-    () =>
-      wantedTargets.map((t) =>
-        planKind !== "list" || !planOk ? 0 : planOk.settings.filter((s) => targetCoverage(model, [s], viewUB, t.members.map((h) => ({ h, family: 0 })), panels, exp.lambdaMin, exp.lambdaMax).some((c) => c > 0)).length,
-      ),
-    [wantedTargets, planKind, planOk, model, viewUB, panels, exp.lambdaMin, exp.lambdaMax],
+    () => (planKind !== "list" || !planOk ? wantedTargets.map(() => ({ recorded: 0, well: 0 })) : wantedStatus(model, planOk.settings, viewUB, wantedTargets.map((t) => t.members), panels, exp.lambdaMin, exp.lambdaMax, exp.placement)),
+    [wantedTargets, planKind, planOk, model, viewUB, panels, exp.lambdaMin, exp.lambdaMax, exp.placement],
   );
   const addWanted = (h: readonly number[]) => {
     if (exp.wanted.some((w) => w[0] === h[0] && w[1] === h[1] && w[2] === h[2])) return;
@@ -277,8 +275,8 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
         base: exp.angles,
         UB: viewUB,
         reflections: points.map((p) => ({ h: p.h as Vec3, family: p.family })),
-        wantedFamilies: wantedTargets.map((t) => t.family),
-        extra: wantedTargets.filter((t) => t.index === undefined).map((t) => ({ h: t.h, family: t.family })),
+        wanted: wantedTargets.map((t) => t.members),
+        placement: exp.placement,
         existing: exp.orientations,
         panels,
         lambdaMin: exp.lambdaMin,
@@ -295,8 +293,10 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
         cancelSearch.current = undefined;
         setSearch(null);
         onExp({ ...exp, orientations: [...exp.orientations, ...res.settings.map((a) => a.map((v) => Number(v.toFixed(2))))] });
-        const wantedText = res.wantedTotal ? ` Wanted reflections recorded: ${res.wantedAfter} of ${res.wantedTotal}${res.wantedBefore ? ` (${res.wantedBefore} before)` : ""}.` : "";
-        const full = res.picks.findIndex((p) => p.wanted === 0 && p.families === 0);
+        const wantedText = res.wantedTotal
+          ? ` Wanted reflections: ${res.wellAfter} of ${res.wantedTotal} well placed${res.recordedAfter > res.wellAfter ? `, ${res.recordedAfter} recorded` : ""}${res.recordedBefore ? ` (${res.wellBefore} and ${res.recordedBefore} before)` : ""}.`
+          : "";
+        const full = res.picks.findIndex((p) => p.wellPlaced === 0 && p.wanted === 0 && p.families === 0);
         const redundancy = full >= 0 ? ` Every reachable family is recorded after ${full}; the other ${res.picks.length - full} add second and third recordings.` : "";
         const stopped = res.settings.length < n ? (full >= 0 ? ` Stopped after ${res.settings.length}: every reachable family is already recorded three times.` : ` Stopped after ${res.settings.length}: more settings would record nothing new with this goniometer and band.`) : "";
         setSuggestNote(`Added ${res.settings.length} setting${res.settings.length === 1 ? "" : "s"}, chosen from ${res.candidates.toLocaleString()} on a ${res.step}° grid of ${freeNames.join(", ")}.${wantedText}${redundancy}${stopped}`);
@@ -310,6 +310,8 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
   };
 
   const freeNames = free.map(({ ax }) => ax.name);
+  const outsideLimits = (angles: readonly number[]) => free.some(({ ax, i }) => angles[i]! < ax.min - 1e-9 || angles[i]! > ax.max + 1e-9);
+  const nOutside = planKind === "list" ? exp.orientations.filter(outsideLimits).length : 0;
   return (
     <div className="ui-stack">
       <div className="ui-grid ui-grid--split">
@@ -353,20 +355,20 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
                 ) : (
                   <div className="wanted-list">
                     {wantedTargets.map((t, k) => {
-                      const seen = wantedSeen[k] ?? 0;
+                      const { recorded: seen, well } = wantedSeen[k] ?? { recorded: 0, well: 0 };
                       const unreachable = t.d < exp.lambdaMin / 2;
                       return (
                         <span
                           key={t.h.join(",")}
-                          className={cx("ui-chip", seen > 0 ? "ui-chip--success" : unreachable ? "ui-chip--danger" : "ui-chip--warn", t.index !== undefined && "is-clickable")}
-                          title={`(${hklText(t.h)}) d ${fmt(t.d, 4)} Å${t.index === undefined ? " · not in the reflection list (absent, weak or beyond d_min): targeted as this exact hkl" : ` · any of its ${t.members.length} symmetry equivalents counts`}${unreachable ? ` · d < λmin/2 = ${fmt(exp.lambdaMin / 2, 3)} Å: no setting can record it` : ""}`}
+                          className={cx("ui-chip", well > 0 ? "ui-chip--success" : unreachable ? "ui-chip--danger" : "ui-chip--warn", t.index !== undefined && "is-clickable")}
+                          title={`(${hklText(t.h)}) d ${fmt(t.d, 4)} Å${t.index === undefined ? " · not in the reflection list (absent, weak or beyond d_min): targeted as this exact hkl" : ` · any of its ${t.members.length} symmetry equivalents counts`}${unreachable ? ` · d < λmin/2 = ${fmt(exp.lambdaMin / 2, 3)} Å: no setting can record it` : ""}${seen ? ` · recorded by ${seen} setting${seen === 1 ? "" : "s"}, well placed (mid band, away from panel edges) in ${well}` : ""}`}
                           onClick={() => {
                             if (t.index === undefined) return;
                             setSelected(t.index);
                             setLayer(t.h[plane.fixed]!);
                           }}
                         >
-                          ({hklText(t.h)}) {seen > 0 ? `✓ ${seen}×` : unreachable ? "unreachable" : "not recorded"}
+                          ({hklText(t.h)}) {seen > 0 ? (well > 0 ? `✓ ${well} well · ${seen}×` : `${seen}× · edge or band end`) : unreachable ? "unreachable" : "not recorded"}
                           <button
                             type="button"
                             className="chip-x"
@@ -383,6 +385,16 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
                     })}
                   </div>
                 )}
+                <div className="ui-controls ui-controls--inline placement-row" title="A recording of a wanted reflection is well placed when its wavelength is near the middle of the band and it lands away from the panel edges. Suggest places wanted reflections well first.">
+                  <span className="ui-control-label">Well placed</span>
+                  <span className="ui-control">
+                    <span className="dim-note">λ in the inner</span>
+                    <UnitField label="Inner fraction of the band counted as mid band" value={Math.round(exp.placement.bandFraction * 100)} unit="%" min={5} max={100} width="3.5ch" onCommit={(v) => onExp({ ...exp, placement: { ...exp.placement, bandFraction: v / 100 } })} />
+                    <span className="dim-note">of the band, ≥</span>
+                    <UnitField label="Margin from the panel edges, as a fraction of the panel" value={Math.round(exp.placement.edgeFraction * 100)} unit="%" min={0} max={45} width="3.5ch" onCommit={(v) => onExp({ ...exp, placement: { ...exp.placement, edgeFraction: v / 100 } })} />
+                    <span className="dim-note">of a panel from its edges</span>
+                  </span>
+                </div>
                 <div className="ui-controls ui-controls--inline" style={{ marginTop: "0.55rem" }}>
                   <span className="ui-control">
                     <span className="ui-control-label">Suggest</span>
@@ -423,7 +435,7 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
                     </thead>
                     <tbody>
                       {plan.steps.map((s, k) => (
-                        <tr key={k} className="is-clickable" title="Set the goniometer to this setting" onClick={() => onExp({ ...exp, angles: [...s.angles] })}>
+                        <tr key={k} className={cx("is-clickable", outsideLimits(s.angles) && "is-warn")} title={outsideLimits(s.angles) ? "Outside the goniometer limits" : "Set the goniometer to this setting"} onClick={() => onExp({ ...exp, angles: [...s.angles] })}>
                           <th>{k + 1}</th>
                           {free.map(({ i }) => (
                             <td key={i}>{fmt(s.angles[i]!, 1)}</td>
@@ -491,6 +503,7 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
               {planOk.observedFamilies.toLocaleString()} of {planOk.families.toLocaleString()} families recorded
               {planOk.steps.length ? (reach90 ? `; 90 % after ${planOk.steps.indexOf(reach90) + 1} setting${planOk.steps.indexOf(reach90) ? "s" : ""}` : "; 90 % is not reached") : ""}
               {twice !== undefined && planOk.families ? `; ${fmt((100 * twice) / planOk.families, 0)} % in two or more settings` : ""}.
+              {nOutside > 0 && <span className="warn-inline"> {nOutside} listed setting{nOutside === 1 ? " is" : "s are"} outside the goniometer limits.</span>}
             </p>
           )}
         </Card>
@@ -499,6 +512,7 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
           <Card title="Goniometer" meta={instrument.label} info={`${model.note} ${instrument.source}`}>
             <div className="form-rows">
               <GoniometerControls axes={axes} angles={exp.angles} onAngles={(angles) => onExp({ ...exp, angles })} />
+              <GoniometerLimits catalog={catalogGoniometer} exp={exp} onExp={onExp} />
             </div>
             <dl className="ui-stats ui-stats--three" style={{ marginTop: "0.6rem" }}>
               <div>
