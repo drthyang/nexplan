@@ -8,6 +8,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { Mat3, Vec3 } from "@materia/core/math/types";
 import { determinant, mulMat, mulVec, transpose } from "@materia/core/math/mat3";
 import type { CalcSuccess } from "../app/compute.ts";
+import { rayHit, type DetectorPanel } from "../core/instrument/detectors.ts";
 import { goniometerMatrix, laueCondition } from "../core/ub/goniometer.ts";
 import { UNIVERSAL } from "../core/ub/instruments.ts";
 import type { GoniometerModel } from "../core/ub/goniometer.ts";
@@ -95,6 +96,8 @@ export function GoniometerControls({ axes, angles, onAngles }: { axes: readonly 
 
 /** An SNS instrument's goniometer and band, overriding the generic Eulerian goniometer. */
 export interface OrientationInstrument {
+  /** Catalog id: its detector geometry is loaded on demand for the 3D view. */
+  readonly id: string;
   readonly name: string;
   readonly goniometer: GoniometerModel;
   readonly angles: readonly number[];
@@ -144,20 +147,38 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
   const points = useMemo(() => presentReflections(result), [result]);
   useEffect(() => setSelected(null), [points]);
 
+  // An SNS instrument's detectors, loaded (from the lazy instrument chunk) only when the 3D view is open.
+  const [panels, setPanels] = useState<{ id: string; list: readonly DetectorPanel[] } | null>(null);
+  const instrumentId = instrument?.id;
+  useEffect(() => {
+    if (!explore || !instrumentId || panels?.id === instrumentId) return;
+    let alive = true;
+    void import("../core/ub/instrumentsSns.ts").then((m) => {
+      const list = m.SNS_INSTRUMENTS.find((i) => i.id === instrumentId)?.detectors;
+      if (alive && list) setPanels({ id: instrumentId, list });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [explore, instrumentId, panels]);
+  const detectors = panels && panels.id === instrumentId ? panels.list : undefined;
+
+  // Status per reflection: 2 diffracts onto a detector (or, without detectors, in the band), 1 in the band but misses every panel.
   const laue = useMemo(() => {
     const status = new Uint8Array(points.length);
     const lambdas = new Float64Array(points.length);
-    const rows: { i: number; lambda: number; twoTheta: number; azimuth: number }[] = [];
+    const rows: { i: number; lambda: number; twoTheta: number; azimuth: number; panel?: string }[] = [];
     const RUB = mulMat(R, viewUB);
     points.forEach((p, i) => {
       const s = laueCondition(mulVec(RUB, p.h));
       lambdas[i] = s.lambda;
       if (!(s.lambda >= lambdaMin && s.lambda <= lambdaMax)) return;
-      status[i] = 2;
-      rows.push({ i, lambda: s.lambda, twoTheta: s.twoTheta, azimuth: s.azimuth });
+      const hit = detectors ? rayHit(detectors, s.kf) : undefined;
+      status[i] = detectors && !hit ? 1 : 2;
+      rows.push({ i, lambda: s.lambda, twoTheta: s.twoTheta, azimuth: s.azimuth, ...(hit ? { panel: hit.name } : {}) });
     });
-    return { status, lambdas, rows };
-  }, [points, R, viewUB, lambdaMin, lambdaMax]);
+    return { status, lambdas, rows, onDetectors: detectors ? rows.filter((r) => r.panel).length : undefined };
+  }, [points, R, viewUB, lambdaMin, lambdaMax, detectors]);
 
   const along = useMemo(() => {
     const RUB = mulMat(R, viewUB);
@@ -478,7 +499,7 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
         <Card
           title="Laue construction"
           meta={`${points.length.toLocaleString()} reflections · ${laue.rows.length.toLocaleString()} in the λ band`}
-          info="Laue (white-beam / TOF) Ewald construction in 1/Å without 2π. Points are reciprocal-lattice nodes q = UB·h sized by |F|²; a point is coloured by the wavelength at which it diffracts when that lies in the band. The two spheres are the Ewald spheres for λmin and λmax: everything between them diffracts. Click a point to draw its k_i, k_f and q. Drag to rotate, scroll to zoom."
+          info="Laue (white-beam / TOF) Ewald construction in 1/Å without 2π. Points are reciprocal-lattice nodes q = UB·h sized by |F|²; a point is coloured by the wavelength at which it diffracts when that lies in the band and, with an SNS instrument, its scattered ray hits a panel. Tan points diffract in the band but miss every panel; grey points do not diffract in the band. The two spheres are the Ewald spheres for λmin and λmax: everything between them diffracts. Click a point to draw its k_i, k_f and q. Drag to rotate, scroll to zoom."
           className="viewer-card"
           actions={
             <>
@@ -505,7 +526,7 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
               fileStem={result.blockName}
               status={laue.status}
               lambdas={laue.lambdas}
-              hasDetectors={false}
+              hasDetectors={detectors !== undefined}
             />
           </Suspense>
           {sel && (
@@ -516,7 +537,7 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
             </p>
           )}
         </Card>
-        <Card title="Reflections in the band" meta={`${laue.rows.length.toLocaleString()} at this goniometer setting · strongest first`} flush>
+        <Card title="Reflections in the band" meta={`${laue.rows.length.toLocaleString()} at this goniometer setting${laue.onDetectors !== undefined ? `, ${laue.onDetectors.toLocaleString()} on the detectors` : ""} · strongest first`} flush>
           <div className="ui-table-wrap" style={{ maxHeight: "22rem" }}>
             <table className="ui-table">
               <thead>
@@ -526,6 +547,7 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
                   <th>λ (Å)</th>
                   <th>2θ (°)</th>
                   <th>azimuth (°)</th>
+                  {detectors && <th className="left">Panel</th>}
                   <th>|F|²</th>
                 </tr>
               </thead>
@@ -543,6 +565,7 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
                         <td>{fmt(row.lambda, 4)}</td>
                         <td>{fmt(row.twoTheta, 2)}</td>
                         <td>{fmt(row.azimuth, 1)}</td>
+                        {detectors && <td className={cx("left", !row.panel && "dim-note")}>{row.panel ?? "misses"}</td>}
                         <td>{p.f2.toPrecision(5)}</td>
                       </tr>
                     );

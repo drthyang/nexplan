@@ -31,7 +31,6 @@ import type { GoniometerModel } from "../core/ub/goniometer.ts";
 import { GoniometerControls } from "./UbPage.tsx";
 
 const InstrumentView = lazy(() => import("../views/InstrumentView.tsx").then((m) => ({ default: m.InstrumentView })));
-const ReciprocalView = lazy(() => import("../views/ReciprocalView.tsx").then((m) => ({ default: m.ReciprocalView })));
 
 const IDENTITY: Mat3 = [
   [1, 0, 0],
@@ -63,10 +62,9 @@ export function DetectorsPage(props: SimPageProps) {
 /* ------------------------------------------------------------------ single crystal */
 
 function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrientation, instrument, catalogGoniometer, panels, info }: ModeProps) {
-  const { viewUB, fileUB, points, R, sim, tofOf } = useObservations(result, ub, exp, instrument);
+  const { viewUB, fileUB, points, sim, tofOf } = useObservations(result, ub, exp, instrument);
   const [selected, setSelected] = useState<number | null>(null);
   const [panelFilter, setPanelFilter] = useState<number | null>(null);
-  const [view, setView] = useState<"detectors" | "reciprocal">("detectors");
   useEffect(() => {
     setSelected(null);
     setPanelFilter(null);
@@ -188,70 +186,45 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
     <div className="ui-stack">
       <div className="ui-grid ui-grid--split">
         <Card
-          title={view === "detectors" ? `${instrument.goniometer.label} detectors` : "Reciprocal space"}
+          title={`${instrument.goniometer.label} detectors`}
           meta={`${sim.obs.length.toLocaleString()} of ${points.length.toLocaleString()} reflections on the detectors`}
           info={
-            view === "detectors"
-              ? instrument.incident
-                ? "Lab frame, metres: sample at the origin, beam along +z (orange), up +y. Panels from the Mantid instrument definition. With a monochromatic beam only reflections within the elastic band (Δλ/λ = ΔE/2E) of the Ewald sphere diffract at one setting; each spot is where its scattered ray hits a panel. Rotate ψ (or run the scan on the Single-crystal page) to bring others in. Click a spot to select the reflection, a panel to filter the table to it."
-                : "Lab frame, metres: sample at the origin, beam along +z (orange), up +y. Panels from the Mantid instrument definition; each spot is where a reflection's scattered ray hits a panel, coloured by its Laue wavelength. Click a spot to select the reflection, a panel to filter the table to it."
-              : "Reciprocal lattice in the lab frame (1/Å, no 2π) with the Ewald spheres for λmin and λmax. Coloured points diffract onto a detector; tan points diffract in the band but miss every panel; grey points do not diffract in the band."
+            instrument.incident
+              ? "Lab frame, metres: sample at the origin, beam along +z (orange), up +y. Panels from the Mantid instrument definition. With a monochromatic beam only reflections within the elastic band (Δλ/λ = ΔE/2E) of the Ewald sphere diffract at one setting; each spot is where its scattered ray hits a panel. Rotate ψ (or run the scan on the Single-crystal page) to bring others in. Click a spot to select the reflection, a panel to filter the table to it."
+              : "Lab frame, metres: sample at the origin, beam along +z (orange), up +y. Panels from the Mantid instrument definition; each spot is where a reflection's scattered ray hits a panel, coloured by its Laue wavelength. Click a spot to select the reflection, a panel to filter the table to it. The reciprocal-space picture (Ewald spheres, reflections that miss the panels) is on the Orientation page."
           }
           className="viewer-card"
-          actions={<Segmented label="View" value={view} onChange={setView} options={[{ value: "detectors", label: "Detectors" }, { value: "reciprocal", label: "Reciprocal space" }]} />}
         >
           <Suspense fallback={<p className="empty-note">Loading the 3D view…</p>}>
-            {view === "detectors" ? (
-              <InstrumentView
-                panels={panels}
-                spots={covOn ? [] : spots3d}
-                lambdaMin={exp.lambdaMin}
-                lambdaMax={exp.lambdaMax}
-                selected={selected}
-                onSelect={setSelected}
-                theme={theme}
-                fileStem={result.blockName}
-                instrumentName={instrument.goniometer.label}
-                selectedPanel={covOn ? null : (selObs?.hit.panel ?? panelFilter)}
-                onPanelClick={togglePanel}
-                legend={lambdaLegend}
-                {...(covImages ? { panelImages: covImages, summary: `coverage of (${hklText(points[selected!]!.h)})${equivalents ? " and equivalents" : ""} over the goniometer range` } : {})}
-              />
-            ) : (
-              <ReciprocalView
-                UB={viewUB}
-                R={R}
-                qSign={1}
-                lambdaMin={exp.lambdaMin}
-                lambdaMax={exp.lambdaMax}
-                points={points}
-                frame="lab"
-                selected={selected}
-                onSelect={setSelected}
-                theme={theme}
-                showEwald
-                fileStem={result.blockName}
-                status={sim.status}
-                lambdas={sim.lambdas}
-                hasDetectors
-              />
-            )}
+            <InstrumentView
+              panels={panels}
+              spots={covOn ? [] : spots3d}
+              lambdaMin={exp.lambdaMin}
+              lambdaMax={exp.lambdaMax}
+              selected={selected}
+              onSelect={setSelected}
+              theme={theme}
+              fileStem={result.blockName}
+              instrumentName={instrument.goniometer.label}
+              selectedPanel={covOn ? null : (selObs?.hit.panel ?? panelFilter)}
+              onPanelClick={togglePanel}
+              legend={lambdaLegend}
+              {...(covImages ? { panelImages: covImages, summary: `coverage of (${hklText(points[selected!]!.h)})${equivalents ? " and equivalents" : ""} over the goniometer range` } : {})}
+            />
           </Suspense>
-          {view === "detectors" && (
-            <div className="ring-controls">
-              <Segmented label="Show on the detectors" value={show} onChange={setShow} options={[{ value: "spots", label: "Spots now" }, { value: "coverage", label: "Coverage" }]} />
-              {show === "coverage" && (
-                <>
-                  <HklField value={sel ? sel.h : null} onPick={pickHkl} />
-                  <label className="ui-check">
-                    <input type="checkbox" checked={equivalents} onChange={(e) => setEquivalents(e.target.checked)} /> Equivalents
-                  </label>
-                </>
-              )}
-            </div>
-          )}
-          {view === "detectors" && show === "coverage" && <p className="selection-note dim-note">{covStatus}</p>}
-          {sel && !(view === "detectors" && show === "coverage") && (
+          <div className="ring-controls">
+            <Segmented label="Show on the detectors" value={show} onChange={setShow} options={[{ value: "spots", label: "Spots now" }, { value: "coverage", label: "Coverage" }]} />
+            {show === "coverage" && (
+              <>
+                <HklField value={sel ? sel.h : null} onPick={pickHkl} />
+                <label className="ui-check">
+                  <input type="checkbox" checked={equivalents} onChange={(e) => setEquivalents(e.target.checked)} /> Equivalents
+                </label>
+              </>
+            )}
+          </div>
+          {show === "coverage" && <p className="selection-note dim-note">{covStatus}</p>}
+          {sel && show !== "coverage" && (
             <p className="selection-note">
               <b>({hklText(sel.h)})</b> d {fmt(sel.d, 4)} Å · |F|² {sel.f2.toPrecision(4)} ·{" "}
               {selObs

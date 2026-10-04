@@ -521,7 +521,7 @@ export function App() {
                 onUb={setUb}
                 gonio={gonio}
                 onGonio={setGonio}
-                instrument={entry ? { name: entry.label, goniometer: limitedGoniometer(entry.goniometer, experiment.limits[entry.id]), angles: experiment.angles, onAngles: (angles) => setExperiment({ ...experiment, angles }), lambdaMin: experiment.lambdaMin, lambdaMax: experiment.lambdaMax } : undefined}
+                instrument={entry ? { id: entry.id, name: entry.label, goniometer: limitedGoniometer(entry.goniometer, experiment.limits[entry.id]), angles: experiment.angles, onAngles: (angles) => setExperiment({ ...experiment, angles }), lambdaMin: experiment.lambdaMin, lambdaMax: experiment.lambdaMax } : undefined}
               />
             )}
             {ok && tab === "powder" && !sns && (
