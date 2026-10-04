@@ -17,7 +17,7 @@ import type { GoniometerModel } from "../core/ub/goniometer.ts";
 import { UnitField } from "./components.tsx";
 import { chooseInstrument, limitedGoniometer, sampleKind, withLimits, type ExperimentState } from "./experimentState.ts";
 import { fmt } from "./format.ts";
-import { hklMiss, presentAfter, presentReflections, useViewUB, type HklMiss, type UbState } from "./ubShared.ts";
+import { hklMiss, presentReflections, simulatable, useViewUB, type HklMiss, type UbState } from "./ubShared.ts";
 
 export interface SimPageProps {
   readonly result: CalcSuccess;
@@ -146,73 +146,67 @@ export function HklField({ value, onPick, invalid }: { value: readonly number[] 
 }
 
 /**
- * Selection by typed hkl that says why a miss is a miss (HklNotice): the field's red outline alone
- * says nothing, and touch screens show no tooltips. Any other selection or a new calculation clears it.
- * After "Calculate down to …" (fixDMin) the hkl waits for the new calculation, then is selected or explained.
+ * Selection by typed hkl. One the page lists is selected; any other (forbidden, |F| ≈ 0, past the cap,
+ * below d_min) becomes the probe, simulated on its own (nothing listed is selected) while HklNotice says
+ * what it is: the field outline alone says nothing, and touch screens show no tooltips. A selection made
+ * elsewhere ends it; a new calculation retries the hkl, which may now be listed or have a new reason.
  */
-export function useHklPick(result: CalcSuccess, find: (text: string) => number | undefined, select: (i: number) => void, current: number | null, onDMin: (dMin: number) => void, cap?: number) {
+export function useHklPick(result: CalcSuccess, find: (text: string) => number | undefined, select: (i: number | null) => void, current: number | null, cap?: number) {
   const [miss, setMiss] = useState<HklMiss | null>(null);
-  const [waiting, setWaiting] = useState<string | null>(null);
   const pick = (text: string) => {
     const i = find(text);
-    if (i === undefined) {
-      setMiss(hklMiss(result, text, cap));
-      return false;
+    if (i !== undefined) {
+      setMiss(null);
+      select(i);
+      return;
     }
-    setMiss(null);
-    select(i);
-    return true;
+    const m = hklMiss(result, text, cap);
+    setMiss(m);
+    if (simulatable(m)) select(null);
   };
-  // A selection made elsewhere (table, map, 3D view) ends the notice; the reset to none that follows a
-  // new calculation does not, or it would wipe the retried hkl's notice set in the same commit.
+  // The reset to none that follows a new calculation is not a selection: it must not end the retried notice.
   useEffect(() => {
     if (current !== null) setMiss(null);
   }, [current]);
   useEffect(() => {
-    setMiss(null);
-    if (waiting === null) return;
-    setWaiting(null);
-    pick(waiting);
-    // Only a new calculation retries the waiting hkl.
+    if (miss?.hkl) pick(miss.hkl.join(" "));
+    // Only a new calculation retries the hkl.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
-  const fixDMin = (dMin: number) => {
-    if (miss?.hkl) setWaiting(miss.hkl.join(" "));
-    onDMin(dMin);
-  };
-  const clear = () => {
-    setMiss(null);
-    setWaiting(null);
-  };
-  /** HklField props: while a notice stands, the field keeps the hkl it is about. */
-  const field = (selected: readonly number[] | null) => ({ value: miss?.hkl ?? selected, onPick: pick, invalid: miss?.message });
-  return { pick, miss, fixDMin, clear, field };
+  const probe = miss && simulatable(miss) ? miss : null;
+  /** HklField props: the field keeps the hkl a notice is about, outlined only when it is not a reflection. */
+  const field = (selected: readonly number[] | null) => ({ value: miss?.hkl ?? selected, onPick: pick, invalid: miss && !simulatable(miss) ? miss.message : undefined });
+  return { pick, miss, probe, clear: () => setMiss(null), field };
 }
 
-/** Warn of the simulated cap once the 1/d³ estimate (presentAfter, which runs low) comes within 20 % of it. */
-const CAP_MARGIN = 0.8;
-
-/** The reason a typed hkl is not shown, with the d_min that would bring it in when that is all it takes. */
-export function HklNotice({ miss, onDMin }: { miss: HklMiss | null; onDMin: (dMin: number) => void }) {
+/**
+ * What a typed hkl is (forbidden, |F| ≈ 0, past the cap, below d_min) and, where the page simulates it
+ * (`simulated`), that it is shown anyway; below d_min, the d_min that calculates its |F|.
+ */
+export function HklNotice({ miss, onDMin, simulated = false }: { miss: HklMiss | null; onDMin: (dMin: number) => void; simulated?: boolean }) {
   if (!miss) return null;
-  const { d, cap } = miss;
+  const shown = simulated && simulatable(miss);
+  const why = !shown
+    ? ""
+    : miss.kind === "systematic" || miss.kind === "accidental"
+      ? " Simulated as asked: such a peak can come from an unreported phase, lower symmetry or multiple scattering."
+      : miss.kind === "dmin"
+        ? " Its position is simulated."
+        : " Simulated on its own, as asked.";
+  const d = miss.kind === "dmin" ? miss.d : undefined;
   const to = d !== undefined ? suggestDMin(d) : undefined;
-  // Past the cap, a weak reflection may still be left out after recalculating.
-  const after = to !== undefined ? presentAfter(miss, to) : undefined;
   return (
     <p className="warn-note" role="alert">
-      {miss.message}{" "}
+      {miss.message}
+      {why}{" "}
       {d !== undefined &&
         to !== undefined &&
         (to <= d ? (
-          <>
-            <button type="button" className="ui-pill" onClick={() => onDMin(to)}>
-              Calculate down to {to} Å
-            </button>
-            {cap !== undefined && after !== undefined && after > CAP_MARGIN * cap && ` Only the ${cap.toLocaleString("en-US")} strongest reflections are simulated and the list grows as 1/d³, so a weak one may still be left out.`}
-          </>
+          <button type="button" className="ui-pill" title="Recalculate down to this d_min: the reflection is then listed with its |F|" onClick={() => onDMin(to)}>
+            Calculate down to {to} Å
+          </button>
         ) : (
-          `${LOWEST_SUGGESTED_DMIN} Å is the lowest offered here (the list grows as 1/d³): type a d_min of at most ${fmt(Math.floor(d * 1000) / 1000, 3)} Å in the bar to include it.`
+          `${LOWEST_SUGGESTED_DMIN} Å is the lowest offered here (the list grows as 1/d³): type a d_min of at most ${fmt(Math.floor(d * 1000) / 1000, 3)} Å in the bar to calculate it.`
         ))}
     </p>
   );

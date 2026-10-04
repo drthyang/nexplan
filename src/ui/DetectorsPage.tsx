@@ -28,7 +28,7 @@ import { fmt, hklText } from "./format.ts";
 import { byHkl, byNumber, byText, SortTh, useSort } from "./sortable.tsx";
 import { flightPathRange, paintLambdaMap, paintLambdaPanels, paintMap, paintPanels, panelGrids } from "./ringImages.ts";
 import { DMinNote, defaultPanel, findHkl, GoniometerLimits, HklField, HklNotice, InstrumentRequired, lam, useHklPick, useObservations, usePowderGroups, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
-import { PRESENT_CAP } from "./ubShared.ts";
+import { familyMembers, PRESENT_CAP } from "./ubShared.ts";
 import type { GoniometerModel } from "../core/ub/goniometer.ts";
 import { GoniometerControls } from "./UbPage.tsx";
 
@@ -87,19 +87,24 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
   );
   const selObs = sim.obs.find((o) => o.index === selected);
   const sel = selected !== null ? points[selected] : undefined;
+  const hkl = useHklPick(result, (text) => findHkl(points, text), setSelected, selected, PRESENT_CAP);
+  // What the coverage is for: a listed reflection, or a typed one the list leaves out (forbidden, |F| ≈ 0,
+  // past the cap, below d_min), simulated on request: its position needs no |F|.
+  const target = useMemo((): { h: Vec3; d: number; family?: number | undefined } | undefined => (hkl.probe ? { h: hkl.probe.hkl as unknown as Vec3, d: hkl.probe.d!, family: hkl.probe.family } : sel ? { h: sel.h as Vec3, d: sel.d, family: sel.family } : undefined), [hkl.probe, sel]);
+  const targetKey = target ? target.h.join(" ") : null;
 
   // Reflection coverage: every detector pixel the selected reflection (or its equivalents) can reach
   // as the free goniometer axes sweep their ranges, coloured by λ, solved exactly per pixel (coverage.ts).
   const [show, setShow] = useState<"spots" | "coverage">("spots");
   const [equivalents, setEquivalents] = useState(false);
   // Tagged with the reflection list and selection it was computed for, so a stale result is never shown.
-  type Coverage = ({ solver: CoverageSolver; lambdas: Float32Array[]; targets: number } | { error: string }) & { readonly of: typeof points; readonly index: number };
+  type Coverage = ({ solver: CoverageSolver; lambdas: Float32Array[]; targets: number } | { error: string }) & { readonly of: typeof points; readonly key: string };
   const [coverageState, setCoverage] = useState<Coverage | null>(null);
-  const coverage = coverageState && coverageState.of === points && coverageState.index === selected && show === "coverage" ? coverageState : null;
+  const coverage = coverageState && coverageState.of === points && coverageState.key === targetKey && show === "coverage" ? coverageState : null;
   const [covBusy, setCovBusy] = useState(false);
   const grids = useMemo(() => panelGrids(panels), [panels]);
   useEffect(() => {
-    if (show !== "coverage" || selected === null) {
+    if (show !== "coverage" || !target || targetKey === null) {
       setCoverage(null);
       setCovBusy(false);
       return;
@@ -107,14 +112,20 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
     let alive = true;
     setCovBusy(true);
     const t = setTimeout(() => {
-      const target = points[selected]!;
-      const targets = equivalents ? points.filter((p) => p.family === target.family) : [target];
+      // Equivalents of a listed reflection from the list; of a typed one from the calculation (absent ones too).
+      const hs: Vec3[] = !equivalents
+        ? [target.h]
+        : !hkl.probe
+          ? points.filter((p) => p.family === target.family).map((p) => p.h as Vec3)
+          : target.family !== undefined
+            ? (familyMembers(result, target.family) as Vec3[])
+            : [target.h];
       try {
-        const solver = coverageSolver(instrument.goniometer, viewUB, targets.map((p) => p.h), exp.lambdaMin, exp.lambdaMax);
+        const solver = coverageSolver(instrument.goniometer, viewUB, hs, exp.lambdaMin, exp.lambdaMax);
         const lambdas = coveragePanelLambdas(panels, grids, solver);
-        if (alive) setCoverage({ solver, lambdas, targets: targets.length, of: points, index: selected });
+        if (alive) setCoverage({ solver, lambdas, targets: hs.length, of: points, key: targetKey });
       } catch (e) {
-        if (alive) setCoverage({ error: (e as Error).message, of: points, index: selected });
+        if (alive) setCoverage({ error: (e as Error).message, of: points, key: targetKey });
       }
       if (alive) setCovBusy(false);
     }, 30);
@@ -122,8 +133,9 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
       alive = false;
       clearTimeout(t);
     };
-  }, [show, selected, equivalents, points, instrument, viewUB, panels, grids, exp.lambdaMin, exp.lambdaMax]);
-  const covOn = coverage !== null && "lambdas" in coverage && selected !== null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show, target, equivalents, points, instrument, viewUB, panels, grids, exp.lambdaMin, exp.lambdaMax]);
+  const covOn = coverage !== null && "lambdas" in coverage && target !== undefined;
   const covImages = useMemo(() => (covOn ? paintLambdaPanels(grids, (coverage as { lambdas: Float32Array[] }).lambdas, exp.lambdaMin, exp.lambdaMax) : undefined), [covOn, coverage, grids, exp.lambdaMin, exp.lambdaMax]);
   const mapCache = useRef<{ key: string; cells: ReturnType<typeof mapCells> } | null>(null);
   const covRaster = useCallback(
@@ -137,7 +149,7 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
     [coverage, panels, exp.lambdaMin, exp.lambdaMax],
   );
   // Bragg window: a spacing d lands only at 2 asin(λmin/2d) ≤ 2θ ≤ 2 asin(min(1, λmax/2d)), whatever the orientation.
-  const covWindow = covOn ? twoThetaRangeForD(points[selected!]!.d, exp.lambdaMin, exp.lambdaMax) : undefined;
+  const covWindow = covOn ? twoThetaRangeForD(target!.d, exp.lambdaMin, exp.lambdaMax) : undefined;
   const covRings = useMemo<MapRing[]>(() => (covWindow ? [covWindow.min, covWindow.max].filter((t) => t > 0.5 && t < 179.5).map((t) => ({ twoTheta: t, emphasis: true })) : []), [covWindow?.min, covWindow?.max]);
   const covStats = useMemo(() => {
     if (!covOn) return undefined;
@@ -158,7 +170,7 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
   // Reaching no panel leaves the map blank: said as a warning, not in the dim status line.
   const covNone = !covBusy && coverage !== null && covStats !== undefined && covStats.reached === 0;
   const covStatus =
-    selected === null
+    !target
       ? "Select a reflection (type hkl, or pick it in the table, map or 3D view) to see everywhere it can be recorded."
       : covBusy
         ? "Calculating…"
@@ -166,10 +178,9 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
           ? coverage.error
           : coverage && covStats
             ? covNone
-              ? `(${hklText(points[selected]!.h)}) d ${fmt(points[selected]!.d, 4)} Å${coverage.targets > 1 ? ` + ${coverage.targets - 1} equivalents` : ""} reaches no detector pixel for ${sweep} in the λ band ${lam(exp.lambdaMin)}–${lam(exp.lambdaMax)} Å, so nothing is drawn.`
-              : `(${hklText(points[selected]!.h)}) d ${fmt(points[selected]!.d, 4)} Å${coverage.targets > 1 ? ` + ${coverage.targets - 1} equivalents` : ""}: reachable on ${covStats.reached} of ${panels.length} panels, ${fmt(100 * covStats.fraction, 1)} % of the detector pixels inside its Bragg window 2θ ${fmt(covWindow?.min ?? NaN, 1)}–${fmt(covWindow?.max ?? NaN, 1)}° · solved exactly for ${sweep}`
+              ? `(${hklText(target.h)}) d ${fmt(target.d, 4)} Å${coverage.targets > 1 ? ` + ${coverage.targets - 1} equivalents` : ""} reaches no detector pixel for ${sweep} in the λ band ${lam(exp.lambdaMin)}–${lam(exp.lambdaMax)} Å, so nothing is drawn.`
+              : `(${hklText(target.h)}) d ${fmt(target.d, 4)} Å${coverage.targets > 1 ? ` + ${coverage.targets - 1} equivalents` : ""}: reachable on ${covStats.reached} of ${panels.length} panels, ${fmt(100 * covStats.fraction, 1)} % of the detector pixels inside its Bragg window 2θ ${fmt(covWindow?.min ?? NaN, 1)}–${fmt(covWindow?.max ?? NaN, 1)}° · solved exactly for ${sweep}`
             : "";
-  const hkl = useHklPick(result, (text) => findHkl(points, text), setSelected, selected, onDMin, PRESENT_CAP);
   const togglePanel = (i: number) => setPanelFilter((p) => (p === i ? null : i));
   const [sort, onSort] = useSort<ObsKey>({ key: "f2", dir: "desc" }, { d: "desc", f2: "desc" });
   const sortProps = { sort, onSort };
@@ -238,7 +249,7 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
               selectedPanel={covOn ? null : (selObs?.hit.panel ?? panelFilter)}
               onPanelClick={togglePanel}
               legend={lambdaLegend}
-              {...(covImages ? { panelImages: covImages, summary: `coverage of (${hklText(points[selected!]!.h)})${equivalents ? " and equivalents" : ""} over the goniometer range` } : {})}
+              {...(covImages ? { panelImages: covImages, summary: `coverage of (${hklText(target!.h)})${equivalents ? " and equivalents" : ""} over the goniometer range` } : {})}
             />
           </Suspense>
           <div className="ring-controls">
@@ -263,7 +274,7 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
               </>
             )}
           </div>
-          {show === "coverage" && <HklNotice miss={hkl.miss} onDMin={hkl.fixDMin} />}
+          {show === "coverage" && <HklNotice miss={hkl.miss} onDMin={onDMin} simulated />}
           {show === "coverage" && <p className={covNone ? "selection-note warn-note" : "selection-note dim-note"}>{covStatus}</p>}
           {sel && show !== "coverage" && (
             <p className="selection-note">
@@ -317,7 +328,7 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
 
       <Card
         title="Detector map"
-        meta={covOn ? `coverage of (${hklText(points[selected!]!.h)})${equivalents ? " and equivalents" : ""}, coloured by λ` : panelFilter !== null ? `${panels[panelFilter]!.name} selected · click it again to clear` : `${panels.length} panels unrolled about the vertical axis`}
+        meta={covOn ? `coverage of (${hklText(target!.h)})${equivalents ? " and equivalents" : ""}, coloured by λ` : panelFilter !== null ? `${panels[panelFilter]!.name} selected · click it again to clear` : `${panels.length} panels unrolled about the vertical axis`}
         info={
           covOn
             ? "Every detector pixel the selected reflection (and its symmetry equivalents, if ticked) can reach as the free goniometer axes sweep their full ranges, coloured by the wavelength it is recorded at (λ = 2d sinθ at that pixel); grey where it never lands. Solved exactly per pixel: the pixel fixes the direction of q, and the goniometer angles that turn the reflection onto it are found in closed form and checked against the axis ranges. The red curves bound the Bragg window, 2 asin(λmin/2d) ≤ 2θ ≤ 2 asin(min(1, λmax/2d)): small-d reflections can reach most panels, large-d ones only a few at low angle. γ is the horizontal angle from the beam (positive towards +x), ν the elevation."
@@ -463,15 +474,6 @@ function PowderDetectors({ result, theme, exp, onExp, onDMin, instrument, panels
     [panels, ringProf, slice, l1, gain],
   );
 
-  const g = sel !== null ? groups[sel] : undefined;
-  const range = g ? twoThetaRangeForD(g.d, exp.lambdaMin, exp.lambdaMax) : undefined;
-  const seeing = useMemo(() => (g ? new Set(panelsSeeing(g.d, info, exp.lambdaMin, exp.lambdaMax)) : undefined), [g, info, exp.lambdaMin, exp.lambdaMax]);
-  const ringNow = g && ringsOn && lambdaNom / (2 * g.d) <= 1 ? (2 * Math.asin(lambdaNom / (2 * g.d)) * 180) / Math.PI : undefined;
-  const rings = useMemo<MapRing[]>(() => (!ringsOn && range ? [range.min, range.max].filter((t) => t > 0.5 && t < 179.5).map((t) => ({ twoTheta: t, emphasis: true })) : []), [ringsOn, range?.min, range?.max]);
-  // The selected reflection's ring in this slice, ray-traced onto the panels (independent of the images).
-  const traces = useMemo(() => (ringsOn && g ? ringTrace(panels, l1, slice, g.d, 720).map((t) => t.points) : undefined), [ringsOn, g, panels, l1, slice]);
-  const pickPanel = (i: number) => onExp({ ...exp, panel: i });
-  const label = (x: (typeof groups)[number]) => x.families.map((f) => `(${hklText(f.hkl)})`).join(" + ");
   const findRing = (text: string) => {
     const v = text.trim().split(/[\s,]+/).map(Number);
     if (v.length !== 3 || v.some((x) => !Number.isInteger(x))) return undefined;
@@ -481,7 +483,18 @@ function PowderDetectors({ result, theme, exp, onExp, onDMin, instrument, panels
     const i = groups.findIndex((gr) => Math.abs(gr.d - d) <= 1e-6 * d);
     return i < 0 ? undefined : i;
   };
-  const hkl = useHklPick(result, findRing, setSel, sel, onDMin);
+  const hkl = useHklPick(result, findRing, setSel, sel);
+  // A typed hkl with no ring in the pattern (forbidden, |F| ≈ 0, below d_min) is drawn where its ring would be.
+  const probeRing = useMemo<(typeof groups)[number] | undefined>(() => (hkl.probe ? { d: hkl.probe.d!, q: (2 * Math.PI) / hkl.probe.d!, sumF2: 0, families: [{ hkl: hkl.probe.hkl!, multiplicity: 1, f2: 0 }] } : undefined), [hkl.probe]);
+  const g = probeRing ?? (sel !== null ? groups[sel] : undefined);
+  const range = g ? twoThetaRangeForD(g.d, exp.lambdaMin, exp.lambdaMax) : undefined;
+  const seeing = useMemo(() => (g ? new Set(panelsSeeing(g.d, info, exp.lambdaMin, exp.lambdaMax)) : undefined), [g, info, exp.lambdaMin, exp.lambdaMax]);
+  const ringNow = g && ringsOn && lambdaNom / (2 * g.d) <= 1 ? (2 * Math.asin(lambdaNom / (2 * g.d)) * 180) / Math.PI : undefined;
+  const rings = useMemo<MapRing[]>(() => (!ringsOn && range ? [range.min, range.max].filter((t) => t > 0.5 && t < 179.5).map((t) => ({ twoTheta: t, emphasis: true })) : []), [ringsOn, range?.min, range?.max]);
+  // The selected reflection's ring in this slice, ray-traced onto the panels (independent of the images).
+  const traces = useMemo(() => (ringsOn && g ? ringTrace(panels, l1, slice, g.d, 720).map((t) => t.points) : undefined), [ringsOn, g, panels, l1, slice]);
+  const pickPanel = (i: number) => onExp({ ...exp, panel: i });
+  const label = (x: (typeof groups)[number]) => x.families.map((f) => `(${hklText(f.hkl)})`).join(" + ");
   const seen = dRangeAt(pa.twoThetaCenter, exp.lambdaMin, exp.lambdaMax);
   const difc = panelDifc(panels[panel]!, l1);
   const angleLegend = (
@@ -566,13 +579,20 @@ function PowderDetectors({ result, theme, exp, onExp, onDMin, instrument, panels
             <span className="ring-controls__end">
               <HklField {...hkl.field(g ? g.families[0]!.hkl : null)} />
               {g && (
-                <button type="button" className="ui-pill" onClick={() => setSel(null)}>
+                <button
+                  type="button"
+                  className="ui-pill"
+                  onClick={() => {
+                    setSel(null);
+                    hkl.clear();
+                  }}
+                >
                   Clear
                 </button>
               )}
             </span>
           </div>
-          <HklNotice miss={hkl.miss} onDMin={hkl.fixDMin} />
+          <HklNotice miss={hkl.miss} onDMin={onDMin} simulated />
           {g && range && (
             <p className="selection-note">
               <b>{label(g)}</b> d {fmt(g.d, 5)} Å · diffracts at 2θ {fmt(range.min, 1)}–{fmt(range.max, 1)}° for λ {lam(exp.lambdaMin)}–{lam(exp.lambdaMax)} Å · seen by {seeing!.size} of {panels.length} panels

@@ -40,23 +40,30 @@ export function presentReflections(result: CalcSuccess, max = PRESENT_CAP) {
   return idx.slice(0, max).map((i) => ({ h: [r.h[i]!, r.k[i]!, r.l[i]!] as [number, number, number], f2: r.f2[i]!, d: r.d[i]!, family: r.family[i]! }));
 }
 
-/** Why a typed hkl is not among the simulated reflections, by kind, with what a notice needs to say it. */
+/**
+ * A typed hkl the page could not select from its list, by kind, with what a notice needs to say it. Unless
+ * the text is malformed or (0 0 0), its position can still be simulated on request (simulatable), as a
+ * forbidden peak is sometimes measured on purpose: it can reveal an unreported phase.
+ */
 export interface HklMiss {
   readonly kind: "input" | "origin" | "systematic" | "accidental" | "cap" | "weak" | "dmin" | "missing";
   readonly message: string;
   /** The indices, once the text parses. */
   readonly hkl?: readonly [number, number, number];
-  /** "dmin": the reflection's spacing, the d_min it was calculated to, and the present count and cap then. */
+  /** Its spacing from the cell, for any hkl but (0 0 0). */
   readonly d?: number;
-  readonly dMin?: number;
-  readonly present?: number;
-  readonly cap?: number;
+  /** |F|² and symmetry family when the calculation has the hkl (absent ones included). */
+  readonly f2?: number;
+  readonly family?: number;
 }
 
+/** Whether the miss names a reflection whose position can be simulated (its geometry needs no |F|). */
+export const simulatable = (m: HklMiss): boolean => m.kind !== "input" && m.kind !== "origin";
+
 /**
- * Explains a typed hkl that a page could not select: not three integers, (000), absent
- * (systematic or accidental), past the simulated cap, or beyond d_min. `cap` is the
- * number of present reflections the page simulates, when it caps them.
+ * Explains a typed hkl that a page could not select: not three integers, (000), forbidden (systematic
+ * absence) or accidentally absent, past the listed cap, or beyond d_min. `cap` is the number of present
+ * reflections the page lists, when it caps them.
  */
 export function hklMiss(result: CalcSuccess, text: string, cap?: number): HklMiss {
   const v = text.trim().split(/[\s,]+/).map(Number);
@@ -67,29 +74,30 @@ export function hklMiss(result: CalcSuccess, text: string, cap?: number): HklMis
   if (h === 0 && k === 0 && l === 0) return { kind: "origin", hkl, message: "(0 0 0) is the direct beam, not a reflection." };
   const r = result.reflections;
   let present = 0;
-  let cls = -1;
+  let at = -1;
   for (let i = 0; i < r.h.length; i++) {
     if (r.cls[i] === 0) present++;
-    if (r.h[i] === h && r.k[i] === k && r.l[i] === l) cls = r.cls[i]!;
+    if (r.h[i] === h && r.k[i] === k && r.l[i] === l) at = i;
   }
   const s = result.structure;
-  if (cls === 1) return { kind: "systematic", hkl, message: `${name} is systematically absent${s.setting ? ` in ${s.setting}` : ""}: |F| = 0 by symmetry.` };
-  if (cls === 2) return { kind: "accidental", hkl, message: `${name} is allowed by the space group but |F| ≈ 0 for this structure (an accidental absence).` };
+  const d = dSpacing(s.cell, h, k, l);
+  const found = at >= 0 ? { f2: r.f2[at]!, family: r.family[at]! } : {};
+  const cls = at >= 0 ? r.cls[at]! : -1;
+  if (cls === 1) return { kind: "systematic", hkl, d, ...found, message: `${name} is forbidden: systematically absent${s.setting ? ` in ${s.setting}` : ""} (|F| = 0 by symmetry).` };
+  if (cls === 2) return { kind: "accidental", hkl, d, ...found, message: `${name} is allowed by the space group but |F| ≈ 0 for this structure (an accidental absence).` };
   if (cls === 0)
     return cap !== undefined && present > cap
-      ? { kind: "cap", hkl, message: `${name} is present but weaker than the ${cap.toLocaleString("en-US")} strongest reflections simulated here.` }
-      : { kind: "weak", hkl, message: `${name} is present but too weak to draw.` };
-  const d = dSpacing(s.cell, h, k, l);
+      ? { kind: "cap", hkl, d, ...found, message: `${name} is present but weaker than the ${cap.toLocaleString("en-US")} strongest reflections listed here.` }
+      : { kind: "weak", hkl, d, ...found, message: `${name} is present but its |F|² is negligible.` };
   const dMin = result.provenance.dMin;
-  if (d < dMin) return { kind: "dmin", hkl, d, dMin, present, ...(cap !== undefined ? { cap } : {}), message: `${name} has d = ${fmt(d, 4)} Å, below d_min = ${dMin} Å, so it is not calculated.` };
-  return { kind: "missing", hkl, message: `${name} is not among the calculated reflections.` };
+  if (d < dMin) return { kind: "dmin", hkl, d, message: `${name} has d = ${fmt(d, 4)} Å, below d_min = ${dMin} Å, so its |F| is not calculated.` };
+  return { kind: "missing", hkl, d, message: `${name} is not among the calculated reflections.` };
 }
 
-/**
- * Present reflections expected if a "dmin" miss is calculated down to `dMin`, as the list grows as 1/d³.
- * Rough and low: a first list of a few hundred has not reached the asymptotic count (spinel from 0.8 Å:
- * 5–8 % low at 0.6–0.3 Å; 8,883 for 9,570 at 0.38 Å), so callers leave a margin below any limit.
- */
-export function presentAfter(miss: HklMiss, dMin: number): number | undefined {
-  return miss.present !== undefined && miss.dMin !== undefined ? miss.present * (miss.dMin / dMin) ** 3 : undefined;
+/** All hkl of one symmetry family in the calculation, absent ones included (the equivalents of a forbidden peak). */
+export function familyMembers(result: CalcSuccess, family: number): [number, number, number][] {
+  const r = result.reflections;
+  const out: [number, number, number][] = [];
+  for (let i = 0; i < r.h.length; i++) if (r.family[i] === family) out.push([r.h[i]!, r.k[i]!, r.l[i]!]);
+  return out;
 }
