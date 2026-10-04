@@ -1771,6 +1771,13 @@ input.ui-range {
   flex: 0 0 15.5rem;
 }
 
+/* Phones: the label column would leave room for a short button only (NOMAD, ARCS), so every group label takes its own row. */
+@media (max-width: 760px) {
+  .empty-state__row .ui-control-label {
+    flex-basis: 100%;
+  }
+}
+
 .ring-controls__end {
   display: inline-flex;
   align-items: center;
@@ -2155,6 +2162,18 @@ input.ui-range {
     content: "";
     position: absolute;
     inset: -0.65rem;
+  }
+
+  /* X-ray/Neutron, CW/TOF, a/b/c, d/Q: as tall as the pills (not 21 px), and no narrower. Every such switch has 2–3 options. */
+  .ui-seg--frame button {
+    min-width: var(--h-pill);
+    min-height: var(--h-pill);
+  }
+
+  /* Sized, not padded with ::after: it sits 0.6rem from the screen edge, where a hit pad would scroll the page sideways. */
+  .disclaimer__close {
+    width: var(--h-pill);
+    height: var(--h-pill);
   }
 
   .chip-x {
