@@ -45,6 +45,19 @@ export interface InstrumentPreset {
    * scan of one axis (CORELLI: rocking or full-volume scans in 3° steps).
    */
   readonly plan?: { readonly kind: "list" } | { readonly kind: "scan"; readonly start: number; readonly end: number; readonly step: number };
+  /**
+   * Focused banks of a TOF powder diffractometer, as its data are reduced:
+   * member panels by IDF component name, and the effective 2θ and L2 Mantid
+   * assigns after focusing when known (otherwise the solid-angle-weighted means).
+   */
+  readonly banks?: { readonly source: string; readonly list: readonly FocusedBankSpec[] };
+}
+
+export interface FocusedBankSpec {
+  readonly name: string;
+  readonly panels: readonly string[];
+  readonly twoThetaDeg?: number;
+  readonly l2?: number;
 }
 
 export const OMEGA: GoniometerAxis = { name: "ω", direction: [0, 1, 0], sense: 1, min: -180, max: 360 };

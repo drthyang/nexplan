@@ -64,8 +64,9 @@ definition (always neutron scattering).
     NeuXtalViz), and the reflections on each panel with pixel, λ and time of flight. Powders: Debye–Scherrer rings on
     the panels in a time-of-flight slice (play sweeps the band), or at Ei for the chopper spectrometers.
 - **Simulation**
-  - *Powder*: the pattern for the generic beam (CW or one TOF bank), or for an SNS instrument the pattern of any
-    panel (elastic 2θ for ARCS, SEQUOIA, CNCS) and the 2θ–d coverage of the detector array.
+  - *Powder*: the pattern for the generic beam (CW or one TOF bank), or for an SNS instrument the pattern of a focused
+    bank as the data are reduced (NOMAD's six banks, POWGEN's one), of any single panel, or the elastic 2θ pattern
+    (ARCS, SEQUOIA, CNCS), with the 2θ–d coverage of the detector array.
   - *Single crystal*: the measurement plan as each instrument is run (TOPAZ: a list of about ten chosen
     orientations, built from wanted reflections with "suggest settings" (a greedy search over the goniometer, within
     limits you can set, that places the wanted peaks near mid band and away from panel edges first, then completeness,

@@ -25,6 +25,9 @@ export interface ExperimentState {
   readonly limits: Readonly<Record<string, Readonly<Record<number, readonly [number, number]>>>>;
   /** Powder: the panel whose pattern is simulated (null = the one nearest 2θ = 90°). */
   readonly panel: number | null;
+  /** Powder on an instrument with focused banks: the bank shown (null = the one nearest 2θ = 90°), or a single panel instead. */
+  readonly bank: number | null;
+  readonly powderView: "bank" | "panel";
   /** Relative resolution Δd/d (FWHM) of simulated peaks and rings. */
   readonly dOverD: number;
   /** Instruments that take both (chopper spectrometers): which sample is simulated. */
@@ -45,6 +48,8 @@ export const DEFAULT_EXPERIMENT: ExperimentState = {
   placement: { bandFraction: 0.5, edgeFraction: 0.1 },
   limits: {},
   panel: null,
+  bank: null,
+  powderView: "bank",
   dOverD: 0.005,
   sample: "single-crystal",
   eiMeV: 60,
@@ -71,6 +76,7 @@ export function chooseInstrument(exp: ExperimentState, id: string): ExperimentSt
     instrumentId: id,
     angles: ins.goniometer.axes.map((ax) => ax.fixed ?? 0),
     panel: null,
+    bank: null,
     sample: modes.includes(exp.sample) ? exp.sample : modes[0]!,
     scan: ins.plan?.kind === "scan" ? { axis: firstFree, start: ins.plan.start, end: ins.plan.end, step: ins.plan.step, interleave: false } : { ...exp.scan, axis: firstFree },
     orientations: [],

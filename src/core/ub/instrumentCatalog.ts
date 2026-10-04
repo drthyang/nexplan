@@ -100,6 +100,18 @@ export const SNS_CATALOG: readonly CatalogEntry[] = [
     lambdaMax: 3.0,
     geometry: "NOMAD",
     source: `ORNL NOMAD page (0.1–3 Å, 19.5 m).`,
+    banks: {
+      source:
+        "The six physical banks, the IDF assemblies Group1–Group6 (Mantid NOMAD_Definition.xml @ 67c2f43; CreateGroupingWorkspace GroupDetectorsBy='Group'; mantid utils/nomad/diagnostics.py: PANEL_COUNT = 6). Effective L2 = 2 m and 2θ = 15, 31, 67, 122, 154, 7° from the NOMAD characterisation example in Mantid's PDLoadCharacterizations docs (NOMAD_11_22_11.prm, L1 19.5 m) and the bank labels of NOMAD autoreduction; current characterisation files may differ. Calibrations can also exclude packs, which is not modelled.",
+      list: [
+        { name: "Bank 1", panels: range(1, 14), twoThetaDeg: 15, l2: 2 },
+        { name: "Bank 2", panels: range(15, 37), twoThetaDeg: 31, l2: 2 },
+        { name: "Bank 3", panels: range(38, 51), twoThetaDeg: 67, l2: 2 },
+        { name: "Bank 4", panels: range(52, 63), twoThetaDeg: 122, l2: 2 },
+        { name: "Bank 5", panels: range(64, 81), twoThetaDeg: 154, l2: 2 },
+        { name: "Bank 6", panels: range(82, 99), twoThetaDeg: 7, l2: 2 },
+      ],
+    },
   },
   {
     id: "powgen",
@@ -110,11 +122,28 @@ export const SNS_CATALOG: readonly CatalogEntry[] = [
     lambdaMax: 1.59,
     geometry: "POWGEN",
     source: `ORNL POWGEN page (60 m). Band: one 60 Hz frame around 1.066 Å; set it to your chopper setting.`,
+    banks: {
+      source:
+        "All 40 panels focused to one bank, as POWGEN data are reduced: every detector is group 1 in the Mantid test calibration PG3_PAC_HR_d46168_2020_05_06.h5 (43120 pixels, the 2018 IDF's 40 panels), and autoreduction uses an all-detector grouping (pg3_group_all.xml). Effective L2 = 3.18 m and 2θ = 90° with L1 = 60 m from PG3_char_2020_01_04_PAC_limit_1.4MW.txt (Mantid test data), giving DIFC 22585.7 µs/Å, as the 2024–25 autoreduction's FinalDIFC 22585.8.",
+      list: [
+        {
+          name: "Bank 1 (all panels)",
+          panels: [43, 48, 52, 55, 58, 61, 64, 67, 70, 73, 76, 79, 2, 3, 4, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 29, 30, 33, 36, 39].map((n) => `bank${n}`),
+          twoThetaDeg: 90,
+          l2: 3.18,
+        },
+      ],
+    },
   },
   spectrometer("arcs", "ARCS", { eiMeV: 60, eiMin: 20, eiMax: 1500, elasticFwhm: 0.04 }, "ORNL ARCS spec sheet: 13.6 m to the sample, 3.0–3.4 m to the detectors, −28° to 135° horizontal, −27° to 26° vertical; Ei 20–1500 meV, elastic resolution 3–5 % Ei."),
   spectrometer("sequoia", "SEQUOIA", { eiMeV: 60, eiMin: 4, eiMax: 6000, elasticFwhm: 0.03 }, "ORNL SEQUOIA spec sheet: 20.0 m to the sample, 5.5–6.3 m to the detectors, −30° to 60° horizontal, ±18° vertical (rows B–D; the A row reaches −30°); Ei 4–6000 meV, elastic resolution 1–5 % Ei."),
   spectrometer("cncs", "CNCS", { eiMeV: 12, eiMin: 0.5, eiMax: 80, elasticFwhm: 0.02 }, "ORNL CNCS spec sheet: 36.2 m to the sample, 3.5 m to the detectors, ±16° vertical, horizontal −50° to +140° (the current IDF spans −53.6° to 132.6°); Ei 0.5–80 meV, elastic resolution 10–500 µeV."),
 ];
+
+/** IDF component names bank{from}…bank{to}. */
+function range(from: number, to: number): string[] {
+  return Array.from({ length: to - from + 1 }, (_, k) => `bank${from + k}`);
+}
 
 function spectrometer(id: string, name: string, incident: NonNullable<InstrumentPreset["incident"]>, spec: string): CatalogEntry {
   const lambda = neutronWavelengthA(incident.eiMeV);

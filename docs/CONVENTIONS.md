@@ -266,6 +266,22 @@ neutron scattering); code in
     panel-image cell, and a map cell, at its own 2θ within that cell's angular size, on the real NOMAD and POWGEN
     geometry. They also check that the cone power at fixed λ is ∝ 1/sin θ, and that the time-integrated TOF line is
     ∝ sin θ.
+- **Focused banks** (NOMAD, POWGEN; `src/core/instrument/focus.ts`), as the data are reduced:
+  - Groupings: NOMAD's six physical banks are the IDF assemblies Group1–Group6 (bank1–14, 15–37, 38–51, 52–63,
+    64–81, 82–99), the groups CreateGroupingWorkspace builds with GroupDetectorsBy = 'Group'. POWGEN is focused to one
+    bank of all 40 panels (every pixel is group 1 in the PG3 calibration of Mantid's test data). Mantid ships no
+    grouping file for either: the site calibration files carry the groups, and they can exclude packs, which is not
+    modelled.
+  - Each panel is split into 4 × 8 cells, each with its own 2θ, L2 and solid angle Ω = A·|cos α|/L2². A line at d has
+    I = Σ|F|²·d⁴·⟨sin θ⟩(d), the mean of sin θ over the cells that record d, weighted by Ω. This is what summing the
+    sample and dividing by the summed vanadium gives, since vanadium scatters isotropically. A one-cell bank reduces to
+    the single-panel formula above (tested).
+  - Lines are drawn at t = DIFC_f·d. The bank's DIFC uses the effective L2 and 2θ that Mantid's focusing assigns from
+    the characterisation file: NOMAD 2 m and 15, 31, 67, 122, 154, 7° (the 2011 example in Mantid's
+    PDLoadCharacterizations docs, and the autoreduction bank labels); POWGEN 3.18 m and 90° with L1 = 60 m, so
+    DIFC = 22585.7 µs/Å, as the 2024–25 autoreduction's FinalDIFC 22585.8. Current characterisation files may differ.
+  - Tested: every NOMAD pack in exactly one bank, the solid-angle-weighted 2θ of each NOMAD bank within 6° of its
+    nominal angle, and POWGEN's DIFC.
 - **Chopper spectrometers** (ARCS, SEQUOIA, CNCS), elastic scattering at the incident energy:
   - λ = √(81.804 meV·Å²/Ei).
   - The band is λ·(1 ± ΔE/4E), i.e. Δλ/λ = ΔE/2E split about λ.

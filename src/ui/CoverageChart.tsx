@@ -5,10 +5,11 @@
  * plot shows every panel's 2θ span. Click a line to select a reflection, a
  * panel in the strip (or the band above it) to pick a panel.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import type { PanelAngles } from "../core/instrument/simulate.ts";
 import { coveredTwoTheta, twoThetaRangeForD } from "../core/instrument/simulate.ts";
 import { fmt } from "./format.ts";
+import { useMeasuredWidth } from "./useMeasuredWidth.ts";
 
 export interface CoverageLine {
   readonly d: number;
@@ -30,6 +31,7 @@ export function CoverageChart({
   selected,
   onSelect,
   selectedPanel,
+  selectedPanels,
   onPanelPick,
   dFloor,
   sliceLambda,
@@ -42,21 +44,15 @@ export function CoverageChart({
   selected: number | null;
   onSelect: (i: number | null) => void;
   selectedPanel: number | null;
+  /** Several panels to mark (a focused bank), drawn as their 2θ spans. */
+  selectedPanels?: ReadonlySet<number> | undefined;
   onPanelPick: (i: number) => void;
   /** Reflections are calculated only down to this d. */
   dFloor: number;
   /** Wavelength of the current slice: drawn as the curve d = λ/(2 sinθ). */
   sliceLambda?: number | undefined;
 }) {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(640);
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => setWidth(Math.max(320, Math.round(e!.contentRect.width))));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  const { ref: wrapRef, el: wrapEl, width } = useMeasuredWidth(640, 320);
   const [hover, setHover] = useState<{ i: number; px: number; py: number } | null>(null);
 
   const covered = useMemo(() => coveredTwoTheta(panels), [panels]);
@@ -139,7 +135,7 @@ export function CoverageChart({
     return best;
   };
   const local = (e: { clientX: number; clientY: number }) => {
-    const r = wrapRef.current!.getBoundingClientRect();
+    const r = wrapEl!.getBoundingClientRect();
     return { px: e.clientX - r.left, py: e.clientY - r.top };
   };
 
@@ -152,7 +148,7 @@ export function CoverageChart({
       }
     return out;
   }, [dLo, dHi]);
-  const sp = selectedPanel !== null ? panels[selectedPanel] : undefined;
+  const marked = selectedPanels ?? (selectedPanel !== null ? new Set([selectedPanel]) : new Set<number>());
   const hoverLine = hover ? lines[hover.i] : undefined;
 
   return (
@@ -201,7 +197,10 @@ export function CoverageChart({
             ))}
           </clipPath>
           <path className="coverage-band is-covered" d={band} clipPath={`url(#${clipId}-cov)`} />
-          {sp && <rect className="coverage-panel-span" x={sx(sp.twoThetaMin)} y={m.t} width={Math.max(1, sx(sp.twoThetaMax) - sx(sp.twoThetaMin))} height={H} />}
+          {[...marked].map((i) => {
+            const sp = panels[i];
+            return sp ? <rect key={i} className="coverage-panel-span" x={sx(sp.twoThetaMin)} y={m.t} width={Math.max(1, sx(sp.twoThetaMax) - sx(sp.twoThetaMin))} height={H} /> : null;
+          })}
           {dFloor > dLo && <rect className="coverage-floor" x={m.l} y={sy(dFloor)} width={W} height={m.t + H - sy(dFloor)} />}
           {segs.map((s, i) =>
             s && i !== selected ? <line key={i} className="coverage-line" x1={s.x0} x2={s.x1} y1={s.y} y2={s.y} style={{ opacity: 0.15 + 0.85 * Math.sqrt(lines[i]!.weight / wMax) }} /> : null,
@@ -219,7 +218,7 @@ export function CoverageChart({
         {panels.map((p, i) => (
           <rect
             key={i}
-            className={`coverage-strip${i === selectedPanel ? " is-selected" : ""}`}
+            className={`coverage-strip${marked.has(i) ? " is-selected" : ""}`}
             x={sx(p.twoThetaMin)}
             y={strip.top}
             width={Math.max(1, sx(p.twoThetaMax) - sx(p.twoThetaMin))}
