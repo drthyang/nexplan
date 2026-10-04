@@ -79,18 +79,24 @@ export function useObservations(result: CalcSuccess, ub: UbState, exp: Experimen
   return { viewUB, fileUB, points, R, sim, tofOf };
 }
 
+/** The lowest d_min offered by one click: the reflection list grows as 1/d³ (type a lower value in the bar if needed). */
+export const LOWEST_SUGGESTED_DMIN = 0.3;
+
+/** d_min to cover a reach: rounded down to 0.01 Å, but not below LOWEST_SUGGESTED_DMIN. */
+export const suggestDMin = (reach: number) => Math.max(LOWEST_SUGGESTED_DMIN, Math.floor(reach * 100) / 100);
+
 /** The "detectors reach below d_min" note, with a one-click fix. */
 export function DMinNote({ result, info, lambdaMin, onDMin }: { result: CalcSuccess; info: readonly { twoThetaMax: number }[]; lambdaMin: number; onDMin: (d: number) => void }) {
   if (!info.length) return null;
   const reach = lambdaMin / (2 * Math.sin((Math.max(...info.map((a) => a.twoThetaMax)) * Math.PI) / 360));
   const dMin = result.provenance.dMin;
-  const suggest = Math.max(0.3, Math.ceil(reach * 100) / 100);
+  const suggest = suggestDMin(reach);
   if (!(reach < dMin - 1e-9)) return null;
   return (
     <p className="warn-note">
       The detectors reach d = {fmt(reach, 3)} Å; reflections are calculated down to d_min = {dMin} Å only.{" "}
       {suggest < dMin && (
-        <button type="button" className="ui-pill" onClick={() => onDMin(suggest)}>
+        <button type="button" className="ui-pill" title={suggest > reach ? `${LOWEST_SUGGESTED_DMIN} Å is the lowest offered here: the reflection list grows as 1/d³. Type a lower d_min in the bar if you need it.` : undefined} onClick={() => onDMin(suggest)}>
           Use d_min = {suggest} Å
         </button>
       )}

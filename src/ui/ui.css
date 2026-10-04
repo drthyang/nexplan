@@ -2068,3 +2068,13 @@ input.ui-range {
   margin-top: 0.5rem;
   font-size: var(--fs-80);
 }
+
+.plot-shade rect {
+  fill: var(--muted);
+  opacity: 0.1;
+}
+
+.plot-shade text {
+  fill: var(--muted);
+  font-size: 11px;
+}

@@ -14,7 +14,7 @@ import { Card, Segmented } from "./components.tsx";
 import { CoverageChart, type CoverageLine } from "./CoverageChart.tsx";
 import { fmt, hklText } from "./format.ts";
 import { PowderPlot } from "./PowderPlot.tsx";
-import { DMinNote, defaultPanel, InstrumentRequired, lam, usePowderGroups, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
+import { DMinNote, defaultPanel, InstrumentRequired, lam, LOWEST_SUGGESTED_DMIN, suggestDMin, usePowderGroups, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
 
 export function InstrumentPowder(props: SimPageProps) {
   const { result, exp, onExp, onDMin } = props;
@@ -58,6 +58,18 @@ export function InstrumentPowder(props: SimPageProps) {
 
   const peakSel = sel !== null ? peaks.findIndex((p) => p.d === groups[sel]!.d) : -1;
   const seen = dRangeAt(pa.twoThetaCenter, exp.lambdaMin, exp.lambdaMax);
+  // What the pattern cannot show because reflections stop at d_min: the shortest d this view records, and the shaded range.
+  const calcDMin = result.provenance.dMin;
+  const thetaMax = ((covered.at(-1)?.[1] ?? 180) * Math.PI) / 360;
+  const reach = mono ? lambda0 / (2 * Math.sin(thetaMax)) : seen.dMin;
+  const cutoff =
+    reach < calcDMin - 1e-9
+      ? mono
+        ? { from: (2 * Math.asin(Math.min(1, lambda0 / (2 * calcDMin))) * 180) / Math.PI, to: covered.at(-1)?.[1] ?? 180 }
+        : axis === "tof"
+          ? { from: bank.difc * reach, to: bank.difc * calcDMin }
+          : { from: reach, to: calcDMin }
+      : undefined;
   const pickPanel = (i: number) => onExp({ ...exp, panel: i });
 
   return (
@@ -76,8 +88,26 @@ export function InstrumentPowder(props: SimPageProps) {
         }
         actions={mono ? undefined : <Segmented label="Axis" value={axis} onChange={setAxis} options={[{ value: "tof", label: "TOF" }, { value: "d", label: "d" }]} />}
       >
+        {cutoff && (
+          <p className="warn-note">
+            {mono ? "The detectors record" : "This panel records"} d down to {fmt(reach, 3)} Å, but reflections are calculated down to d_min = {calcDMin} Å only (shaded).{" "}
+            {suggestDMin(reach) < calcDMin && (
+              <button type="button" className="ui-pill" title={suggestDMin(reach) > reach ? `${LOWEST_SUGGESTED_DMIN} Å is the lowest offered here: the reflection list grows as 1/d³. Type a lower d_min in the bar if you need it.` : undefined} onClick={() => onDMin(suggestDMin(reach))}>
+                Calculate down to {suggestDMin(reach)} Å
+              </button>
+            )}
+          </p>
+        )}
         {peaks.length ? (
-          <PowderPlot peaks={peaks} profile={profile} axis={mono ? "twoTheta" : axis} selected={peakSel >= 0 ? peakSel : null} onSelect={(i) => setSel(i === null ? null : (groupOfD.get(peaks[i]!.d) ?? null))} showSticks={false} />
+          <PowderPlot
+            peaks={peaks}
+            profile={profile}
+            axis={mono ? "twoTheta" : axis}
+            selected={peakSel >= 0 ? peakSel : null}
+            onSelect={(i) => setSel(i === null ? null : (groupOfD.get(peaks[i]!.d) ?? null))}
+            showSticks={false}
+            shade={cutoff ? { ...cutoff, label: `d < ${calcDMin} Å: not calculated` } : undefined}
+          />
         ) : (
           <p className="empty-note">{mono ? "No reflection lands on the detectors at this Ei (or above d_min)." : `No reflections fall in this panel's d range (${fmt(seen.dMin, 3)}–${fmt(seen.dMax, 2)} Å) above d_min.`}</p>
         )}
