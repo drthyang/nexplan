@@ -23,7 +23,7 @@ export function InstrumentPowder(props: SimPageProps) {
   const { instrument, panels, info, l1 } = useSnsInstrument(exp);
   const { groups, groupOfD } = usePowderGroups(result);
   const [sel, setSel] = useState<number | null>(null);
-  const [axis, setAxis] = useState<"tof" | "d">("tof");
+  const [axis, setAxis] = useState<"tof" | "d" | "q">("tof");
   useEffect(() => setSel(null), [groups]);
   const colorsCss = useMemo(() => info.map((a) => angleCss(a.twoThetaCenter)), [info]);
   const covered = useMemo(() => coveredTwoTheta(info), [info]);
@@ -90,7 +90,9 @@ export function InstrumentPowder(props: SimPageProps) {
         ? { from: (2 * Math.asin(Math.min(1, lambda0 / (2 * calcDMin))) * 180) / Math.PI, to: covered.at(-1)?.[1] ?? 180 }
         : axis === "tof"
           ? { from: difcShown * reach, to: difcShown * calcDMin }
-          : { from: reach, to: calcDMin }
+          : axis === "d"
+            ? { from: reach, to: calcDMin }
+            : { from: (2 * Math.PI) / calcDMin, to: (2 * Math.PI) / reach }
       : undefined;
   // In the bank view a panel picks the bank it belongs to (or switches to that panel when it is in none).
   const pickPanel = (i: number) => {
@@ -119,7 +121,7 @@ export function InstrumentPowder(props: SimPageProps) {
     downloadText(`${result.blockName}-${instrument.id}-${fb ? fb.spec.name.replace(/\W+/g, "") : mono ? "elastic" : panels[panel]!.name}-peaks.csv`, lines.join("\n") + "\n", "text/csv");
   };
   const exportProfile = () => {
-    const unit = mono ? "two_theta_deg" : axis === "tof" ? "tof_us" : "d_A";
+    const unit = mono ? "two_theta_deg" : axis === "tof" ? "tof_us" : axis === "d" ? "d_A" : "Q_invA";
     const lines = [provenance, `# ${what}; Gaussian peaks of FWHM dd/d${mono ? " combined with dE/2E" : ""}, area-normalised x intensity`, `${unit},intensity`];
     for (let i = 0; i < profile.x.length; i++) lines.push(`${exact(profile.x[i]!)},${exact(profile.y[i]!)}`);
     downloadText(`${result.blockName}-${instrument.id}-${fb ? fb.spec.name.replace(/\W+/g, "") : mono ? "elastic" : panels[panel]!.name}-profile.csv`, lines.join("\n") + "\n", "text/csv");
@@ -147,7 +149,7 @@ export function InstrumentPowder(props: SimPageProps) {
           mono ? undefined : (
             <>
               {focused.length > 0 && <Segmented label="Pattern of" value={exp.powderView} onChange={(v) => onExp({ ...exp, powderView: v })} options={[{ value: "bank", label: "Focused bank" }, { value: "panel", label: "One panel" }]} />}
-              <Segmented label="Axis" value={axis} onChange={setAxis} options={[{ value: "tof", label: "TOF" }, { value: "d", label: "d" }]} />
+              <Segmented label="Axis" value={axis} onChange={setAxis} options={[{ value: "tof", label: "TOF" }, { value: "d", label: "d" }, { value: "q", label: "Q" }]} />
             </>
           )
         }
@@ -170,7 +172,7 @@ export function InstrumentPowder(props: SimPageProps) {
             selected={peakSel >= 0 ? peakSel : null}
             onSelect={(i) => setSel(i === null ? null : (groupOfD.get(peaks[i]!.d) ?? null))}
             showSticks={false}
-            shade={cutoff ? { ...cutoff, label: `d < ${calcDMin} Å: not calculated` } : undefined}
+            shade={cutoff ? { ...cutoff, label: !mono && axis === "q" ? `Q > ${fmt((2 * Math.PI) / calcDMin, 3)} Å⁻¹: not calculated` : `d < ${calcDMin} Å: not calculated` } : undefined}
           />
         ) : (
           <p className="empty-note">{mono ? "No reflection lands on the detectors at this Ei (or above d_min)." : fb ? `No reflections fall in this bank's d range (${fmt(fb.bank.dMin, 3)}–${fmt(fb.bank.dMax, 2)} Å) above d_min.` : `No reflections fall in this panel's d range (${fmt(seen.dMin, 3)}–${fmt(seen.dMax, 2)} Å) above d_min.`}</p>

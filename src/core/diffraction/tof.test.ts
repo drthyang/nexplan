@@ -101,4 +101,15 @@ describe("TOF powder pattern", () => {
     const strongest = peaks.reduce((a, b) => (b.intensity / b.d > a.intensity / a.d ? b : a));
     expect(Math.abs(x[iMax]! - strongest.d) / strongest.d).toBeLessThan(5e-4);
   });
+
+  it("on the Q axis the strongest maximum sits at Q = 2π/d of the strongest peak", () => {
+    const peaks = tofPeaks(groups, bank);
+    const { x, y } = synthesizeTof(peaks, bank, { kind: "gaussian", dOverD: 0.001 }, "q");
+    let iMax = 0;
+    for (let i = 1; i < y.length; i++) if (y[i]! > y[iMax]!) iMax = i;
+    // Constant Δd/d makes a peak's width in Q proportional to Q, so its height goes as intensity·d.
+    const strongest = peaks.reduce((a, b) => (b.intensity * b.d > a.intensity * a.d ? b : a));
+    const q = (2 * Math.PI) / strongest.d;
+    expect(Math.abs(x[iMax]! - q) / q).toBeLessThan(5e-4);
+  });
 });
