@@ -14,6 +14,7 @@ import { formatSymOp } from "../core/symmetry/ops.ts";
 import { CifStructureError, readCifStructure, summarizeBlocks, type CifBlockSummary, type Diagnostic } from "../io/cif/structure.ts";
 import { CifSyntaxError } from "../io/cif/tokenizer.ts";
 
+import { sha256Hex } from "./sha256.ts";
 import { APP_VERSION } from "./version.ts";
 export { APP_VERSION };
 
@@ -148,11 +149,6 @@ export interface Provenance {
   readonly dMin: number;
   readonly conventions: string;
   readonly settings: Omit<CalcInput, "cifText">;
-}
-
-async function sha256Hex(text: string): Promise<string> {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 export async function runCalculation(input: CalcInput): Promise<CalcResult> {
