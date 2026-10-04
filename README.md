@@ -84,6 +84,8 @@ Every table is generated from pinned upstream files (URL, commit and SHA-256 in
 - [X-ray f0, Waasmaier & Kirfel 1995](docs/data-verification/XRAY_WK1995.md): 209/209 rows crosschecked.
 - [Neutron b, Sears 1992](docs/data-verification/NEUTRON_SEARS1992.md): 324 crosschecked, with 6 discrepant rows
   listed for checking against the print.
+- [Consistency with Mantid](docs/data-verification/MANTID_CONSISTENCY.md): constants, TOF ↔ d, the B matrix, Q, the
+  goniometer and the wavelength of a reflection, each transcribed from Mantid's source and tested.
 - [MATERIA's tables](docs/data-verification/MATERIA_TABLES.md): findings include a wrong In value, dropped imaginary
   parts, and transcription errors found in DABAX, cctbx/gemmi and GSAS-II.
 
