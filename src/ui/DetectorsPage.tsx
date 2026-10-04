@@ -25,6 +25,7 @@ import { ANGLE_RAMP_CSS, angleCss, angleHex, INTENSITY_RAMP_CSS, LAMBDA_RAMP_CSS
 import { Card, Segmented } from "./components.tsx";
 import { DetectorMap, type MapRing, type MapSpot } from "./DetectorMap.tsx";
 import { fmt, hklText } from "./format.ts";
+import { byHkl, byNumber, byText, SortTh, useSort } from "./sortable.tsx";
 import { flightPathRange, paintLambdaMap, paintLambdaPanels, paintMap, paintPanels, panelGrids } from "./ringImages.ts";
 import { DMinNote, defaultPanel, findHkl, GoniometerLimits, HklField, InstrumentRequired, lam, useObservations, usePowderGroups, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
 import type { GoniometerModel } from "../core/ub/goniometer.ts";
@@ -37,6 +38,8 @@ const IDENTITY: Mat3 = [
   [0, 1, 0],
   [0, 0, 1],
 ];
+
+type ObsKey = "hkl" | "d" | "lam" | "tof" | "tth" | "az" | "panel" | "col" | "row" | "f2";
 
 interface ModeProps extends SimPageProps {
   readonly instrument: InstrumentPreset;
@@ -168,14 +171,40 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
     return true;
   };
   const togglePanel = (i: number) => setPanelFilter((p) => (p === i ? null : i));
-  const rows = useMemo(
-    () =>
-      sim.obs
-        .filter((o) => panelFilter === null || o.hit.panel === panelFilter)
-        .sort((a, b) => points[b.index]!.f2 - points[a.index]!.f2)
-        .slice(0, 400),
-    [sim, panelFilter, points],
-  );
+  const [sort, onSort] = useSort<ObsKey>({ key: "f2", dir: "desc" }, { d: "desc", f2: "desc" });
+  const sortProps = { sort, onSort };
+  const shownObs = useMemo(() => sim.obs.filter((o) => panelFilter === null || o.hit.panel === panelFilter), [sim, panelFilter]);
+  const rows = useMemo(() => {
+    const { key, dir } = sort;
+    const list = shownObs.slice();
+    if (key === "hkl") list.sort((a, b) => byHkl(points[a.index]!.h, points[b.index]!.h, dir));
+    else if (key === "panel") list.sort((a, b) => byText(a.hit.name, b.hit.name, dir));
+    else {
+      const value = (o: (typeof list)[number]) => {
+        switch (key) {
+          case "d":
+            return points[o.index]!.d;
+          case "lam":
+            return o.lambda;
+          case "tof":
+            return tofOf(o);
+          case "tth":
+            return o.twoTheta;
+          case "az":
+            return o.azimuth;
+          case "col":
+            return o.hit.col;
+          case "row":
+            return o.hit.row;
+          default:
+            return points[o.index]!.f2;
+        }
+      };
+      const v = new Map(list.map((o) => [o, value(o)]));
+      list.sort((a, b) => byNumber(v.get(a)!, v.get(b)!, dir));
+    }
+    return list.slice(0, 400);
+  }, [shownObs, points, sort, tofOf]);
   const lambdaLegend = (
     <span className="lambda-legend">
       λ {lam(exp.lambdaMin)} Å <span className="lambda-ramp" style={{ background: LAMBDA_RAMP_CSS }} /> {lam(exp.lambdaMax)} Å
@@ -289,8 +318,8 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
 
       <Card
         title="Reflections on the detectors"
-        info="At the current goniometer setting. TOF is the moderator-to-detector flight time t = 252.778 µs/(m·Å) × (L1 + L2) × λ, with L2 to the pixel the spot hits: the relation Mantid uses between TOF and wavelength, with no emission-time offset."
-        meta={`${(panelFilter === null ? sim.obs.length : rows.length).toLocaleString()}${panelFilter !== null ? ` on ${panels[panelFilter]!.name}` : ""} · strongest first`}
+        info="At the current goniometer setting. TOF is the moderator-to-detector flight time t = 252.778 µs/(m·Å) × (L1 + L2) × λ, with L2 to the pixel the spot hits: the relation Mantid uses between TOF and wavelength, with no emission-time offset. Strongest first; click a column header to sort by it, again to reverse."
+        meta={`${shownObs.length.toLocaleString()}${panelFilter !== null ? ` on ${panels[panelFilter]!.name}` : ""}${shownObs.length > 400 ? " · first 400 in this order" : ""}`}
         actions={
           panelFilter !== null ? (
             <button type="button" className="ui-pill" onClick={() => setPanelFilter(null)}>
@@ -304,16 +333,36 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
           <table className="ui-table">
             <thead>
               <tr>
-                <th className="left">hkl</th>
-                <th>d (Å)</th>
-                <th>λ (Å)</th>
-                <th>TOF (µs)</th>
-                <th>2θ (°)</th>
-                <th>azimuth (°)</th>
-                <th className="left">Panel</th>
-                <th>col</th>
-                <th>row</th>
-                <th>|F|²</th>
+                <SortTh id="hkl" {...sortProps} left>
+                  hkl
+                </SortTh>
+                <SortTh id="d" {...sortProps}>
+                  d (Å)
+                </SortTh>
+                <SortTh id="lam" {...sortProps}>
+                  λ (Å)
+                </SortTh>
+                <SortTh id="tof" {...sortProps}>
+                  TOF (µs)
+                </SortTh>
+                <SortTh id="tth" {...sortProps}>
+                  2θ (°)
+                </SortTh>
+                <SortTh id="az" {...sortProps}>
+                  azimuth (°)
+                </SortTh>
+                <SortTh id="panel" {...sortProps} left>
+                  Panel
+                </SortTh>
+                <SortTh id="col" {...sortProps}>
+                  col
+                </SortTh>
+                <SortTh id="row" {...sortProps}>
+                  row
+                </SortTh>
+                <SortTh id="f2" {...sortProps}>
+                  |F|²
+                </SortTh>
               </tr>
             </thead>
             <tbody>

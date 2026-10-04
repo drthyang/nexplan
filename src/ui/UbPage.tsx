@@ -17,11 +17,14 @@ import { formatIsawUB, IsawParseError, parseIsawUB } from "../io/isaw.ts";
 import { BASIS_PRESETS, hklTransformText, linearText, parseRatio, ratioText, supercell } from "../core/ub/basis.ts";
 import { Card, cx, Segmented, UnitField } from "./components.tsx";
 import { downloadText, fmt, hklText } from "./format.ts";
+import { byHkl, byNumber, byText, SortTh, useSort } from "./sortable.tsx";
 import { presentReflections, useViewUB, type UbState } from "./ubShared.ts";
 
 export type { UbState } from "./ubShared.ts";
 
 const ReciprocalView = lazy(() => import("../views/ReciprocalView.tsx").then((m) => ({ default: m.ReciprocalView })));
+
+type BandKey = "hkl" | "d" | "lam" | "tth" | "az" | "panel" | "f2";
 
 const OLD_AXES = ["a", "b", "c"] as const;
 const NEW_AXES = ["a′", "b′", "c′"] as const;
@@ -179,6 +182,15 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
     });
     return { status, lambdas, rows, onDetectors: detectors ? rows.filter((r) => r.panel).length : undefined };
   }, [points, R, viewUB, lambdaMin, lambdaMax, detectors]);
+  const [bandSort, onBandSort] = useSort<BandKey>({ key: "f2", dir: "desc" }, { d: "desc", f2: "desc" }, (k) => k !== "panel" || !!detectors);
+  const bandRows = useMemo(() => {
+    const { key, dir } = bandSort;
+    const rows = laue.rows.slice();
+    if (key === "hkl") return rows.sort((a, b) => byHkl(points[a.i]!.h, points[b.i]!.h, dir));
+    if (key === "panel") return rows.sort((a, b) => byText(a.panel, b.panel, dir));
+    const value = (r: (typeof rows)[number]) => (key === "d" ? points[r.i]!.d : key === "lam" ? r.lambda : key === "tth" ? r.twoTheta : key === "az" ? r.azimuth : points[r.i]!.f2);
+    return rows.sort((a, b) => byNumber(value(a), value(b), dir));
+  }, [laue, points, bandSort]);
 
   const along = useMemo(() => {
     const RUB = mulMat(R, viewUB);
@@ -537,24 +549,43 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
             </p>
           )}
         </Card>
-        <Card title="Reflections in the band" meta={`${laue.rows.length.toLocaleString()} at this goniometer setting${laue.onDetectors !== undefined ? `, ${laue.onDetectors.toLocaleString()} on the detectors` : ""} · strongest first`} flush>
+        <Card
+          title="Reflections in the band"
+          meta={`${laue.rows.length.toLocaleString()} at this goniometer setting${laue.onDetectors !== undefined ? `, ${laue.onDetectors.toLocaleString()} on the detectors` : ""}${laue.rows.length > 400 ? " · first 400 in this order" : ""}`}
+          info="Strongest first. Click a column header to sort by it, again to reverse; reflections that miss every panel go last by panel."
+          flush
+        >
           <div className="ui-table-wrap" style={{ maxHeight: "22rem" }}>
             <table className="ui-table">
               <thead>
                 <tr>
-                  <th className="left">hkl</th>
-                  <th>d (Å)</th>
-                  <th>λ (Å)</th>
-                  <th>2θ (°)</th>
-                  <th>azimuth (°)</th>
-                  {detectors && <th className="left">Panel</th>}
-                  <th>|F|²</th>
+                  <SortTh id="hkl" sort={bandSort} onSort={onBandSort} left>
+                    hkl
+                  </SortTh>
+                  <SortTh id="d" sort={bandSort} onSort={onBandSort}>
+                    d (Å)
+                  </SortTh>
+                  <SortTh id="lam" sort={bandSort} onSort={onBandSort}>
+                    λ (Å)
+                  </SortTh>
+                  <SortTh id="tth" sort={bandSort} onSort={onBandSort}>
+                    2θ (°)
+                  </SortTh>
+                  <SortTh id="az" sort={bandSort} onSort={onBandSort}>
+                    azimuth (°)
+                  </SortTh>
+                  {detectors && (
+                    <SortTh id="panel" sort={bandSort} onSort={onBandSort} left>
+                      Panel
+                    </SortTh>
+                  )}
+                  <SortTh id="f2" sort={bandSort} onSort={onBandSort}>
+                    |F|²
+                  </SortTh>
                 </tr>
               </thead>
               <tbody>
-                {laue.rows
-                  .slice()
-                  .sort((a, b) => points[b.i]!.f2 - points[a.i]!.f2)
+                {bandRows
                   .slice(0, 400)
                   .map((row) => {
                     const p = points[row.i]!;

@@ -6,6 +6,7 @@ import type { Diagnostic } from "../io/cif/structure.ts";
 import { Card, Chip, InfoBadge, Segmented, TierChip, UnitField } from "./components.tsx";
 import { downloadText, exact, fmt, hklText, withSu } from "./format.ts";
 import { ScatteringPowerCard } from "./ScatteringPowerCard.tsx";
+import { byHkl, byNumber, SortTh, useSort } from "./sortable.tsx";
 import { PowderPlot } from "./PowderPlot.tsx";
 import { toMateriaModel } from "./materiaModel.ts";
 
@@ -201,6 +202,9 @@ interface FamilyRow {
   readonly members: number[];
 }
 
+type ReflectionKey = "hkl" | "m" | "d" | "tth" | "tof" | "lam" | "q" | "f" | "phase" | "f2" | "class";
+type PeakKey = "hkl" | "d" | "tth" | "tof" | "lam" | "q" | "f2" | "lp" | "i";
+
 export function ReflectionsPage({ result, wavelength, radiation, positions = true }: { result: CalcSuccess; wavelength: number; radiation: "xray" | "neutron"; /** Show 2θ (or TOF, λ) for the generic beam; off for a white-beam instrument, where they vary with orientation. */ positions?: boolean }) {
   const r = result.reflections;
   const bank = result.bank;
@@ -209,6 +213,9 @@ export function ReflectionsPage({ result, wavelength, radiation, positions = tru
   const [open, setOpen] = useState<ReadonlySet<number>>(new Set());
   const [limit, setLimit] = useState(400);
   useEffect(() => setOpen(new Set()), [result]);
+  const [sort, onSort] = useSort<ReflectionKey>({ key: "d", dir: "desc" }, { m: "desc", d: "desc", f: "desc", f2: "desc" }, (k) =>
+    k === "m" ? fold : k === "tth" ? positions && !bank : k === "tof" || k === "lam" ? positions && !!bank : true,
+  );
 
   /** Families in order of first appearance (reflections are sorted by decreasing d). */
   const families = useMemo<FamilyRow[]>(() => {
@@ -254,6 +261,51 @@ export function ReflectionsPage({ result, wavelength, radiation, positions = tru
     return <td>{x <= 1 ? fmt((2 * Math.asin(x) * 180) / Math.PI, 3) : "—"}</td>;
   };
 
+  /** What a column shows for reflection i (m = family size, 1 for a single reflection), as a sort value; NaN where it shows "—". */
+  const sortValue = (key: ReflectionKey, i: number, m: number): number => {
+    const d = r.d[i]!;
+    const absent = r.cls[i] !== 0;
+    switch (key) {
+      case "m":
+        return m;
+      case "tth":
+        return wavelength / (2 * d) <= 1 ? Math.asin(wavelength / (2 * d)) : NaN;
+      case "tof":
+        return tofFromD(bank!, d);
+      case "lam":
+        return 2 * d * sinT;
+      case "q":
+        return 1 / d;
+      case "f":
+        return absent ? 0 : r.f2[i]!;
+      case "f2":
+        return absent ? 0 : m * r.f2[i]!;
+      case "phase":
+        return absent || m > 1 ? NaN : Number(phaseDeg(r.re[i]!, r.im[i]!));
+      case "class":
+        return r.cls[i]!;
+      default:
+        return d;
+    }
+  };
+  /** Rows in the chosen order: each row's sort value is computed once, then a stable sort. */
+  const ordered = <T,>(items: readonly T[], value: (t: T) => number, hkl: (t: T) => number[]): T[] =>
+    items
+      .map((t) => ({ t, v: sort.key === "hkl" ? 0 : value(t), h: sort.key === "hkl" ? hkl(t) : [] }))
+      .sort((a, b) => (sort.key === "hkl" ? byHkl(a.h, b.h, sort.dir) : byNumber(a.v, b.v, sort.dir)))
+      .map((x) => x.t);
+  const memberHkl = (i: number) => [r.h[i]!, r.k[i]!, r.l[i]!];
+  const sortedFamilies = useMemo(
+    () => (fold ? ordered(families, (f) => sortValue(sort.key, f.members[0]!, f.members.length), (f) => [r.familyRep[3 * f.id]!, r.familyRep[3 * f.id + 1]!, r.familyRep[3 * f.id + 2]!]) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sortValue reads only r, bank, sinT and wavelength
+    [families, fold, sort.key, sort.dir, r, bank, wavelength],
+  );
+  const sortedMembers = useMemo(
+    () => (fold ? [] : ordered(families.flatMap((f) => f.members), (i) => sortValue(sort.key, i, 1), memberHkl)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- as above
+    [families, fold, sort.key, sort.dir, r, bank, wavelength],
+  );
+
   const exportCsv = () => {
     const pos = bank ? "tof_us,lambda_A" : "two_theta_deg";
     const lines = [`# NEXPLAN reflections; ${result.provenance.radiation}; ${bank ? `TOF bank 2theta=${bank.twoThetaDeg} DIFC=${bank.difc}` : `lambda=${wavelength} A`}; input sha256 ${result.provenance.inputSha256}`, `h,k,l,family_h,family_k,family_l,d_A,${pos},Q_invA,ReF_${unit},ImF_${unit},F2_${unit}2,class`];
@@ -298,7 +350,7 @@ export function ReflectionsPage({ result, wavelength, radiation, positions = tru
 
   const rows: ReactNode[] = [];
   if (fold) {
-    for (const f of families.slice(0, limit)) {
+    for (const f of sortedFamilies.slice(0, limit)) {
       const i = f.members[0]!;
       const absent = r.cls[i] !== 0;
       const isOpen = open.has(f.id);
@@ -318,24 +370,19 @@ export function ReflectionsPage({ result, wavelength, radiation, positions = tru
           <td className="left dim">{CLASS_NAME[r.cls[i]!]}</td>
         </tr>,
       );
-      if (isOpen) for (const m of f.members) rows.push(memberRow(m, true));
+      if (isOpen) for (const m of ordered(f.members, (i) => sortValue(sort.key, i, 1), memberHkl)) rows.push(memberRow(m, true));
     }
   } else {
-    let n = 0;
-    outer: for (const f of families) {
-      for (const m of f.members) {
-        if (n++ >= limit) break outer;
-        rows.push(memberRow(m, false));
-      }
-    }
+    for (const m of sortedMembers.slice(0, limit)) rows.push(memberRow(m, false));
   }
   const total = fold ? families.length : visibleCount;
+  const sortProps = { sort, onSort };
 
   return (
     <Card
       title="Reflections"
       meta={`${r.h.length.toLocaleString()} signed hkl in ${(r.familyRep.length / 3).toLocaleString()} families · ${counts[0]!.toLocaleString()} present · ${counts[1]!.toLocaleString()} systematic · ${counts[2]!.toLocaleString()} accidental`}
-      info={`Every signed hkl with d ≥ d_min. Folded rows group symmetry-equivalent reflections (point-group orbits${result.friedelMerged ? ", Friedel mates included because all amplitudes are real" : "; Friedel mates are separate because amplitudes are complex"}); |F| is the same within a family and the phases differ. "Systematic" absences follow from the space-group operations; "accidental" means |F| is numerically zero although symmetry allows it.${bank ? " Greyed TOF and λ values lie outside the bank's wavelength band." : ""}`}
+      info={`Every signed hkl with d ≥ d_min. Folded rows group symmetry-equivalent reflections (point-group orbits${result.friedelMerged ? ", Friedel mates included because all amplitudes are real" : "; Friedel mates are separate because amplitudes are complex"}); |F| is the same within a family and the phases differ. "Systematic" absences follow from the space-group operations; "accidental" means |F| is numerically zero although symmetry allows it.${bank ? " Greyed TOF and λ values lie outside the bank's wavelength band." : ""} Click a column header to sort by it, again to reverse; open families list their members in the same order, and "—" cells go last.`}
       actions={
         <>
           <label className="ui-control" style={{ fontSize: "var(--fs-80)" }}>
@@ -355,22 +402,46 @@ export function ReflectionsPage({ result, wavelength, radiation, positions = tru
         <table className="ui-table">
           <thead>
             <tr>
-              <th className="left">{fold ? "Family" : "h k l"}</th>
-              {fold && <th>m</th>}
-              <th>d (Å)</th>
+              <SortTh id="hkl" {...sortProps} left>
+                {fold ? "Family" : "h k l"}
+              </SortTh>
+              {fold && (
+                <SortTh id="m" {...sortProps}>
+                  m
+                </SortTh>
+              )}
+              <SortTh id="d" {...sortProps}>
+                d (Å)
+              </SortTh>
               {!positions ? null : bank ? (
                 <>
-                  <th>TOF (µs)</th>
-                  <th>λ (Å)</th>
+                  <SortTh id="tof" {...sortProps}>
+                    TOF (µs)
+                  </SortTh>
+                  <SortTh id="lam" {...sortProps}>
+                    λ (Å)
+                  </SortTh>
                 </>
               ) : (
-                <th>2θ (°)</th>
+                <SortTh id="tth" {...sortProps}>
+                  2θ (°)
+                </SortTh>
               )}
-              <th>Q (Å⁻¹)</th>
-              <th>|F| ({unit})</th>
-              <th>φ (°)</th>
-              <th>{fold ? "m·|F|²" : "|F|²"}</th>
-              <th className="left">Class</th>
+              <SortTh id="q" {...sortProps}>
+                Q (Å⁻¹)
+              </SortTh>
+              <SortTh id="f" {...sortProps}>
+                |F| ({unit})
+              </SortTh>
+              <SortTh id="phase" {...sortProps}>
+                φ (°)
+              </SortTh>
+              <SortTh id="f2" {...sortProps}>
+                {fold ? "m·|F|²" : "|F|²"}
+              </SortTh>
+              <SortTh id="class" {...sortProps} left>
+                Class
+              </SortTh>
             </tr>
           </thead>
           <tbody>{rows}</tbody>
@@ -421,6 +492,34 @@ export function PowderPage({
     if (selected !== null) rowRefs.current.get(selected)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [selected]);
   const iMax = Math.max(1e-300, ...peaks.map((p) => p.intensity));
+  const [sort, onSort] = useSort<PeakKey>({ key: "d", dir: "desc" }, { d: "desc", f2: "desc", i: "desc" }, (k) => (k === "tth" ? !tof : k === "tof" || k === "lam" ? tof : true));
+  const sortProps = { sort, onSort };
+  /** Peak indices in the chosen order; the index stays the peak's identity for selection and the plot. */
+  const peakOrder = useMemo(() => {
+    const value = (i: number): number => {
+      const p = peaks[i]!;
+      switch (sort.key) {
+        case "tth":
+          return p.twoTheta ?? NaN;
+        case "tof":
+          return p.tof ?? NaN;
+        case "lam":
+          return p.lambda;
+        case "q":
+          return p.q;
+        case "f2":
+          return p.sumF2;
+        case "lp":
+          return p.lp;
+        case "i":
+          return p.intensity;
+        default:
+          return p.d;
+      }
+    };
+    const idx = peaks.map((_, i) => i);
+    return sort.key === "hkl" ? idx.sort((a, b) => byHkl(peaks[a]!.families[0]!.hkl, peaks[b]!.families[0]!.hkl, sort.dir)) : idx.sort((a, b) => byNumber(value(a), value(b), sort.dir));
+  }, [peaks, sort.key, sort.dir]);
   const fwhmUnit = axis === "twoTheta" ? "°" : axis === "d" ? "Å" : "Å⁻¹";
   const settings = result.provenance.settings;
   const axisOptions = tof
@@ -506,7 +605,8 @@ export function PowderPage({
       </Card>
       <Card
         title="Peaks"
-        meta={`${peaks.length} · ordered by decreasing d`}
+        meta={`${peaks.length}`}
+        info="Click a column header to sort by it; click again to reverse."
         actions={
           <>
             <button type="button" className="ui-pill" onClick={exportPeaks}>
@@ -523,24 +623,42 @@ export function PowderPage({
           <table className="ui-table">
             <thead>
               <tr>
-                <th className="left">hkl × multiplicity</th>
-                <th>d (Å)</th>
+                <SortTh id="hkl" {...sortProps} left>
+                  hkl × multiplicity
+                </SortTh>
+                <SortTh id="d" {...sortProps}>
+                  d (Å)
+                </SortTh>
                 {tof ? (
                   <>
-                    <th>TOF (µs)</th>
-                    <th>λ (Å)</th>
+                    <SortTh id="tof" {...sortProps}>
+                      TOF (µs)
+                    </SortTh>
+                    <SortTh id="lam" {...sortProps}>
+                      λ (Å)
+                    </SortTh>
                   </>
                 ) : (
-                  <th>2θ (°)</th>
+                  <SortTh id="tth" {...sortProps}>
+                    2θ (°)
+                  </SortTh>
                 )}
-                <th>Q (Å⁻¹)</th>
-                <th>Σ|F|²</th>
-                <th>{tof ? "sinθ·d⁴" : "LP"}</th>
-                <th>I (rel.)</th>
+                <SortTh id="q" {...sortProps}>
+                  Q (Å⁻¹)
+                </SortTh>
+                <SortTh id="f2" {...sortProps}>
+                  Σ|F|²
+                </SortTh>
+                <SortTh id="lp" {...sortProps}>
+                  {tof ? "sinθ·d⁴" : "LP"}
+                </SortTh>
+                <SortTh id="i" {...sortProps}>
+                  I (rel.)
+                </SortTh>
               </tr>
             </thead>
             <tbody>
-              {peaks.map((p, i) => (
+              {peakOrder.map((i) => [i, peaks[i]!] as const).map(([i, p]) => (
                 <tr
                   key={i}
                   ref={(el) => {

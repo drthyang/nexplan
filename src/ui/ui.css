@@ -1179,6 +1179,47 @@ details.ui-fold > .ui-fold__body {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
+/* Sortable headers: the whole label is the button; the arrow keeps its width so
+   columns never shift, shows faintly on hover (always on touch screens) and in
+   the accent colour on the sorted column. */
+.th-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.th-sort:hover,
+.th-sort.is-active {
+  color: var(--text-strong);
+}
+
+.th-sort:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.th-sort__arrow {
+  font-size: 0.8em;
+  opacity: 0;
+}
+
+.th-sort:hover .th-sort__arrow {
+  opacity: 0.45;
+}
+
+.th-sort.is-active .th-sort__arrow {
+  color: var(--accent);
+  opacity: 1;
+}
+
 .plot-hint,
 .empty-note {
   margin: 0.5rem 0 0;
@@ -2119,6 +2160,16 @@ input.ui-range {
   .chip-x {
     padding: 0.25rem 0.45rem;
     margin-right: -0.3rem;
+  }
+
+  /* No hover to discover them: show every sort arrow faintly, and give headers a taller target. */
+  .th-sort__arrow {
+    opacity: 0.35;
+  }
+
+  .th-sort {
+    padding: 0.45rem 0;
+    margin: -0.45rem 0;
   }
 }
 
