@@ -102,14 +102,14 @@ export const SNS_CATALOG: readonly CatalogEntry[] = [
     source: `ORNL NOMAD page (0.1–3 Å, 19.5 m).`,
     banks: {
       source:
-        "The six physical banks, the IDF assemblies Group1–Group6 (Mantid NOMAD_Definition.xml @ 67c2f43; CreateGroupingWorkspace GroupDetectorsBy='Group'; mantid utils/nomad/diagnostics.py: PANEL_COUNT = 6). Effective L2 = 2 m and 2θ = 15, 31, 67, 122, 154, 7° from the NOMAD characterisation example in Mantid's PDLoadCharacterizations docs (NOMAD_11_22_11.prm, L1 19.5 m) and the bank labels of NOMAD autoreduction; current characterisation files may differ. Calibrations can also exclude packs, which is not modelled.",
+        "Groups: the six physical banks, the IDF assemblies Group1–Group6 (Mantid NOMAD_Definition.xml @ 67c2f43; CreateGroupingWorkspace GroupDetectorsBy='Group'; mantid utils/nomad/diagnostics.py: PANEL_COUNT = 6). Geometry: ORNL's NOMAD GSAS-II instrument file for 2023A (NOMAD_2023A_five_banks_Shifter_Si_640e_instrument_file.instprm, sha256 78b6a260…ee3d3, from neutrons.ornl.gov/nomad/users): banks 2–5 at 2θ 31, 65, 120.4, 150.1° with flight paths 21.18, 20.66, 20.61, 20.29 m (L1 19.5 m) and their calibrated DIFC; bank 1's DIFC 1439.6 (its angle and path in the file are placeholders, so 15° is nominal); bank 6 is not in the file (left out for poor resolution), so its 7° and L2 are nominal and geometric. Resolution: the measured Δd/d (FWHM) per bank in ORNL's NOMAD overview (neutrons.ornl.gov/sites/default/files/NOMAD-Overview.pdf, slide 5, 2014: 0.029, 0.019, 0.0137, 0.0069, 0.0036, 0.039), consistent with the 2023A GSAS-II profiles. Calibrations can also exclude packs, which is not modelled.",
       list: [
-        { name: "Bank 1", panels: range(1, 14), twoThetaDeg: 15, l2: 2 },
-        { name: "Bank 2", panels: range(15, 37), twoThetaDeg: 31, l2: 2 },
-        { name: "Bank 3", panels: range(38, 51), twoThetaDeg: 67, l2: 2 },
-        { name: "Bank 4", panels: range(52, 63), twoThetaDeg: 122, l2: 2 },
-        { name: "Bank 5", panels: range(64, 81), twoThetaDeg: 154, l2: 2 },
-        { name: "Bank 6", panels: range(82, 99), twoThetaDeg: 7, l2: 2 },
+        { name: "Bank 1", panels: range(1, 14), twoThetaDeg: 15, difc: 1439.612, dOverD: 0.029 },
+        { name: "Bank 2", panels: range(15, 37), twoThetaDeg: 31, l2: 1.68, difc: 2851.105, dOverD: 0.019 },
+        { name: "Bank 3", panels: range(38, 51), twoThetaDeg: 65, l2: 1.16, difc: 5612.385, dOverD: 0.0137 },
+        { name: "Bank 4", panels: range(52, 63), twoThetaDeg: 120.4, l2: 1.11, difc: 9068.553, dOverD: 0.0069 },
+        { name: "Bank 5", panels: range(64, 81), twoThetaDeg: 150.1, l2: 0.79, difc: 9912.083, dOverD: 0.0036 },
+        { name: "Bank 6", panels: range(82, 99), twoThetaDeg: 7, dOverD: 0.039 },
       ],
     },
   },
@@ -125,11 +125,20 @@ export const SNS_CATALOG: readonly CatalogEntry[] = [
     source: `ORNL POWGEN page (60 m). Band: one of the standard chopper frames (Frame in the bar).`,
     frames: {
       source:
-        "POWGEN characterisation file PG3_char_2020_01_04_PAC_limit_1.4MW.txt (Mantid test data, sha256 d5beede50de88c73bd1bebcb336017acb836cb26560aeb1c9a3100f598e8c1bc): frequency, centre wavelength, wavelength band and the d range kept by the reduction. PG3_char_2020_05_06-HighRes-PAC_1.4_MW.txt lists the same 60 Hz centres (0.800, 1.500, 2.665, 4.797 Å).",
+        "POWGEN characterisation file PG3_char_2020_01_04_PAC_limit_1.4MW.txt (Mantid test data, sha256 d5beede50de88c73bd1bebcb336017acb836cb26560aeb1c9a3100f598e8c1bc): frequency, centre wavelength, wavelength band and the d range kept by the reduction. PG3_char_2020_05_06-HighRes-PAC_1.4_MW.txt lists the same 60 Hz centres (0.800, 1.500, 2.665, 4.797 Å). Peak profiles for the 0.8, 1.5 and 2.665 Å frames: ORNL's POWGEN GSAS-II instrument files for 2026B, high-resolution guide, 60 Hz (GSAS-II_2026B.zip from neutrons.ornl.gov/powgen/users); they agree with the measured LaB6 resolution of Huq et al., J. Appl. Cryst. 52, 1189 (2019), Fig. 6.",
       list: [
-        { hz: 60, centre: 0.8, lambdaMin: 0.267, lambdaMax: 1.333, dMin: 0.16, dMax: 7.9 },
-        { hz: 60, centre: 1.5, lambdaMin: 0.967, lambdaMax: 2.033, dMin: 0.507, dMax: 12.2 },
-        { hz: 60, centre: 2.665, lambdaMin: 2.132, lambdaMax: 3.198, dMin: 1.098, dMax: 20.3 },
+        {
+          hz: 60, centre: 0.8, lambdaMin: 0.267, lambdaMax: 1.333, dMin: 0.16, dMax: 7.9,
+          profile: { file: "2026B_HighRes_60HzB1_CWL0p8.instprm (sha256 39e1985e…ae283)", alpha: 0.1708533072582208, beta0: 0.0075824082466843055, beta1: -0.00516577901541761, betaq: 0.05760976330830213, sig0: -50.93185615655676, sig1: -548.1087291088847, sig2: 472.73578172569887, sigq: 329.4080753435242 },
+        },
+        {
+          hz: 60, centre: 1.5, lambdaMin: 0.967, lambdaMax: 2.033, dMin: 0.507, dMax: 12.2,
+          profile: { file: "2026B_HighRes_60HzB2_CWL1p5.instprm (sha256 24ac6a4d…6322d)", alpha: 0.173, beta0: 0.011013, beta1: -0.020539, betaq: 0.110563, sig0: -86.861, sig1: -470.926, sig2: 204.536, sigq: 400.696 },
+        },
+        {
+          hz: 60, centre: 2.665, lambdaMin: 2.132, lambdaMax: 3.198, dMin: 1.098, dMax: 20.3,
+          profile: { file: "2026B_HighRes_60HzB3_CWL2p665.instprm (sha256 e1a27beb…16264)", alpha: 0.185, beta0: 0.005383, beta1: -0.118589, betaq: 0.211904, sig0: 301.715, sig1: -74.184, sig2: 73.021, sigq: -252.239 },
+        },
         { hz: 60, centre: 4.797, lambdaMin: 4.264, lambdaMax: 5.33, dMin: 2.14, dMax: 34.8 },
         { hz: 60, centre: 0.533, lambdaMin: 0.05, lambdaMax: 1.066, dMin: 0.05, dMax: 7.5 },
         { hz: 20, centre: 1.599, lambdaMin: 0.05, lambdaMax: 3.198, dMin: 0.1, dMax: 20 },

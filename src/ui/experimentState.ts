@@ -28,6 +28,8 @@ export interface ExperimentState {
   /** Powder on an instrument with focused banks: the bank shown (null = the one nearest 2θ = 90°), or a single panel instead. */
   readonly bank: number | null;
   readonly powderView: "bank" | "panel";
+  /** Powder peak widths: the instrument's published resolution where there is one, or the Δd/d of the bar. */
+  readonly peakWidth: "instrument" | "fixed";
   /** Relative resolution Δd/d (FWHM) of simulated peaks and rings. */
   readonly dOverD: number;
   /** Instruments that take both (chopper spectrometers): which sample is simulated. */
@@ -50,6 +52,7 @@ export const DEFAULT_EXPERIMENT: ExperimentState = {
   panel: null,
   bank: null,
   powderView: "bank",
+  peakWidth: "instrument",
   dOverD: 0.005,
   sample: "single-crystal",
   eiMeV: 60,

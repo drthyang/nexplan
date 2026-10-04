@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { cwPeaks } from "../core/diffraction/powder.ts";
-import { synthesizeTof, tofFromWavelength, tofPeaks, type TofBank } from "../core/diffraction/tof.ts";
+import { backToBackFwhm, backToBackValidFrom, synthesizeTof, tofFromWavelength, tofPeaks, type TofBank, type TofShape } from "../core/diffraction/tof.ts";
 import { focusedBank, focusedPeaks, focusedTofBank } from "../core/instrument/focus.ts";
 import { elasticPattern } from "../core/instrument/powderRings.ts";
 import { coveredTwoTheta, dRangeAt, panelDifc } from "../core/instrument/simulate.ts";
@@ -42,7 +42,7 @@ export function InstrumentPowder(props: SimPageProps) {
       specs.map((spec) => {
         const idx = spec.panels.map((n) => panels.findIndex((q) => q.name === n)).filter((i) => i >= 0);
         const missing = spec.panels.filter((n) => !panels.some((q) => q.name === n));
-        return { spec, idx, missing, bank: focusedBank(spec.name, idx.map((i) => panels[i]!), l1, exp.lambdaMin, exp.lambdaMax, { ...(spec.twoThetaDeg !== undefined ? { twoThetaDeg: spec.twoThetaDeg } : {}), ...(spec.l2 !== undefined ? { l2: spec.l2 } : {}) }) };
+        return { spec, idx, missing, bank: focusedBank(spec.name, idx.map((i) => panels[i]!), l1, exp.lambdaMin, exp.lambdaMax, { ...(spec.twoThetaDeg !== undefined ? { twoThetaDeg: spec.twoThetaDeg } : {}), ...(spec.l2 !== undefined ? { l2: spec.l2 } : {}), ...(spec.difc !== undefined ? { difc: spec.difc } : {}) }) };
       }).filter((f) => f.idx.length > 0),
     [specs, panels, l1, exp.lambdaMin, exp.lambdaMax],
   );
@@ -63,9 +63,33 @@ export function InstrumentPowder(props: SimPageProps) {
             : tofPeaks(groups, bank),
     [mono, groups, bank, lambda0, covered, fb, exp.lambdaMin, exp.lambdaMax],
   );
+  // Peak widths from the instrument where published: NOMAD's measured Δd/d per bank, or the GSAS-II
+  // profile of POWGEN's chosen frame (d-dependent, back-to-back exponentials ⊗ Gaussian).
+  const frame = instrument?.frames?.list.find((f) => Math.abs(f.lambdaMin - exp.lambdaMin) < 1e-6 && Math.abs(f.lambdaMax - exp.lambdaMax) < 1e-6);
+  const instrumentWidth = useMemo((): { shape: TofShape; label: string; detail: string } | undefined => {
+    if (!fb) return undefined;
+    if (fb.spec.dOverD !== undefined)
+      return { shape: { kind: "gaussian", dOverD: fb.spec.dOverD }, label: `Δd/d ${Number((100 * fb.spec.dOverD).toPrecision(3))} % (measured)`, detail: `Gaussian peaks of the bank's measured FWHM Δd/d = ${fb.spec.dOverD}` };
+    const pr = frame?.profile;
+    if (!pr) return undefined;
+    const base = { kind: "backToBack" as const, alpha1: pr.alpha, beta0: pr.beta0, beta1: pr.beta1, betaq: pr.betaq, sig0: pr.sig0, sig1: pr.sig1, sig2: pr.sig2, sigq: pr.sigq };
+    const validFrom = backToBackValidFrom(base);
+    const shape = { ...base, ...(validFrom !== undefined ? { validFrom } : {}) };
+    const rel = (d: number) => backToBackFwhm(shape, d) / (fb.bank.difc * d);
+    const d1 = Math.max(validFrom ?? 0, 0.5);
+    return {
+      shape,
+      label: `Δd/d ${fmt(100 * rel(d1), 2)} % at ${d1} Å to ${fmt(100 * rel(4), 2)} % at 4 Å (${frame!.centre} Å frame)`,
+      detail: `GSAS-II TOF profile of the ${frame!.centre} Å frame, ${pr.file}${validFrom !== undefined ? `; below ${fmt(validFrom, 3)} Å the fitted parameters are unphysical and those at ${fmt(validFrom, 3)} Å are used` : ""}`,
+    };
+  }, [fb, frame]);
+  const widthFromInstrument = exp.peakWidth === "instrument" && instrumentWidth !== undefined;
+  const tofShape: TofShape = widthFromInstrument ? instrumentWidth!.shape : { kind: "gaussian", dOverD: exp.dOverD };
+  const widthLabel = widthFromInstrument ? instrumentWidth!.label : `Δd/d ${Number((100 * exp.dOverD).toPrecision(6))} %`;
   const profile = useMemo(
-    () => (!bank || !drawBank ? { x: new Float64Array(), y: new Float64Array() } : mono ? elasticPattern(peaks, Math.hypot(exp.dOverD, exp.eRes / 2), covered) : synthesizeTof(peaks, drawBank, { kind: "gaussian", dOverD: exp.dOverD }, axis)),
-    [mono, peaks, bank, drawBank, exp.dOverD, exp.eRes, covered, axis],
+    () => (!bank || !drawBank ? { x: new Float64Array(), y: new Float64Array() } : mono ? elasticPattern(peaks, Math.hypot(exp.dOverD, exp.eRes / 2), covered) : synthesizeTof(peaks, drawBank, tofShape, axis)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [mono, peaks, bank, drawBank, exp.dOverD, exp.eRes, covered, axis, widthFromInstrument, instrumentWidth],
   );
   const lines = useMemo<CoverageLine[]>(() => groups.map((x) => ({ d: x.d, weight: x.sumF2, label: x.families.map((f) => `(${hklText(f.hkl)})`).join(" + ") })), [groups]);
   const panelOrder = useMemo(() => info.map((a, i) => ({ a, i })).sort((x, y) => x.a.twoThetaCenter - y.a.twoThetaCenter), [info]);
@@ -122,7 +146,8 @@ export function InstrumentPowder(props: SimPageProps) {
   };
   const exportProfile = () => {
     const unit = mono ? "two_theta_deg" : axis === "tof" ? "tof_us" : axis === "d" ? "d_A" : "Q_invA";
-    const lines = [provenance, `# ${what}; Gaussian peaks of FWHM dd/d${mono ? " combined with dE/2E" : ""}, area-normalised x intensity`, `${unit},intensity`];
+    const shapeText = mono ? `Gaussian peaks of FWHM dd/d combined with dE/2E` : widthFromInstrument ? instrumentWidth!.detail : `Gaussian peaks of FWHM dd/d = ${exp.dOverD}`;
+    const lines = [provenance, `# ${what}; ${shapeText}; area-normalised x intensity`, `${unit},intensity`];
     for (let i = 0; i < profile.x.length; i++) lines.push(`${exact(profile.x[i]!)},${exact(profile.y[i]!)}`);
     downloadText(`${result.blockName}-${instrument.id}-${fb ? fb.spec.name.replace(/\W+/g, "") : mono ? "elastic" : panels[panel]!.name}-profile.csv`, lines.join("\n") + "\n", "text/csv");
   };
@@ -135,20 +160,25 @@ export function InstrumentPowder(props: SimPageProps) {
           mono
             ? `λ ${fmt(lambda0, 4)} Å · 2θ ${fmt(covered[0]?.[0] ?? 0, 1)}–${fmt(covered.at(-1)?.[1] ?? 0, 1)}° · zero in detector gaps`
             : fb
-              ? `focused, ${fb.idx.length} panels · 2θ ${fmt(fb.bank.twoThetaDeg, 1)}° (${fmt(fb.bank.twoThetaMin, 0)}–${fmt(fb.bank.twoThetaMax, 0)}°) · DIFC ${fmt(fb.bank.difc, 1)} µs/Å · Δd/d ${Number((100 * exp.dOverD).toPrecision(6))} %`
+              ? `focused, ${fb.idx.length} panels · 2θ ${fmt(fb.bank.twoThetaDeg, 1)}° (${fmt(fb.bank.twoThetaMin, 0)}–${fmt(fb.bank.twoThetaMax, 0)}°) · DIFC ${fmt(fb.bank.difc, 1)} µs/Å · ${widthLabel}`
               : `2θ ${fmt(pa.twoThetaCenter, 2)}° · DIFC ${fmt(bank.difc, 1)} µs/Å · Δd/d ${Number((100 * exp.dOverD).toPrecision(6))} %`
         }
         info={
           mono
             ? "Elastic intensity per unit solid angle against 2θ over all panels, as a chopper spectrometer records it at the elastic line: I = Σ|F|²/(sin²θ cosθ) (CW powder Lorentz factor, no polarization for neutrons), each peak a Gaussian of FWHM 2·tanθ·√((Δd/d)² + (ΔE/2E)²); zero where no panel covers 2θ. Click a peak to select it in the coverage chart."
             : fb
-              ? "Neutron TOF pattern of a focused bank, as the data are reduced: the bank's panels are split into cells, each recording d from λmin/(2 sinθ) to λmax/(2 sinθ) at its own angle; after focusing and vanadium normalisation a line at d has I = Σ|F|²·d⁴·⟨sinθ⟩(d), the mean over the cells that record d weighted by their solid angles. Drawn on the bank's DIFC = 252.778·(L1 + L2)·2 sinθ µs/Å with the effective 2θ and L2 (no DIFA, ZERO; real banks are calibrated), Gaussian peaks of constant Δd/d."
+              ? "Neutron TOF pattern of a focused bank, as the data are reduced: the bank's panels are split into cells, each recording d from λmin/(2 sinθ) to λmax/(2 sinθ) at its own angle; after focusing and vanadium normalisation a line at d has I = Σ|F|²·d⁴·⟨sinθ⟩(d), the mean over the cells that record d weighted by their solid angles. Drawn on the bank's calibrated DIFC where ORNL publishes one, else DIFC = 252.778·(L1 + L2)·2 sinθ µs/Å with the effective 2θ and L2 (no DIFA, ZERO). Peak widths: the instrument's published resolution (NOMAD's measured Δd/d per bank; POWGEN's GSAS-II profile for the chosen frame, which widens with d), or the Δd/d of the bar."
               : "Neutron TOF pattern of the selected panel treated as one bank at its centre angle: DIFC = 252.778·(L1 + L2)·2 sinθ µs/Å (no DIFA, ZERO; real banks are calibrated). I = Σ|F|²·sinθ·d⁴ (GSAS-II TOF Lorentz factor, incident spectrum normalised out), Gaussian peaks of constant Δd/d on a logarithmic TOF grid. Pick another panel below, in the coverage strip, or on the Detectors page."
         }
         actions={
           mono ? undefined : (
             <>
               {focused.length > 0 && <Segmented label="Pattern of" value={exp.powderView} onChange={(v) => onExp({ ...exp, powderView: v })} options={[{ value: "bank", label: "Focused bank" }, { value: "panel", label: "One panel" }]} />}
+              {instrumentWidth && (
+                <span title={`Peak widths: ${instrumentWidth.detail}, or the Δd/d set in the bar`}>
+                  <Segmented label="Peak widths" value={exp.peakWidth} onChange={(v) => onExp({ ...exp, peakWidth: v })} options={[{ value: "instrument", label: "Instrument" }, { value: "fixed", label: "Δd/d" }]} />
+                </span>
+              )}
               <Segmented label="Axis" value={axis} onChange={setAxis} options={[{ value: "tof", label: "TOF" }, { value: "d", label: "d" }, { value: "q", label: "Q" }]} />
             </>
           )

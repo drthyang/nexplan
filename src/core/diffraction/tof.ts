@@ -38,7 +38,23 @@ export interface TofBank {
 
 export type TofShape =
   | { readonly kind: "gaussian"; /** Relative resolution Δd/d (FWHM). */ readonly dOverD: number }
-  | { readonly kind: "backToBack"; readonly alpha1: number; readonly beta0: number; readonly beta1: number; readonly sig0: number; readonly sig1: number; readonly sig2: number };
+  | {
+      readonly kind: "backToBack";
+      readonly alpha1: number;
+      readonly beta0: number;
+      readonly beta1: number;
+      readonly sig0: number;
+      readonly sig1: number;
+      readonly sig2: number;
+      /** GSAS-II's extra terms: σ² += sig-q·d, β += beta-q/d² (GSASIIpwd.py getFWHM; 0 when absent). */
+      readonly sigq?: number;
+      readonly betaq?: number;
+      /**
+       * Fitted parameters can give σ² ≤ 0 or β ≤ 0 at short d, where GSAS-II's formula has no
+       * value; below validFrom (Å) the shape uses the parameters at validFrom (backToBackValidFrom).
+       */
+      readonly validFrom?: number;
+    };
 
 /**
  * Flight time (µs) from the moderator to a detector for wavelength λ over a total path L = L1 + L2:
@@ -98,12 +114,38 @@ export function tofShapeAt(shape: TofShape, peak: PowderPeak, delta: number): nu
   return tofBackToBack(delta, backToBackAt(shape, peak.d));
 }
 
-export function backToBackAt(shape: Extract<TofShape, { kind: "backToBack" }>, d: number) {
+/**
+ * GSAS(-II) TOF profile parameters at d: α = alpha/d, β = beta-0 + beta-1/d⁴ + beta-q/d²,
+ * σ² = sig-0 + sig-1·d² + sig-2·d⁴ + sig-q·d (µs²), as in GSASIIpwd.py getFWHM.
+ */
+export function backToBackAt(shape: Extract<TofShape, { kind: "backToBack" }>, dIn: number) {
+  const d = Math.max(dIn, shape.validFrom ?? 0);
   return {
     alpha: shape.alpha1 / d,
-    beta: shape.beta0 + shape.beta1 / d ** 4,
-    sigma: Math.sqrt(Math.max(1e-12, shape.sig0 + shape.sig1 * d * d + shape.sig2 * d ** 4)),
+    beta: shape.beta0 + shape.beta1 / d ** 4 + (shape.betaq ?? 0) / d ** 2,
+    sigma: Math.sqrt(Math.max(1e-12, shape.sig0 + shape.sig1 * d * d + shape.sig2 * d ** 4 + (shape.sigq ?? 0) * d)),
   };
+}
+
+/**
+ * The shortest d (Å) from which the fitted parameters stay physical (σ² > 0, α > 0, β > 0)
+ * up to dMax, on a 0.005 Å grid; undefined if they never are.
+ */
+export function backToBackValidFrom(shape: Extract<TofShape, { kind: "backToBack" }>, dMax = 50): number | undefined {
+  let from: number | undefined;
+  for (let d = dMax; d >= 0.02; d -= 0.005) {
+    const s2 = shape.sig0 + shape.sig1 * d * d + shape.sig2 * d ** 4 + (shape.sigq ?? 0) * d;
+    const beta = shape.beta0 + shape.beta1 / d ** 4 + (shape.betaq ?? 0) / d ** 2;
+    if (s2 > 0 && beta > 0 && shape.alpha1 > 0) from = d;
+    else break;
+  }
+  return from;
+}
+
+/** GSAS-II's FWHM (µs) of the back-to-back profile at d with no Lorentzian: 2.35482·σ + ln2·(α + β)/(αβ). */
+export function backToBackFwhm(shape: Extract<TofShape, { kind: "backToBack" }>, d: number): number {
+  const p = backToBackAt(shape, d);
+  return 2.35482 * p.sigma + (Math.LN2 * (p.alpha + p.beta)) / (p.alpha * p.beta);
 }
 
 /** Half-width (µs) beyond which a peak's shape is negligible (< 1e-7 of its area). */

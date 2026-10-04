@@ -65,6 +65,8 @@ export interface ChopperFrame {
   readonly lambdaMax: number;
   readonly dMin: number;
   readonly dMax: number;
+  /** Peak profile of the focused data for this frame: GSAS-II TOF parameters (no Lorentzian), with their file. */
+  readonly profile?: { readonly file: string; readonly alpha: number; readonly beta0: number; readonly beta1: number; readonly betaq: number; readonly sig0: number; readonly sig1: number; readonly sig2: number; readonly sigq: number };
 }
 
 export interface FocusedBankSpec {
@@ -72,6 +74,10 @@ export interface FocusedBankSpec {
   readonly panels: readonly string[];
   readonly twoThetaDeg?: number;
   readonly l2?: number;
+  /** Calibrated DIFC (µs/Å) of the focused bank, when published; otherwise from L1 + L2 and 2θ. */
+  readonly difc?: number;
+  /** Measured resolution Δd/d (FWHM) of the bank. */
+  readonly dOverD?: number;
 }
 
 export const OMEGA: GoniometerAxis = { name: "ω", direction: [0, 1, 0], sense: 1, min: -180, max: 360 };

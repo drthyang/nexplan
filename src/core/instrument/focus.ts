@@ -17,7 +17,8 @@
  *
  * Lines are drawn on the focused bank's TOF axis, t = DIFC_f·d with
  * DIFC_f = (m_n/h)·(L1 + L2_f)·2 sin θ_f, where the effective L2_f and 2θ_f are
- * given (as Mantid's focusing assigns them) or else the Ω-weighted means.
+ * given (as Mantid's focusing assigns them) or else the Ω-weighted means, unless
+ * a calibrated DIFC is given.
  * Every line has the same relative width Δd/d; real focused banks are calibrated
  * and their resolution depends on the group.
  */
@@ -76,7 +77,7 @@ export function focusedBank(
   l1: number,
   lambdaMin: number,
   lambdaMax: number,
-  opts: { readonly twoThetaDeg?: number; readonly l2?: number; readonly nx?: number; readonly ny?: number } = {},
+  opts: { readonly twoThetaDeg?: number; readonly l2?: number; readonly difc?: number; readonly nx?: number; readonly ny?: number } = {},
 ): FocusedBank {
   const cells = focusCells(panels, opts.nx, opts.ny);
   let omega = 0;
@@ -98,7 +99,8 @@ export function focusedBank(
   }
   const twoThetaDeg = opts.twoThetaDeg ?? tt / omega;
   const L2 = opts.l2 ?? l2 / omega;
-  return { name, cells, twoThetaDeg, l2: L2, difc: difcFromGeometry(l1 + L2, twoThetaDeg), dMin: lambdaMin / (2 * sMax), dMax: lambdaMax / (2 * sMin), twoThetaMin: ttMin, twoThetaMax: ttMax, omega };
+  // A published (calibrated) DIFC takes precedence over the one from the effective geometry.
+  return { name, cells, twoThetaDeg, l2: L2, difc: opts.difc ?? difcFromGeometry(l1 + L2, twoThetaDeg), dMin: lambdaMin / (2 * sMax), dMax: lambdaMax / (2 * sMin), twoThetaMin: ttMin, twoThetaMax: ttMax, omega };
 }
 
 /** ⟨sin θ⟩(d) over the cells that record d, weighted by solid angle; NaN when none does. */

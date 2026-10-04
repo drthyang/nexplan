@@ -354,8 +354,8 @@ export function App() {
                         <span className="sym">λ</span> band
                         <InfoBadge>The wavelength band reaching the sample (white beam, time of flight). Defaults from the instrument; POWGEN's follows the chopper frame, chosen beside it (from POWGEN's characterisation file).</InfoBadge>
                       </span>
-                      <UnitField label="Minimum wavelength" value={Number(experiment.lambdaMin.toPrecision(4))} unit="Å" min={0.05} width="5.5ch" onCommit={(v) => setExperiment({ ...experiment, lambdaMin: Math.min(v, experiment.lambdaMax - 0.01) })} />
-                      <UnitField label="Maximum wavelength" value={Number(experiment.lambdaMax.toPrecision(4))} unit="Å" min={0.06} width="5.5ch" onCommit={(v) => setExperiment({ ...experiment, lambdaMax: Math.max(v, experiment.lambdaMin + 0.01) })} />
+                      <UnitField label="Minimum wavelength" value={Number(experiment.lambdaMin.toPrecision(4))} unit="Å" min={0.05} width="6ch" onCommit={(v) => setExperiment({ ...experiment, lambdaMin: Math.min(v, experiment.lambdaMax - 0.01) })} />
+                      <UnitField label="Maximum wavelength" value={Number(experiment.lambdaMax.toPrecision(4))} unit="Å" min={0.06} width="6ch" onCommit={(v) => setExperiment({ ...experiment, lambdaMax: Math.max(v, experiment.lambdaMin + 0.01) })} />
                       {entry.frames && (
                         <select
                           className="ui-select"

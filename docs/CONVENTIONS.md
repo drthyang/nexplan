@@ -276,10 +276,21 @@ neutron scattering); code in
     I = Σ|F|²·d⁴·⟨sin θ⟩(d), the mean of sin θ over the cells that record d, weighted by Ω. This is what summing the
     sample and dividing by the summed vanadium gives, since vanadium scatters isotropically. A one-cell bank reduces to
     the single-panel formula above (tested).
-  - Lines are drawn at t = DIFC_f·d. The bank's DIFC uses the effective L2 and 2θ that Mantid's focusing assigns from
-    the characterisation file: NOMAD 2 m and 15, 31, 67, 122, 154, 7° (the 2011 example in Mantid's
-    PDLoadCharacterizations docs, and the autoreduction bank labels); POWGEN 3.18 m and 90° with L1 = 60 m, so
-    DIFC = 22585.7 µs/Å, as the 2024–25 autoreduction's FinalDIFC 22585.8. Current characterisation files may differ.
+  - Lines are drawn at t = DIFC_f·d. NOMAD: the calibrated DIFC of ORNL's 2023A GSAS-II instrument file for banks 1–5
+    (banks 2–5 at 2θ 31, 65, 120.4, 150.1° and flight paths 21.18, 20.66, 20.61, 20.29 m; bank 1's angle and path there
+    are placeholders, so 15° is nominal); bank 6 (7°) is not in that file and uses the geometric DIFC. POWGEN: L2 3.18 m
+    and 90° with L1 = 60 m (characterisation file), DIFC = 22585.7 µs/Å, as the 2024–25 autoreduction's FinalDIFC
+    22585.8.
+  - **Peak widths** from the instrument where ORNL publishes them (or the bar's Δd/d, by choice):
+    - NOMAD: the measured Δd/d (FWHM) per bank of ORNL's NOMAD overview (slide 5, 2014): 2.9, 1.9, 1.37, 0.69, 0.36,
+      3.9 % for banks 1–6, as constant-width Gaussians. The 2023A GSAS-II profiles give similar widths (within
+      10–25 %) but include Lorentzian terms that the app's TOF profile does not.
+    - POWGEN: ORNL's 2026B GSAS-II instrument files (high-resolution guide, 60 Hz) for the 0.8, 1.5 and 2.665 Å
+      frames, as GSAS-II's TOF profile: back-to-back exponentials, α = alpha/d and β = beta-0 + beta-1/d⁴ +
+      beta-q/d², convolved with a Gaussian of σ² = sig-0 + sig-1·d² + sig-2·d⁴ + sig-q·d (GSASIIpwd.py getFWHM; the
+      files have no Lorentzian). Δd/d grows with d: for the 0.8 Å frame 0.22 % at 1 Å and about 1 % at 4 Å, within
+      25 % of the LaB6 resolution measured by Huq et al., J. Appl. Cryst. 52, 1189 (2019), Fig. 6 (tested). Below the
+      shortest d where the fitted σ² and β are positive, the parameters at that d are used.
   - Tested: every NOMAD pack in exactly one bank, the solid-angle-weighted 2θ of each NOMAD bank within 6° of its
     nominal angle, and POWGEN's DIFC.
 - **Chopper spectrometers** (ARCS, SEQUOIA, CNCS), elastic scattering at the incident energy:
