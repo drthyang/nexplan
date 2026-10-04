@@ -51,6 +51,20 @@ export interface InstrumentPreset {
    * assigns after focusing when known (otherwise the solid-angle-weighted means).
    */
   readonly banks?: { readonly source: string; readonly list: readonly FocusedBankSpec[] };
+  /**
+   * Standard chopper settings of a white-beam instrument (POWGEN's frames): the
+   * band each passes and the d range the reduction keeps (characterisation file).
+   */
+  readonly frames?: { readonly source: string; readonly list: readonly ChopperFrame[] };
+}
+
+export interface ChopperFrame {
+  readonly hz: number;
+  readonly centre: number;
+  readonly lambdaMin: number;
+  readonly lambdaMax: number;
+  readonly dMin: number;
+  readonly dMax: number;
 }
 
 export interface FocusedBankSpec {

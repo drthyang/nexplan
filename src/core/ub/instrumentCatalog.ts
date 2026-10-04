@@ -118,10 +118,24 @@ export const SNS_CATALOG: readonly CatalogEntry[] = [
     modes: ["powder"],
     label: "POWGEN",
     goniometer: { id: "powgen", label: "POWGEN", axes: [], note: "Powder diffractometer: the sample is fixed." },
-    lambdaMin: 0.54,
-    lambdaMax: 1.59,
+    // Default band: the 60 Hz frame centred at 1.5 Å (see frames below).
+    lambdaMin: 0.967,
+    lambdaMax: 2.033,
     geometry: "POWGEN",
-    source: `ORNL POWGEN page (60 m). Band: one 60 Hz frame around 1.066 Å; set it to your chopper setting.`,
+    source: `ORNL POWGEN page (60 m). Band: one of the standard chopper frames (Frame in the bar).`,
+    frames: {
+      source:
+        "POWGEN characterisation file PG3_char_2020_01_04_PAC_limit_1.4MW.txt (Mantid test data, sha256 d5beede50de88c73bd1bebcb336017acb836cb26560aeb1c9a3100f598e8c1bc): frequency, centre wavelength, wavelength band and the d range kept by the reduction. PG3_char_2020_05_06-HighRes-PAC_1.4_MW.txt lists the same 60 Hz centres (0.800, 1.500, 2.665, 4.797 Å).",
+      list: [
+        { hz: 60, centre: 0.8, lambdaMin: 0.267, lambdaMax: 1.333, dMin: 0.16, dMax: 7.9 },
+        { hz: 60, centre: 1.5, lambdaMin: 0.967, lambdaMax: 2.033, dMin: 0.507, dMax: 12.2 },
+        { hz: 60, centre: 2.665, lambdaMin: 2.132, lambdaMax: 3.198, dMin: 1.098, dMax: 20.3 },
+        { hz: 60, centre: 4.797, lambdaMin: 4.264, lambdaMax: 5.33, dMin: 2.14, dMax: 34.8 },
+        { hz: 60, centre: 0.533, lambdaMin: 0.05, lambdaMax: 1.066, dMin: 0.05, dMax: 7.5 },
+        { hz: 20, centre: 1.599, lambdaMin: 0.05, lambdaMax: 3.198, dMin: 0.1, dMax: 20 },
+        { hz: 10, centre: 3.198, lambdaMin: 0.05, lambdaMax: 6.396, dMin: 0.1, dMax: 40 },
+      ],
+    },
     banks: {
       source:
         "All 40 panels focused to one bank, as POWGEN data are reduced: every detector is group 1 in the Mantid test calibration PG3_PAC_HR_d46168_2020_05_06.h5 (43120 pixels, the 2018 IDF's 40 panels), and autoreduction uses an all-detector grouping (pg3_group_all.xml). Effective L2 = 3.18 m and 2θ = 90° with L1 = 60 m from PG3_char_2020_01_04_PAC_limit_1.4MW.txt (Mantid test data), giving DIFC 22585.7 µs/Å, as the 2024–25 autoreduction's FinalDIFC 22585.8.",

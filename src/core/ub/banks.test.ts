@@ -34,4 +34,24 @@ describe("focused banks in the catalog (NOMAD, POWGEN)", () => {
     const bank = focusedBank(spec.name, pg.detectors!, pg.l1!, 0.54, 1.59, { twoThetaDeg: spec.twoThetaDeg!, l2: spec.l2! });
     expect(bank.difc).toBeCloseTo(22585.7, 0);
   });
+
+  it("POWGEN frames: the four standard 60 Hz frames are 1.066 Å wide and centred; the default band is the 1.5 Å frame", () => {
+    const pg = ins("powgen");
+    const frames = pg.frames!.list;
+    for (const c of [0.8, 1.5, 2.665, 4.797]) {
+      const f = frames.find((x) => x.hz === 60 && x.centre === c)!;
+      expect(f.lambdaMax - f.lambdaMin).toBeCloseTo(1.066, 6);
+      expect((f.lambdaMin + f.lambdaMax) / 2).toBeCloseTo(c, 6);
+    }
+    expect([pg.lambdaMin, pg.lambdaMax]).toEqual([0.967, 2.033]);
+  });
+
+  it("POWGEN frames: the d range the reduction keeps lies within what the detectors record for that band (IDF 2θ span)", () => {
+    const pg = ins("powgen");
+    for (const f of pg.frames!.list) {
+      const bank = focusedBank("all", pg.detectors!, pg.l1!, f.lambdaMin, f.lambdaMax);
+      expect(f.dMin).toBeGreaterThanOrEqual(bank.dMin * 0.99);
+      expect(f.dMax).toBeLessThanOrEqual(bank.dMax * 1.01);
+    }
+  });
 });

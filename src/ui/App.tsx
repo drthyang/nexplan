@@ -352,10 +352,30 @@ export function App() {
                     <span className="ui-control">
                       <span className="ui-control-label">
                         <span className="sym">λ</span> band
-                        <InfoBadge>The wavelength band reaching the sample (white beam, time of flight). Defaults from the instrument; POWGEN's depends on the chopper setting.</InfoBadge>
+                        <InfoBadge>The wavelength band reaching the sample (white beam, time of flight). Defaults from the instrument; POWGEN's follows the chopper frame, chosen beside it (from POWGEN's characterisation file).</InfoBadge>
                       </span>
-                      <UnitField label="Minimum wavelength" value={Number(experiment.lambdaMin.toPrecision(4))} unit="Å" min={0.05} width="5ch" onCommit={(v) => setExperiment({ ...experiment, lambdaMin: Math.min(v, experiment.lambdaMax - 0.01) })} />
-                      <UnitField label="Maximum wavelength" value={Number(experiment.lambdaMax.toPrecision(4))} unit="Å" min={0.06} width="5ch" onCommit={(v) => setExperiment({ ...experiment, lambdaMax: Math.max(v, experiment.lambdaMin + 0.01) })} />
+                      <UnitField label="Minimum wavelength" value={Number(experiment.lambdaMin.toPrecision(4))} unit="Å" min={0.05} width="5.5ch" onCommit={(v) => setExperiment({ ...experiment, lambdaMin: Math.min(v, experiment.lambdaMax - 0.01) })} />
+                      <UnitField label="Maximum wavelength" value={Number(experiment.lambdaMax.toPrecision(4))} unit="Å" min={0.06} width="5.5ch" onCommit={(v) => setExperiment({ ...experiment, lambdaMax: Math.max(v, experiment.lambdaMin + 0.01) })} />
+                      {entry.frames && (
+                        <select
+                          className="ui-select"
+                          aria-label="Chopper frame"
+                          title={entry.frames.source}
+                          value={String(entry.frames.list.findIndex((f) => Math.abs(f.lambdaMin - experiment.lambdaMin) < 1e-6 && Math.abs(f.lambdaMax - experiment.lambdaMax) < 1e-6))}
+                          onChange={(e) => {
+                            const f = entry.frames!.list[Number(e.target.value)];
+                            if (f) setExperiment({ ...experiment, lambdaMin: f.lambdaMin, lambdaMax: f.lambdaMax });
+                          }}
+                        >
+                          <option value="-1">Custom band</option>
+                          {/* Centre wavelength, chopper frequency, and the d range the reduction keeps (characterisation file). */}
+                          {entry.frames.list.map((f, i) => (
+                            <option key={i} value={i}>
+                              {f.centre} Å · {f.hz} Hz · d {f.dMin}–{f.dMax} Å
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </span>
                   )}
                   <span className="ui-control">
