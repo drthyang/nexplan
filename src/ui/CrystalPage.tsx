@@ -25,7 +25,8 @@ import { Card, cx, Segmented, UnitField } from "./components.tsx";
 import { downloadText, fmt, hklText } from "./format.ts";
 import { ScanChart } from "./ScanChart.tsx";
 import { SliceChart, type SlicePoint } from "./SliceChart.tsx";
-import { DMinNote, findHkl, GoniometerLimits, HklField, InstrumentRequired, lam, useObservations, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
+import { DMinNote, findHkl, GoniometerLimits, HklField, HklNotice, InstrumentRequired, lam, useHklPick, useObservations, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
+import { PRESENT_CAP } from "./ubShared.ts";
 import { GoniometerControls } from "./UbPage.tsx";
 
 const I3: Mat3 = [
@@ -106,6 +107,18 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
   const [layer, setLayer] = useState(0);
   const [showCoverage, setShowCoverage] = useState(true);
   const plane = PLANES[planeId];
+  const hkl = useHklPick(
+    result,
+    (t) => findHkl(points, t),
+    (i) => {
+      setSelected(i);
+      // Show its plane: the layer of the plane in view that contains it.
+      setLayer(points[i]!.h[plane.fixed]!);
+    },
+    selected,
+    onDMin,
+    PRESENT_CAP,
+  );
   const geom = useMemo(() => {
     const a1 = mulVec(viewUB, plane.u1);
     const a2 = mulVec(viewUB, plane.u2);
@@ -652,20 +665,10 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
             <div className="form-rows">
               <div className="form-row">
                 <span className="ui-control-label">hkl</span>
-                <HklField
-                  value={sel ? sel.h : null}
-                  onPick={(t) => {
-                    const i = findHkl(points, t);
-                    if (i === undefined) return false;
-                    setSelected(i);
-                    const p = points[i]!;
-                    // Show its plane: the layer of the plane in view that contains it.
-                    setLayer(p.h[plane.fixed]!);
-                    return true;
-                  }}
-                />
+                <HklField {...hkl.field(sel ? sel.h : null)} />
               </div>
             </div>
+            <HklNotice miss={hkl.miss} onDMin={hkl.fixDMin} />
             {sel ? (
               <>
                 <dl className="ui-stats ui-stats--three" style={{ marginTop: "0.6rem" }}>

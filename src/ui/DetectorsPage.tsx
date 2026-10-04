@@ -27,7 +27,8 @@ import { DetectorMap, type MapRing, type MapSpot } from "./DetectorMap.tsx";
 import { fmt, hklText } from "./format.ts";
 import { byHkl, byNumber, byText, SortTh, useSort } from "./sortable.tsx";
 import { flightPathRange, paintLambdaMap, paintLambdaPanels, paintMap, paintPanels, panelGrids } from "./ringImages.ts";
-import { DMinNote, defaultPanel, findHkl, GoniometerLimits, HklField, InstrumentRequired, lam, useObservations, usePowderGroups, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
+import { DMinNote, defaultPanel, findHkl, GoniometerLimits, HklField, HklNotice, InstrumentRequired, lam, useHklPick, useObservations, usePowderGroups, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
+import { PRESENT_CAP } from "./ubShared.ts";
 import type { GoniometerModel } from "../core/ub/goniometer.ts";
 import { GoniometerControls } from "./UbPage.tsx";
 
@@ -154,6 +155,8 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
     return { reached, fraction: inWindow ? cells / inWindow : 0 };
   }, [covOn, coverage, grids, panels, covWindow]);
   const sweep = free.map(({ ax }) => `${ax.name} ${ax.min}–${Math.min(ax.max, ax.min + 360)}°`).join(", ");
+  // Reaching no panel leaves the map blank: said as a warning, not in the dim status line.
+  const covNone = !covBusy && coverage !== null && covStats !== undefined && covStats.reached === 0;
   const covStatus =
     selected === null
       ? "Select a reflection (type hkl, or pick it in the table, map or 3D view) to see everywhere it can be recorded."
@@ -162,14 +165,11 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
         : coverage && "error" in coverage
           ? coverage.error
           : coverage && covStats
-            ? `(${hklText(points[selected]!.h)}) d ${fmt(points[selected]!.d, 4)} Å${coverage.targets > 1 ? ` + ${coverage.targets - 1} equivalents` : ""}: reachable on ${covStats.reached} of ${panels.length} panels, ${fmt(100 * covStats.fraction, 1)} % of the detector pixels inside its Bragg window 2θ ${fmt(covWindow?.min ?? NaN, 1)}–${fmt(covWindow?.max ?? NaN, 1)}° · solved exactly for ${sweep}`
+            ? covNone
+              ? `(${hklText(points[selected]!.h)}) d ${fmt(points[selected]!.d, 4)} Å${coverage.targets > 1 ? ` + ${coverage.targets - 1} equivalents` : ""} reaches no detector pixel for ${sweep} in the λ band ${lam(exp.lambdaMin)}–${lam(exp.lambdaMax)} Å, so nothing is drawn.`
+              : `(${hklText(points[selected]!.h)}) d ${fmt(points[selected]!.d, 4)} Å${coverage.targets > 1 ? ` + ${coverage.targets - 1} equivalents` : ""}: reachable on ${covStats.reached} of ${panels.length} panels, ${fmt(100 * covStats.fraction, 1)} % of the detector pixels inside its Bragg window 2θ ${fmt(covWindow?.min ?? NaN, 1)}–${fmt(covWindow?.max ?? NaN, 1)}° · solved exactly for ${sweep}`
             : "";
-  const pickHkl = (text: string) => {
-    const i = findHkl(points, text);
-    if (i === undefined) return false;
-    setSelected(i);
-    return true;
-  };
+  const hkl = useHklPick(result, (text) => findHkl(points, text), setSelected, selected, onDMin, PRESENT_CAP);
   const togglePanel = (i: number) => setPanelFilter((p) => (p === i ? null : i));
   const [sort, onSort] = useSort<ObsKey>({ key: "f2", dir: "desc" }, { d: "desc", f2: "desc" });
   const sortProps = { sort, onSort };
@@ -242,17 +242,29 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
             />
           </Suspense>
           <div className="ring-controls">
-            <Segmented label="Show on the detectors" value={show} onChange={setShow} options={[{ value: "spots", label: "Spots now" }, { value: "coverage", label: "Coverage" }]} />
+            <Segmented
+              label="Show on the detectors"
+              value={show}
+              onChange={(v) => {
+                setShow(v);
+                hkl.clear();
+              }}
+              options={[
+                { value: "spots", label: "Spots now" },
+                { value: "coverage", label: "Coverage" },
+              ]}
+            />
             {show === "coverage" && (
               <>
-                <HklField value={sel ? sel.h : null} onPick={pickHkl} />
+                <HklField {...hkl.field(sel ? sel.h : null)} />
                 <label className="ui-check">
                   <input type="checkbox" checked={equivalents} onChange={(e) => setEquivalents(e.target.checked)} /> Equivalents
                 </label>
               </>
             )}
           </div>
-          {show === "coverage" && <p className="selection-note dim-note">{covStatus}</p>}
+          {show === "coverage" && <HklNotice miss={hkl.miss} onDMin={hkl.fixDMin} />}
+          {show === "coverage" && <p className={covNone ? "selection-note warn-note" : "selection-note dim-note"}>{covStatus}</p>}
           {sel && show !== "coverage" && (
             <p className="selection-note">
               <b>({hklText(sel.h)})</b> d {fmt(sel.d, 4)} Å · |F|² {sel.f2.toPrecision(4)} ·{" "}
@@ -460,17 +472,16 @@ function PowderDetectors({ result, theme, exp, onExp, onDMin, instrument, panels
   const traces = useMemo(() => (ringsOn && g ? ringTrace(panels, l1, slice, g.d, 720).map((t) => t.points) : undefined), [ringsOn, g, panels, l1, slice]);
   const pickPanel = (i: number) => onExp({ ...exp, panel: i });
   const label = (x: (typeof groups)[number]) => x.families.map((f) => `(${hklText(f.hkl)})`).join(" + ");
-  const pickHkl = (text: string) => {
+  const findRing = (text: string) => {
     const v = text.trim().split(/[\s,]+/).map(Number);
-    if (v.length !== 3 || v.some((x) => !Number.isInteger(x))) return false;
+    if (v.length !== 3 || v.some((x) => !Number.isInteger(x))) return undefined;
     // Any hkl: its spacing from the cell picks the d-group (equivalents and overlaps share one ring).
     const q = mulVec(cellUB, v as unknown as Vec3);
     const d = 1 / Math.hypot(...q);
     const i = groups.findIndex((gr) => Math.abs(gr.d - d) <= 1e-6 * d);
-    if (i < 0) return false;
-    setSel(i);
-    return true;
+    return i < 0 ? undefined : i;
   };
+  const hkl = useHklPick(result, findRing, setSel, sel, onDMin);
   const seen = dRangeAt(pa.twoThetaCenter, exp.lambdaMin, exp.lambdaMax);
   const difc = panelDifc(panels[panel]!, l1);
   const angleLegend = (
@@ -553,7 +564,7 @@ function PowderDetectors({ result, theme, exp, onExp, onDMin, instrument, panels
               </span>
             )}
             <span className="ring-controls__end">
-              <HklField value={g ? g.families[0]!.hkl : null} onPick={pickHkl} />
+              <HklField {...hkl.field(g ? g.families[0]!.hkl : null)} />
               {g && (
                 <button type="button" className="ui-pill" onClick={() => setSel(null)}>
                   Clear
@@ -561,6 +572,7 @@ function PowderDetectors({ result, theme, exp, onExp, onDMin, instrument, panels
               )}
             </span>
           </div>
+          <HklNotice miss={hkl.miss} onDMin={hkl.fixDMin} />
           {g && range && (
             <p className="selection-note">
               <b>{label(g)}</b> d {fmt(g.d, 5)} Å · diffracts at 2θ {fmt(range.min, 1)}–{fmt(range.max, 1)}° for λ {lam(exp.lambdaMin)}–{lam(exp.lambdaMax)} Å · seen by {seeing!.size} of {panels.length} panels

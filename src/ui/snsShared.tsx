@@ -17,7 +17,7 @@ import type { GoniometerModel } from "../core/ub/goniometer.ts";
 import { UnitField } from "./components.tsx";
 import { chooseInstrument, limitedGoniometer, sampleKind, withLimits, type ExperimentState } from "./experimentState.ts";
 import { fmt } from "./format.ts";
-import { presentReflections, useViewUB, type UbState } from "./ubShared.ts";
+import { hklMiss, presentAfter, presentReflections, useViewUB, type HklMiss, type UbState } from "./ubShared.ts";
 
 export interface SimPageProps {
   readonly result: CalcSuccess;
@@ -125,24 +125,96 @@ export function InstrumentRequired({ exp, onExp, need, title, children }: { exp:
   );
 }
 
-/** h k l entry: commits on Enter or blur; flags indices that are not among the simulated reflections. */
-export function HklField({ value, onPick }: { value: readonly number[] | null; onPick: (text: string) => boolean }) {
+/**
+ * h k l entry: commits on Enter or blur. `invalid` is the reason the last entry was not selected
+ * (useHklPick), which outlines the field; the page shows the same reason in an HklNotice.
+ */
+export function HklField({ value, onPick, invalid }: { value: readonly number[] | null; onPick: (text: string) => void; invalid?: string | undefined }) {
   const shown = value ? value.join(" ") : "";
   const [text, setText] = useState(shown);
-  const [bad, setBad] = useState(false);
-  useEffect(() => {
-    setText(shown);
-    setBad(false);
-  }, [shown]);
+  useEffect(() => setText(shown), [shown]);
   const commit = () => {
     if (text.trim() === "" || text === shown) return;
-    setBad(!onPick(text));
+    onPick(text);
   };
   return (
-    <span className={`ui-unit-field${bad ? " is-invalid" : ""}`} title={bad ? "Not a present reflection with d ≥ d_min (or not among the 6000 strongest)" : "Miller indices, e.g. 4 0 0"}>
-      <input className="ui-unit-field__input" aria-label="Reflection h k l" placeholder="h k l" value={text} style={{ width: "7ch" }} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === "Enter" && commit()} />
+    <span className={`ui-unit-field${invalid ? " is-invalid" : ""}`} title={invalid ?? "Miller indices, e.g. 4 0 0"}>
+      <input className="ui-unit-field__input" aria-label="Reflection h k l" aria-invalid={invalid ? true : undefined} placeholder="h k l" value={text} style={{ width: `${Math.max(7, text.length + 1)}ch` }} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === "Enter" && commit()} />
       <span className="ui-unit-field__unit">hkl</span>
     </span>
+  );
+}
+
+/**
+ * Selection by typed hkl that says why a miss is a miss (HklNotice): the field's red outline alone
+ * says nothing, and touch screens show no tooltips. Any other selection or a new calculation clears it.
+ * After "Calculate down to …" (fixDMin) the hkl waits for the new calculation, then is selected or explained.
+ */
+export function useHklPick(result: CalcSuccess, find: (text: string) => number | undefined, select: (i: number) => void, current: number | null, onDMin: (dMin: number) => void, cap?: number) {
+  const [miss, setMiss] = useState<HklMiss | null>(null);
+  const [waiting, setWaiting] = useState<string | null>(null);
+  const pick = (text: string) => {
+    const i = find(text);
+    if (i === undefined) {
+      setMiss(hklMiss(result, text, cap));
+      return false;
+    }
+    setMiss(null);
+    select(i);
+    return true;
+  };
+  // A selection made elsewhere (table, map, 3D view) ends the notice; the reset to none that follows a
+  // new calculation does not, or it would wipe the retried hkl's notice set in the same commit.
+  useEffect(() => {
+    if (current !== null) setMiss(null);
+  }, [current]);
+  useEffect(() => {
+    setMiss(null);
+    if (waiting === null) return;
+    setWaiting(null);
+    pick(waiting);
+    // Only a new calculation retries the waiting hkl.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
+  const fixDMin = (dMin: number) => {
+    if (miss?.hkl) setWaiting(miss.hkl.join(" "));
+    onDMin(dMin);
+  };
+  const clear = () => {
+    setMiss(null);
+    setWaiting(null);
+  };
+  /** HklField props: while a notice stands, the field keeps the hkl it is about. */
+  const field = (selected: readonly number[] | null) => ({ value: miss?.hkl ?? selected, onPick: pick, invalid: miss?.message });
+  return { pick, miss, fixDMin, clear, field };
+}
+
+/** Warn of the simulated cap once the 1/d³ estimate (presentAfter, which runs low) comes within 20 % of it. */
+const CAP_MARGIN = 0.8;
+
+/** The reason a typed hkl is not shown, with the d_min that would bring it in when that is all it takes. */
+export function HklNotice({ miss, onDMin }: { miss: HklMiss | null; onDMin: (dMin: number) => void }) {
+  if (!miss) return null;
+  const { d, cap } = miss;
+  const to = d !== undefined ? suggestDMin(d) : undefined;
+  // Past the cap, a weak reflection may still be left out after recalculating.
+  const after = to !== undefined ? presentAfter(miss, to) : undefined;
+  return (
+    <p className="warn-note" role="alert">
+      {miss.message}{" "}
+      {d !== undefined &&
+        to !== undefined &&
+        (to <= d ? (
+          <>
+            <button type="button" className="ui-pill" onClick={() => onDMin(to)}>
+              Calculate down to {to} Å
+            </button>
+            {cap !== undefined && after !== undefined && after > CAP_MARGIN * cap && ` Only the ${cap.toLocaleString("en-US")} strongest reflections are simulated and the list grows as 1/d³, so a weak one may still be left out.`}
+          </>
+        ) : (
+          `${LOWEST_SUGGESTED_DMIN} Å is the lowest offered here (the list grows as 1/d³): type a d_min of at most ${fmt(Math.floor(d * 1000) / 1000, 3)} Å in the bar to include it.`
+        ))}
+    </p>
   );
 }
 

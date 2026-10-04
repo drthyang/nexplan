@@ -1661,8 +1661,10 @@ input.ui-range {
   pointer-events: none;
 }
 
+/* Wraps on narrow cards: a phone's card would otherwise clip the last control (Equivalents beside a wide hkl). */
 .ring-controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.6rem;
   margin-top: 0.6rem;
