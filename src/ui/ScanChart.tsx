@@ -3,27 +3,20 @@
  * axis) and the cumulative fraction of symmetry families seen (line, left
  * axis). Click a step to move the goniometer there.
  */
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import type { ScanStep } from "../core/instrument/simulate.ts";
 import { fmt } from "./format.ts";
+import { typeScale, useMeasuredWidth } from "./useMeasuredWidth.ts";
 
 export function ScanChart({ steps, axisIndex, axisName, current, onPick }: { steps: readonly ScanStep[]; axisIndex: number; axisName: string; current: number; onPick: (angle: number) => void }) {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(560);
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => setWidth(Math.max(300, Math.round(e!.contentRect.width))));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  const { ref: wrapRef, el: wrapEl, width } = useMeasuredWidth(560, 300);
   const [hover, setHover] = useState<number | null>(null);
 
   const xs = steps.map((s) => s.angles[axisIndex]!);
   const x0 = xs[0] ?? 0;
   const x1 = xs.length > 1 ? xs[xs.length - 1]! : x0 + 1;
   const nMax = Math.max(1, ...steps.map((s) => s.observed));
-  const height = Math.max(240, Math.min(340, width * 0.5));
+  const height = Math.max(240, Math.min(340 * typeScale(), width * 0.5));
   const m = { l: 48, r: 46, t: 12, b: 44 };
   const W = width - m.l - m.r;
   const H = height - m.t - m.b;
@@ -55,12 +48,12 @@ export function ScanChart({ steps, axisIndex, axisName, current, onPick }: { ste
         role="img"
         aria-label={`Rotation scan over ${axisName}: reflections per step and cumulative completeness`}
         onPointerMove={(e) => {
-          const r = wrapRef.current!.getBoundingClientRect();
+          const r = wrapEl!.getBoundingClientRect();
           setHover(steps.length ? nearest(e.clientX - r.left) : null);
         }}
         onPointerLeave={() => setHover(null)}
         onClick={(e) => {
-          const r = wrapRef.current!.getBoundingClientRect();
+          const r = wrapEl!.getBoundingClientRect();
           if (steps.length) onPick(xs[nearest(e.clientX - r.left)]!);
         }}
       >

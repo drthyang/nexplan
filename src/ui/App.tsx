@@ -227,7 +227,7 @@ export function App() {
   return (
     <div className="app-container" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
       <main className="main-content">
-        <header className="app-header">
+        <header className={cx("app-header", file && "has-structure")}>
           <div className="header-primary">
             <div className="brand-row">
               <div className="brand-mark" aria-hidden="true">
@@ -279,7 +279,7 @@ export function App() {
               </select>
             </label>
             <select
-              className="ui-select"
+              className="ui-select demo-pick"
               aria-label="Load a demo structure"
               value=""
               onChange={(e) => {
@@ -294,11 +294,11 @@ export function App() {
                 </option>
               ))}
             </select>
-            <button type="button" className="ui-btn-brand" onClick={() => fileInput.current?.click()}>
+            <button type="button" className="ui-btn-brand load-cif" onClick={() => fileInput.current?.click()}>
               Load CIF…
             </button>
             <input ref={fileInput} type="file" accept=".cif,.CIF,text/plain" hidden onChange={(e) => void onFiles(e.target.files)} />
-            <button type="button" className="ui-icon-btn" aria-label={theme === "light" ? "Use dark theme" : "Use light theme"} title={theme === "light" ? "Dark theme" : "Light theme"} onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
+            <button type="button" className="ui-icon-btn theme-btn" aria-label={theme === "light" ? "Use dark theme" : "Use light theme"} title={theme === "light" ? "Dark theme" : "Light theme"} onClick={() => setTheme(theme === "light" ? "dark" : "light")}>
               {theme === "light" ? (
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></svg>
               ) : (

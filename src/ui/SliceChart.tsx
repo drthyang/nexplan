@@ -7,8 +7,8 @@
  *  - hollow: never recorded.
  * Marker area follows |F|². Click a marker to select it.
  */
-import { useEffect, useRef, useState } from "react";
 import { lambdaCss } from "../views/colormaps.ts";
+import { useMeasuredWidth } from "./useMeasuredWidth.ts";
 
 export interface SlicePoint {
   readonly index: number;
@@ -49,17 +49,12 @@ export function SliceChart({
   /** In-plane reciprocal axes to draw from the origin (unit-cell vectors), with labels. */
   axes?: readonly { readonly x: number; readonly y: number; readonly label: string }[];
 }) {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(560);
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => setWidth(Math.max(280, Math.round(e!.contentRect.width))));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  const { ref: setWrapEl, width } = useMeasuredWidth(560, 280);
+  // The square grows with the type size (rem) but stays within the window's height, on phones and 4K alike.
+  const rem = typeof document !== "undefined" ? parseFloat(getComputedStyle(document.documentElement).fontSize) || 15 : 15;
+  const limit = Math.max(240, Math.min(42 * rem, (typeof window !== "undefined" ? window.innerHeight : 900) - 16 * rem));
   const m = { l: 52, r: 14, t: 12, b: 44 };
-  const S = Math.max(220, Math.min(620, width - m.l - m.r));
+  const S = Math.max(220, Math.min(limit, width - m.l - m.r));
   const W = S + m.l + m.r;
   const H = S + m.t + m.b;
   const sx = (x: number) => m.l + ((x + extent) / (2 * extent)) * S;
@@ -72,7 +67,7 @@ export function SliceChart({
   const order = [...points].sort((a, b) => (a.state === b.state ? 0 : a.state === "never" ? -1 : b.state === "never" ? 1 : a.state === "scan" ? -1 : 1));
 
   return (
-    <div ref={wrapRef} className="plot-wrap slice-wrap">
+    <div ref={setWrapEl} className="plot-wrap slice-wrap">
       <svg className="plot" width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Reciprocal-space slice" onClick={() => onSelect(null)}>
         <clipPath id="slice-clip">
           <rect x={m.l} y={m.t} width={S} height={S} />

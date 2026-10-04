@@ -7,9 +7,10 @@
  * through peaks, Esc clears. A selection made elsewhere that lies outside the
  * zoomed range pans the view to it.
  */
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { peakPosition, type PowderAxis, type PowderPeak } from "../core/diffraction/powder.ts";
 import { fmt, hklText } from "./format.ts";
+import { typeScale, useMeasuredWidth } from "./useMeasuredWidth.ts";
 
 export const AXIS_LABEL: Record<PowderAxis, string> = { twoTheta: "2θ (deg)", tof: "TOF (µs)", d: "d (Å)", q: "Q (Å⁻¹)" };
 
@@ -47,16 +48,8 @@ export function PowderPlot({
   /** Optional range (axis units) to shade with a label, e.g. where reflections are not calculated. */
   shade?: { readonly from: number; readonly to: number; readonly label: string } | undefined;
 }) {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(800);
-  const height = Math.max(280, Math.min(480, width * 0.44));
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => setWidth(Math.max(320, Math.round(e!.contentRect.width))));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  const { ref: wrapRef, el: wrapEl, width } = useMeasuredWidth(800, 320);
+  const height = Math.max(280, Math.min(480 * typeScale(), width * 0.44));
 
   const pos = useMemo(() => peaks.map((p) => peakPosition(p, axis)), [peaks, axis]);
   /** Peak indices in increasing axis position, for ←/→ navigation. */
@@ -121,7 +114,7 @@ export function PowderPlot({
   const [hover, setHover] = useState<{ index: number; py: number } | null>(null);
   const [drag, setDrag] = useState<{ a: number; b: number; px0: number } | null>(null);
   const local = (clientX: number, clientY: number) => {
-    const r = wrapRef.current!.getBoundingClientRect();
+    const r = wrapEl!.getBoundingClientRect();
     return { px: clientX - r.left, py: clientY - r.top };
   };
   const toData = (px: number) => x0 + ((px - m.l) / W) * (x1 - x0);

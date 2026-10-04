@@ -9,7 +9,7 @@ import { useMemo, useState } from "react";
 import type { PanelAngles } from "../core/instrument/simulate.ts";
 import { coveredTwoTheta, twoThetaRangeForD } from "../core/instrument/simulate.ts";
 import { fmt } from "./format.ts";
-import { useMeasuredWidth } from "./useMeasuredWidth.ts";
+import { typeScale, useMeasuredWidth } from "./useMeasuredWidth.ts";
 
 export interface CoverageLine {
   readonly d: number;
@@ -61,7 +61,7 @@ export function CoverageChart({
   const dHiBand = lambdaMax / (2 * Math.sin((tMin * Math.PI) / 360));
   const dMaxLine = Math.max(0, ...lines.map((l) => l.d));
   const dHi = Math.min(dHiBand, Math.max(dMaxLine * 1.4, dLo * 8));
-  const height = Math.max(300, Math.min(440, width * 0.62));
+  const height = Math.max(300, Math.min(440 * typeScale(), width * 0.62));
   const m = { l: 52, r: 12, t: 10, b: 66 };
   const W = width - m.l - m.r;
   const H = height - m.t - m.b;

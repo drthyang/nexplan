@@ -2083,3 +2083,164 @@ input.ui-range {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* ---------------------------------------------------------------- devices
+   Phones (iPhone 16–17: 393–440 pt portrait), iPads (744–1032 portrait, 1133–1376 landscape),
+   MacBook Pro 14"/16" (1512/1728), and 1080p, 1440p and 4K monitors. */
+
+/* A hidden info popover takes no space: as an invisible box it pushed phone pages sideways. */
+.ui-info__popover {
+  display: none;
+  max-width: min(20rem, calc(100vw - 2rem));
+}
+
+.ui-info:hover .ui-info__popover,
+.ui-info:focus-within .ui-info__popover {
+  display: block;
+}
+
+/* Touch screens: controls and pills at least ~36 px, "?" badges with a larger hit area. */
+@media (pointer: coarse) {
+  :root {
+    --h-pill: 2.4rem;
+  }
+
+  .ui-info__trigger {
+    position: relative;
+  }
+
+  .ui-info__trigger::after {
+    content: "";
+    position: absolute;
+    inset: -0.65rem;
+  }
+
+  .chip-x {
+    padding: 0.25rem 0.45rem;
+    margin-right: -0.3rem;
+  }
+}
+
+@media (max-width: 760px) {
+  /* Info appears as a sheet along the bottom edge, never off screen. */
+  .ui-info__popover {
+    position: fixed;
+    top: auto;
+    left: calc(0.75rem + var(--safe-left));
+    right: calc(0.75rem + var(--safe-right));
+    bottom: calc(0.75rem + var(--safe-bottom));
+    width: auto;
+    max-width: none;
+    max-height: 55vh;
+    overflow: auto;
+    z-index: 60;
+    font-size: var(--fs-84);
+  }
+
+  /* Header: brand with Load CIF and theme, then the instrument, then the tabs. */
+  .app-header {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 0.5rem 0.5rem;
+    padding-top: calc(0.55rem + var(--safe-top));
+    padding-bottom: 0.55rem;
+  }
+
+  .header-actions {
+    display: contents;
+  }
+
+  .brand-row {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .load-cif {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .theme-btn {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .instrument-pick {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex;
+    width: 100%;
+  }
+
+  .instrument-pick .ui-select,
+  .header-actions .instrument-pick .ui-select {
+    flex: 1 1 auto;
+    max-width: none;
+  }
+
+  .demo-pick {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+
+  .page-tabs {
+    grid-column: 1 / -1;
+    grid-row: 4;
+    gap: 0.4rem;
+  }
+
+  .has-structure .demo-pick {
+    display: none;
+  }
+
+  .has-structure .page-tabs {
+    grid-row: 3;
+  }
+
+  .tab-group + .tab-group {
+    padding-left: 0.4rem;
+  }
+
+  .ui-seg--nav button {
+    padding: 0.3rem 0.62rem;
+  }
+
+  .brand-mark {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .ui-page {
+    padding-left: calc(0.75rem + var(--safe-left));
+    padding-right: calc(0.75rem + var(--safe-right));
+  }
+}
+
+/* Short screens (phones in landscape): the whole page scrolls, header included, as on narrow phones. */
+@media (max-height: 560px) {
+  body {
+    overflow: auto;
+  }
+
+  .app-container {
+    height: auto;
+    min-height: var(--viewport-h);
+    overflow: visible;
+  }
+
+  .workspace {
+    overflow: visible;
+  }
+}
+
+/* The slice is drawn at its own size (bounded by the window), not stretched to the card. */
+.slice-wrap .plot {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  margin-inline: auto;
+}
+
+/* Content width follows the type size: about 2400 px at 15 px type, 3360 px at 4K's 21 px. */
+.ui-page {
+  max-width: 160rem;
+}

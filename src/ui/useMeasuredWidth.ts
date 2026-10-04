@@ -24,3 +24,13 @@ export function useMeasuredWidth<T extends HTMLElement = HTMLDivElement>(initial
   }, [el, min]);
   return { ref: setEl, el, width };
 }
+
+/**
+ * The root type size in px (15 px on 1080p-class windows, up to 21 px at 4K; see tokens.css), so chart heights can
+ * grow with the type instead of turning into thin strips on large monitors. A height of 480 px at 15 px becomes
+ * 672 px at 21 px.
+ */
+export function typeScale(): number {
+  if (typeof document === "undefined") return 1;
+  return (parseFloat(getComputedStyle(document.documentElement).fontSize) || 15) / 15;
+}

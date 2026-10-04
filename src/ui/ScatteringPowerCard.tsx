@@ -4,13 +4,14 @@
  * and Bragg line strengths j|F|²/v_c². No flux, detector or counting-time
  * assumptions: everything is per unit volume of material.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CalcInput, CalcSuccess } from "../app/compute.ts";
 import { braggStrengths, braggSummary, LAMBDA_2200, scatteringPower, type BraggLine, type BraggWeight, type ScatteringPower } from "../core/scattering/power.ts";
 import { calculateIsolated } from "../workers/client.ts";
 import { Card, Segmented, UnitField } from "./components.tsx";
 import { DEMO_REFERENCES, REFERENCES, STANDARDS } from "./standards.ts";
 import { fmt } from "./format.ts";
+import { typeScale, useMeasuredWidth } from "./useMeasuredWidth.ts";
 
 interface Material {
   readonly name: string;
@@ -245,19 +246,11 @@ export function ScatteringPowerCard({ result }: { result: CalcSuccess }) {
 
 /** Line strengths against d: the sample above the axis, the reference mirrored below, on one scale. */
 function LineMirror({ sample, reference, sampleName, refName, window: win, dMin, weight }: { sample: readonly BraggLine[]; reference?: readonly BraggLine[] | undefined; sampleName: string; refName: string; window: [number, number]; dMin: number; weight: BraggWeight }) {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(700);
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => setWidth(Math.max(320, Math.round(e!.contentRect.width))));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  const { ref: wrapRef, width } = useMeasuredWidth(700, 320);
   const dHi = Math.min(6, Math.max(win[1] * 1.15, ...sample.map((l) => l.d), ...(reference ?? []).map((l) => l.d)));
   const dLo = Math.max(0.05, dMin * 0.95);
   const max = Math.max(1e-300, ...sample.filter((l) => l.d >= dLo).map((l) => l[weight]), ...(reference ?? []).filter((l) => l.d >= dLo).map((l) => l[weight]));
-  const H = 220;
+  const H = Math.round(220 * typeScale());
   const m = { l: 12, r: 12, t: 16, b: 34 };
   const W = width - m.l - m.r;
   const mid = m.t + (H - m.t - m.b) / 2;

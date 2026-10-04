@@ -7,12 +7,13 @@
  * selected reflection emphasised, and the cones that bound where it lands.
  * With a raster (powder rings), the panels become outlines over the image.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import type { Vec3 } from "@materia/core/math/types";
 import type { DetectorPanel } from "../core/instrument/detectors.ts";
 import { coneDirections, cylinderAngles, panelAngles, panelCylinderPolygons } from "../core/instrument/simulate.ts";
 import { lambdaCss } from "../views/colormaps.ts";
 import { fmt } from "./format.ts";
+import { typeScale, useMeasuredWidth } from "./useMeasuredWidth.ts";
 
 export interface MapSpot {
   readonly index: number;
@@ -80,15 +81,7 @@ export function DetectorMap({
   /** Polylines on the detectors (lab frame), drawn in the selection colour. */
   traces?: readonly (readonly Vec3[])[];
 }) {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(800);
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver(([e]) => setWidth(Math.max(320, Math.round(e!.contentRect.width))));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  const { ref: wrapRef, width } = useMeasuredWidth(800, 320);
 
   const shapes = useMemo(() => panels.map((p) => panelCylinderPolygons(p)), [panels]);
   const info = useMemo(() => panels.map(panelAngles), [panels]);
@@ -103,7 +96,7 @@ export function DetectorMap({
 
   const m = { l: 46, r: 12, t: 10, b: 40 };
   const W = width - m.l - m.r;
-  const H = Math.max(200, Math.min(440, (W * (2 * nuMax)) / 360));
+  const H = Math.max(200, Math.min(440 * typeScale(), (W * (2 * nuMax)) / 360));
   const height = H + m.t + m.b;
   const sx = (g: number) => m.l + ((g + 180) / 360) * W;
   const sy = (n: number) => m.t + ((nuMax - n) / (2 * nuMax)) * H;
