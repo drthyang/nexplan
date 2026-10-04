@@ -2078,3 +2078,8 @@ input.ui-range {
   fill: var(--muted);
   font-size: 11px;
 }
+
+.ui-seg--nav button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

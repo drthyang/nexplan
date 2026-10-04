@@ -202,6 +202,15 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sns, radiation]);
 
+  // Pages that do not apply to the sample on the chosen instrument: a powder is not oriented.
+  const powderOnly = sns && sampleKind(experiment) === "powder";
+  const unavailable = (id: Tab): string | undefined =>
+    powderOnly && (id === "orientation" || id === "crystal") ? `${entry!.label} measures a powder here: there is no crystal orientation or single-crystal plan.${entry!.modes?.includes("single-crystal") ? " Choose Single crystal in the bar to use these pages." : ""}` : undefined;
+  useEffect(() => {
+    if (unavailable(tab)) setTab("powder");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [powderOnly, tab]);
+
   const ok: CalcSuccess | undefined = result?.ok ? result : undefined;
   // SNS simulations need the neutron calculation (the switch to neutrons above may still be running).
   const simReady = ok !== undefined && (!sns || ok.provenance.settings.radiation === "neutron");
@@ -240,11 +249,14 @@ export function App() {
                 <div key={g.label} className="tab-group" role="group" aria-label={g.label}>
                   <span className="tab-group__label">{g.label}</span>
                   <div className="ui-seg ui-seg--nav">
-                    {g.tabs.map(([id, label]) => (
-                      <button key={id} type="button" className={cx(tab === id && "is-active")} aria-current={tab === id ? "page" : undefined} onClick={() => setTab(id)}>
-                        {label}
-                      </button>
-                    ))}
+                    {g.tabs.map(([id, label]) => {
+                      const off = unavailable(id);
+                      return (
+                        <button key={id} type="button" className={cx(tab === id && "is-active")} aria-current={tab === id ? "page" : undefined} disabled={off !== undefined} title={off} onClick={() => setTab(id)}>
+                          {label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
