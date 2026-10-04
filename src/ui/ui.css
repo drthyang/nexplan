@@ -2069,13 +2069,14 @@ input.ui-range {
   font-size: var(--fs-80);
 }
 
+/* Plots stay on a light background in both themes, so the shading uses fixed plot ink. */
 .plot-shade rect {
-  fill: var(--muted);
-  opacity: 0.1;
+  fill: #64748b;
+  opacity: 0.12;
 }
 
 .plot-shade text {
-  fill: var(--muted);
+  fill: var(--chart-tick-text);
   font-size: 11px;
 }
 
@@ -2243,4 +2244,12 @@ input.ui-range {
 /* Content width follows the type size: about 2400 px at 15 px type, 3360 px at 4K's 21 px. */
 .ui-page {
   max-width: 160rem;
+}
+
+.plot-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 1rem;
 }

@@ -115,7 +115,10 @@ export function meanSinTheta(bank: FocusedBank, d: number, lambdaMin: number, la
   return w > 0 ? ws / w : NaN;
 }
 
-/** Lines of the focused pattern: I = Σ|F|²·d⁴·⟨sin θ⟩(d), at t = DIFC_f·d. */
+/**
+ * Lines of the focused pattern: I = Σ|F|²·d⁴·⟨sin θ⟩(d), at t = DIFC_f·d. The cells record a line at
+ * different wavelengths, so `lambda` here is only nominal (λ at the effective angle) and is not exported.
+ */
 export function focusedPeaks(groups: readonly PeakGroup[], bank: FocusedBank, lambdaMin: number, lambdaMax: number): PowderPeak[] {
   const sf = Math.sin((bank.twoThetaDeg * DEG) / 2);
   const out: PowderPeak[] = [];
@@ -131,9 +134,12 @@ export function focusedPeaks(groups: readonly PeakGroup[], bank: FocusedBank, la
 
 /**
  * A TofBank for drawing the focused pattern (synthesizeTof): the focused DIFC
- * and 2θ, with the band chosen so that its d range is the bank's (λ = 2d sin θ_f).
+ * and 2θ, with the band chosen so that its d range is the bank's (λ = 2d sin θ_f),
+ * optionally ended at dMax (a bank with a low-angle panel records d far beyond
+ * the structure's longest spacing).
  */
-export function focusedTofBank(bank: FocusedBank): TofBank {
+export function focusedTofBank(bank: FocusedBank, opts: { readonly dMax?: number } = {}): TofBank {
   const sf = Math.sin((bank.twoThetaDeg * DEG) / 2);
-  return { twoThetaDeg: bank.twoThetaDeg, difc: bank.difc, difa: 0, zero: 0, lambdaMin: 2 * bank.dMin * sf, lambdaMax: 2 * bank.dMax * sf };
+  const dMax = Math.min(bank.dMax, opts.dMax ?? Infinity);
+  return { twoThetaDeg: bank.twoThetaDeg, difc: bank.difc, difa: 0, zero: 0, lambdaMin: 2 * bank.dMin * sf, lambdaMax: 2 * Math.max(bank.dMin, dMax) * sf };
 }

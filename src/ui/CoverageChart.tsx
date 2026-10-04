@@ -149,6 +149,8 @@ export function CoverageChart({
     return out;
   }, [dLo, dHi]);
   const marked = selectedPanels ?? (selectedPanel !== null ? new Set([selectedPanel]) : new Set<number>());
+  // One highlight per contiguous 2θ range of the marked panels (overlapping translucent spans would stack up).
+  const markedSpans = coveredTwoTheta([...marked].map((i) => panels[i]).filter((x): x is PanelAngles => x !== undefined));
   const hoverLine = hover ? lines[hover.i] : undefined;
 
   return (
@@ -197,10 +199,9 @@ export function CoverageChart({
             ))}
           </clipPath>
           <path className="coverage-band is-covered" d={band} clipPath={`url(#${clipId}-cov)`} />
-          {[...marked].map((i) => {
-            const sp = panels[i];
-            return sp ? <rect key={i} className="coverage-panel-span" x={sx(sp.twoThetaMin)} y={m.t} width={Math.max(1, sx(sp.twoThetaMax) - sx(sp.twoThetaMin))} height={H} /> : null;
-          })}
+          {markedSpans.map(([lo, hi]) => (
+            <rect key={lo} className="coverage-panel-span" x={sx(lo)} y={m.t} width={Math.max(1, sx(hi) - sx(lo))} height={H} />
+          ))}
           {dFloor > dLo && <rect className="coverage-floor" x={m.l} y={sy(dFloor)} width={W} height={m.t + H - sy(dFloor)} />}
           {segs.map((s, i) =>
             s && i !== selected ? <line key={i} className="coverage-line" x1={s.x0} x2={s.x1} y1={s.y} y2={s.y} style={{ opacity: 0.15 + 0.85 * Math.sqrt(lines[i]!.weight / wMax) }} /> : null,

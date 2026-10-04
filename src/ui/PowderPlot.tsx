@@ -185,14 +185,21 @@ export function PowderPlot({
           <rect x={m.l} y={m.t} width={W} height={H + tickBand.height + 8} />
         </clipPath>
         <g clipPath="url(#plot-clip)">
-          {shade && Math.max(shade.from, shade.to) > x0 && Math.min(shade.from, shade.to) < x1 && (
-            <g className="plot-shade">
-              <rect x={sx(Math.max(x0, Math.min(shade.from, shade.to)))} y={m.t} width={Math.max(0, sx(Math.min(x1, Math.max(shade.from, shade.to))) - sx(Math.max(x0, Math.min(shade.from, shade.to))))} height={H} />
-              <text x={(sx(Math.max(x0, Math.min(shade.from, shade.to))) + sx(Math.min(x1, Math.max(shade.from, shade.to)))) / 2} y={m.t + 18} textAnchor="middle">
-                {shade.label}
-              </text>
-            </g>
-          )}
+          {shade && Math.max(shade.from, shade.to) > x0 && Math.min(shade.from, shade.to) < x1 && (() => {
+            const left = sx(Math.max(x0, Math.min(shade.from, shade.to)));
+            const right = sx(Math.min(x1, Math.max(shade.from, shade.to)));
+            // The label sits inside the shaded range when it fits, else just beside it (on the side with room).
+            const fits = right - left > 7 * shade.label.length;
+            const besideRight = right < m.l + W / 2;
+            return (
+              <g className="plot-shade">
+                <rect x={left} y={m.t} width={Math.max(0, right - left)} height={H} />
+                <text x={fits ? (left + right) / 2 : besideRight ? right + 6 : left - 6} y={m.t + 18} textAnchor={fits ? "middle" : besideRight ? "start" : "end"}>
+                  {shade.label}
+                </text>
+              </g>
+            );
+          })()}
           {sel !== null && <line className="selection-line" x1={sx(pos[sel]!)} x2={sx(pos[sel]!)} y1={m.t} y2={tickBand.top + tickBand.height} />}
           {showSticks &&
             visibleIdx.map((i) => <line key={`s${i}`} className="series-stick" x1={sx(pos[i]!)} x2={sx(pos[i]!)} y1={sy(0)} y2={sy((100 * peaks[i]!.intensity) / iMax)} />)}

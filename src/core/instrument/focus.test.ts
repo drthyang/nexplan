@@ -62,5 +62,9 @@ describe("focused-bank cells", () => {
     expect(tb.lambdaMin / (2 * s)).toBeCloseTo(bank.dMin, 12);
     expect(tb.lambdaMax / (2 * s)).toBeCloseTo(bank.dMax, 12);
     expect(tb.difc).toBe(bank.difc);
+    // Ended early at a given d (never below the bank's d minimum).
+    const short = focusedTofBank(bank, { dMax: 2 });
+    expect(short.lambdaMax / (2 * s)).toBeCloseTo(Math.min(2, bank.dMax), 12);
+    expect(focusedTofBank(bank, { dMax: 1e-3 }).lambdaMax / (2 * s)).toBeCloseTo(bank.dMin, 12);
   });
 });

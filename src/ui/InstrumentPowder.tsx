@@ -14,7 +14,7 @@ import { coveredTwoTheta, dRangeAt, panelDifc } from "../core/instrument/simulat
 import { angleCss } from "../views/colormaps.ts";
 import { Card, Segmented } from "./components.tsx";
 import { CoverageChart, type CoverageLine } from "./CoverageChart.tsx";
-import { fmt, hklText } from "./format.ts";
+import { downloadText, exact, fmt, hklText } from "./format.ts";
 import { PowderPlot } from "./PowderPlot.tsx";
 import { DMinNote, defaultPanel, InstrumentRequired, lam, LOWEST_SUGGESTED_DMIN, suggestDMin, usePowderGroups, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
 
@@ -49,7 +49,9 @@ export function InstrumentPowder(props: SimPageProps) {
   const byBank = focused.length > 0 && exp.powderView === "bank";
   const bankIndex = exp.bank !== null && exp.bank < focused.length ? exp.bank : focused.reduce((best, f, i) => (Math.abs(f.bank.twoThetaDeg - 90) < Math.abs(focused[best]!.bank.twoThetaDeg - 90) ? i : best), 0);
   const fb = byBank ? focused[bankIndex] : undefined;
-  const drawBank = useMemo(() => (fb ? focusedTofBank(fb.bank) : bank), [fb, bank]);
+  // The focused axis ends a little past the longest calculated spacing, not at the bank's (possibly far larger) d limit.
+  const longestD = useMemo(() => Math.max(0, ...groups.map((g) => g.d)), [groups]);
+  const drawBank = useMemo(() => (fb ? focusedTofBank(fb.bank, longestD > 0 ? { dMax: longestD * 1.15 } : {}) : bank), [fb, bank, longestD]);
   const peaks = useMemo(
     () =>
       !bank
@@ -96,6 +98,31 @@ export function InstrumentPowder(props: SimPageProps) {
       const k = focused.findIndex((f) => f.idx.includes(i));
       onExp(k >= 0 ? { ...exp, bank: k } : { ...exp, panel: i, powderView: "panel" });
     } else onExp({ ...exp, panel: i });
+  };
+
+  // ---------------------------------------------------------------- export (peaks and profile, with what they were computed for)
+  const what = mono
+    ? `${instrument.goniometer.label} elastic powder pattern; lambda ${lambda0} A; 2theta ${fmt(covered[0]?.[0] ?? 0, 2)}-${fmt(covered.at(-1)?.[1] ?? 0, 2)} deg (zero in detector gaps); intensity per solid angle sumF2/(sin^2 th cos th)`
+    : fb
+      ? `${instrument.goniometer.label} ${fb.spec.name} focused (${fb.idx.length} panels: ${fb.spec.panels.join(" ")}); effective 2theta ${fb.bank.twoThetaDeg} deg, L1 ${l1} m, L2 ${fb.bank.l2} m, DIFC ${exact(fb.bank.difc)} us/A; I = sumF2*d^4*<sin th>(d), solid-angle weighted over the cells that record d`
+      : `${instrument.goniometer.label} ${panels[panel]!.name} as one bank at 2theta ${exact(pa.twoThetaCenter)} deg, L1+L2 ${exact(l1 + pa.l2)} m, DIFC ${exact(bank.difc)} us/A; I = sumF2*sin(th)*d^4`;
+  const provenance = `# NEXPLAN; ${result.structure.name || result.blockName} (data_${result.blockName}), input sha256 ${result.provenance.inputSha256}; lambda band ${exp.lambdaMin}-${exp.lambdaMax} A; d_min ${calcDMin} A; dd/d ${exp.dOverD}`;
+  const exportPeaks = () => {
+    const lines = [
+      provenance,
+      `# ${what}`,
+      // A focused bank's line is recorded by many cells at different wavelengths: its TOF is a coordinate on the
+      // focused DIFC (as in Mantid's focused output), and no single λ applies.
+      `d_A,${mono ? "two_theta_deg" : fb ? "tof_us_on_focused_difc" : "tof_us,lambda_A"},sumF2,lorentz,intensity,families`,
+      ...peaks.map((pk) => [exact(pk.d), ...(mono ? [exact(pk.twoTheta!)] : fb ? [exact(pk.tof!)] : [exact(pk.tof!), exact(pk.lambda!)]), exact(pk.sumF2), exact(pk.lp), exact(pk.intensity), `"${pk.families.map((f) => `(${f.hkl.join(" ")})x${f.multiplicity}`).join(" + ")}"`].join(",")),
+    ];
+    downloadText(`${result.blockName}-${instrument.id}-${fb ? fb.spec.name.replace(/\W+/g, "") : mono ? "elastic" : panels[panel]!.name}-peaks.csv`, lines.join("\n") + "\n", "text/csv");
+  };
+  const exportProfile = () => {
+    const unit = mono ? "two_theta_deg" : axis === "tof" ? "tof_us" : "d_A";
+    const lines = [provenance, `# ${what}; Gaussian peaks of FWHM dd/d${mono ? " combined with dE/2E" : ""}, area-normalised x intensity`, `${unit},intensity`];
+    for (let i = 0; i < profile.x.length; i++) lines.push(`${exact(profile.x[i]!)},${exact(profile.y[i]!)}`);
+    downloadText(`${result.blockName}-${instrument.id}-${fb ? fb.spec.name.replace(/\W+/g, "") : mono ? "elastic" : panels[panel]!.name}-profile.csv`, lines.join("\n") + "\n", "text/csv");
   };
 
   return (
@@ -148,7 +175,19 @@ export function InstrumentPowder(props: SimPageProps) {
         ) : (
           <p className="empty-note">{mono ? "No reflection lands on the detectors at this Ei (or above d_min)." : fb ? `No reflections fall in this bank's d range (${fmt(fb.bank.dMin, 3)}–${fmt(fb.bank.dMax, 2)} Å) above d_min.` : `No reflections fall in this panel's d range (${fmt(seen.dMin, 3)}–${fmt(seen.dMax, 2)} Å) above d_min.`}</p>
         )}
-        <p className="plot-hint">Click a peak or tick to select it · drag to zoom · double-click to reset</p>
+        <div className="plot-footer">
+          <p className="plot-hint">Click a peak or tick to select it · drag to zoom · double-click to reset</p>
+          {peaks.length > 0 && (
+            <span className="ui-controls ui-controls--inline">
+              <button type="button" className="ui-pill" onClick={exportPeaks} title="Every line with d, position, Σ|F|², Lorentz factor, intensity and hkl, with what it was computed for">
+                Peaks CSV
+              </button>
+              <button type="button" className="ui-pill" onClick={exportProfile} title="The drawn pattern on its axis, with what it was computed for">
+                Profile CSV
+              </button>
+            </span>
+          )}
+        </div>
       </Card>
 
       <div className="ui-grid ui-grid--split">
