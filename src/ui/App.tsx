@@ -466,7 +466,7 @@ export function App() {
                   <circle cx="70" cy="30" r="8" fill="var(--accent)" />
                 </svg>
                 <h2>Neutron Experiment Planner</h2>
-                <p>Start from a crystal structure (CIF 1.1). NEXPLAN calculates neutron and X-ray reflections, structure factors and powder patterns, orients the crystal from a UB matrix, and simulates the measurement on SNS instruments. Everything runs in this browser tab; nothing is uploaded.</p>
+                <p>Start from a crystal structure (CIF 1.1). NEXPLAN calculates neutron and X-ray reflections, structure factors and powder patterns, orients the crystal from a UB matrix, and plans the measurement on SNS instruments: which settings record the peaks you want, and what each detector bank sees. Everything runs in this browser tab; nothing is uploaded.</p>
                 <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", justifyContent: "center" }}>
                   <button type="button" className="ui-btn-primary" onClick={() => fileInput.current?.click()}>
                     Choose a CIF file
@@ -484,10 +484,10 @@ export function App() {
               <ol className="workflow" aria-label="How NEXPLAN works">
                 {(
                   [
-                    ["Sample", "Load a CIF: cell, symmetry, sites and the scattering lengths used, each with its source; every reflection with d, Q and complex F."],
-                    ["Setup", "Pick an SNS instrument in the header (or a generic X-ray or neutron beam), then load or build the UB matrix and set the goniometer."],
+                    ["Sample", "Load a CIF: cell, symmetry, sites and the scattering lengths used, each with its source; every reflection with d, Q and complex F; scattering power against a standard."],
+                    ["Setup", "Pick an SNS instrument in the header (or a generic X-ray or neutron beam), load the UB (ISAW or Mantid) or re-index it, and set the goniometer within its limits."],
                     ["Instrument", "The real SNS detector array in 3D and unrolled: where spots land now, everywhere a reflection can reach, powder rings in a time-of-flight slice."],
-                    ["Simulation", "Powder patterns per detector panel; orientation lists, rotation scans, completeness and reciprocal-space slices for single crystals."],
+                    ["Simulation", "Powder patterns per focused bank (NOMAD, POWGEN) or panel; TOPAZ orientation lists from wanted peaks, CORELLI and ψ scans, completeness and slices; CSV export."],
                   ] as [string, string][]
                 ).map(([title, text], i) => (
                   <li key={title}>
