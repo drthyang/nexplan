@@ -24,6 +24,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # The tests read pinned sources (TOPAZ IDF and .mat files) that are not in the repository.
+      - run: npm run data:fetch
       - run: npm test
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
