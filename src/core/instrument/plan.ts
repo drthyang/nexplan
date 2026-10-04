@@ -207,20 +207,36 @@ export interface Placement {
 
 export const DEFAULT_PLACEMENT: Placement = { bandFraction: 0.5, edgeFraction: 0.1 };
 
-/** 0: not recorded; 1: recorded; 2: recorded and well placed (best over the members). */
-function placementLevel(R: Mat3, members: Compiled, panels: readonly PreparedPanel[], lambdaMin: number, lambdaMax: number, placement: Placement): 0 | 1 | 2 {
+/**
+ * How setting R records a wanted reflection, best over its members. level: 0 not recorded, 1 recorded,
+ * 2 well placed. cost of that best recording: the larger of |λ − mid|/(half the band) and the hit's
+ * offset from the panel centre, so 0 is mid band on a panel centre and 1 a band end or a panel edge
+ * (Infinity when not recorded). The "fewest" goal prefers settings that centre the wanted reflections.
+ */
+function placementOf(R: Mat3, members: Compiled, panels: readonly PreparedPanel[], lambdaMin: number, lambdaMax: number, placement: Placement): { level: 0 | 1 | 2; cost: number } {
   const mid = (lambdaMin + lambdaMax) / 2;
-  const halfWidth = (placement.bandFraction * (lambdaMax - lambdaMin)) / 2;
+  const half = (lambdaMax - lambdaMin) / 2 || 1;
+  const halfWidth = placement.bandFraction * half;
   const maxOffset = 1 - 2 * placement.edgeFraction;
   let level: 0 | 1 | 2 = 0;
+  let cost = Infinity;
   for (let i = 0; i < members.fam.length; i++) {
     const hit = landing(R, members, i, panels, lambdaMin, lambdaMax);
     if (!hit) continue;
-    if (Math.abs(hit.lambda - mid) <= halfWidth + 1e-12 && hit.offset <= maxOffset + 1e-12) return 2;
-    level = 1;
+    const c = Math.max(Math.abs(hit.lambda - mid) / half, hit.offset);
+    if (Math.abs(hit.lambda - mid) <= halfWidth + 1e-12 && hit.offset <= maxOffset + 1e-12) {
+      if (level < 2) cost = Infinity;
+      level = 2;
+      cost = Math.min(cost, c);
+    } else if (level < 2) {
+      level = 1;
+      cost = Math.min(cost, c);
+    }
   }
-  return level;
+  return { level, cost };
 }
+
+const placementLevel = (R: Mat3, members: Compiled, panels: readonly PreparedPanel[], lambdaMin: number, lambdaMax: number, placement: Placement) => placementOf(R, members, panels, lambdaMin, lambdaMax, placement).level;
 
 const compileMembers = (UB: Mat3, members: readonly Vec3[]) => compile(UB, members.map((h) => ({ h, family: 0 })));
 
@@ -236,19 +252,27 @@ export interface GreedyPick {
 }
 
 /**
- * Greedy coverage: up to n picks from `sets` (family ids per candidate). Each
- * pick maximises, in order, the wanted reflections it newly places well, the
- * wanted reflections it newly records (`wanted[i][w]`: level 0, 1 or 2 of wanted
- * reflection w at candidate i), the new families, the families it records for
- * the second and third time (redundancy, used for scaling and absorption
- * corrections), then the families it records in all. Stops when a pick would
- * add nothing on any of these. `covered` and `wantedBefore` describe settings
- * already measured.
+ * What suggestions aim for. "coverage": the most from n settings (wanted reflections, then completeness,
+ * then redundancy). "fewest": as few settings as place every wanted reflection well (at most n), preferring
+ * the one that centres them best among equals; with none wanted, as few as record every reachable family.
+ */
+export type PlanGoal = "coverage" | "fewest";
+
+/**
+ * Greedy picks, up to n, from `sets` (family ids per candidate). For "coverage" each pick maximises, in
+ * order, the wanted reflections it newly places well, the wanted reflections it newly records (`wanted[i][w]`:
+ * level 0, 1 or 2 of wanted reflection w at candidate i), the new families, the families it records for the
+ * second and third time (redundancy, used for scaling and absorption corrections), then the families it
+ * records in all; it stops when a pick would add nothing on any of these. "fewest" is greedy set cover
+ * (within ln n + 1 of the fewest settings: Johnson, J. Comput. Syst. Sci. 9, 256 (1974); Chvátal, Math.
+ * Oper. Res. 4, 233 (1979)): the same first two, then the lowest summed `costs` of those wanted reflections
+ * (placementOf: nearest mid band and panel centre), then new families; it stops once no wanted reflection
+ * gains (with none wanted, once no family is new). `covered` and `wantedBefore` describe settings measured.
  */
 export function greedyCover(
   sets: readonly Int32Array[],
   n: number,
-  opts: { readonly covered?: Iterable<number>; readonly wanted?: readonly Uint8Array[]; readonly wantedBefore?: Uint8Array } = {},
+  opts: { readonly covered?: Iterable<number>; readonly wanted?: readonly Uint8Array[]; readonly wantedBefore?: Uint8Array; readonly costs?: readonly Float64Array[]; readonly goal?: PlanGoal } = {},
 ): GreedyPick[] {
   const dense = new Map<number, number>();
   const toDense = (id: number) => {
@@ -258,17 +282,20 @@ export function greedyCover(
   const dsets = sets.map((set) => Int32Array.from(set, toDense));
   const covered = [...(opts.covered ?? [])].map(toDense);
   const nWanted = opts.wantedBefore?.length ?? opts.wanted?.[0]?.length ?? 0;
-  return greedyDense(dsets, n, dense.size, covered, opts.wanted ?? sets.map(() => new Uint8Array(nWanted)), opts.wantedBefore ?? new Uint8Array(nWanted));
+  const wanted = opts.wanted ?? sets.map(() => new Uint8Array(nWanted));
+  return greedyDense(dsets, n, dense.size, covered, wanted, opts.wantedBefore ?? new Uint8Array(nWanted), opts.costs ?? wanted.map((l) => new Float64Array(l.length)), opts.goal ?? "coverage");
 }
 
-function greedyDense(sets: readonly Int32Array[], n: number, nIds: number, covered: readonly number[], wanted: readonly Uint8Array[], wantedBefore: Uint8Array): GreedyPick[] {
+function greedyDense(sets: readonly Int32Array[], n: number, nIds: number, covered: readonly number[], wanted: readonly Uint8Array[], wantedBefore: Uint8Array, costs: readonly Float64Array[], goal: PlanGoal): GreedyPick[] {
   const count = new Int32Array(nIds);
   for (const id of covered) count[id]!++;
   const best = Uint8Array.from(wantedBefore);
   const used = new Uint8Array(sets.length);
   const picks: GreedyPick[] = [];
-  const g = new Float64Array(6);
-  const b = new Float64Array(6);
+  const fewest = goal === "fewest";
+  // Gains, compared in order: well placed, recorded, −cost ("fewest" only), new, second, third, all families.
+  const g = new Float64Array(7);
+  const b = new Float64Array(7);
   for (let step = 0; step < n; step++) {
     let pick = -1;
     for (let i = 0; i < sets.length; i++) {
@@ -276,17 +303,19 @@ function greedyDense(sets: readonly Int32Array[], n: number, nIds: number, cover
       g.fill(0);
       const levels = wanted[i]!;
       for (let w = 0; w < levels.length; w++) {
+        const raises = (levels[w] === 2 && best[w]! < 2) || (levels[w]! >= 1 && best[w] === 0);
         if (levels[w] === 2 && best[w]! < 2) g[0]!++;
         if (levels[w]! >= 1 && best[w] === 0) g[1]!++;
+        if (fewest && raises) g[2]! -= costs[i]![w]!;
       }
       const set = sets[i]!;
       for (let k = 0; k < set.length; k++) {
         const c = count[set[k]!]!;
-        if (c < 3) g[2 + c]!++;
+        if (c < 3) g[3 + c]!++;
       }
-      g[5] = set.length;
+      g[6] = set.length;
       let better = pick < 0;
-      for (let k = 0; !better && k < 6; k++) {
+      for (let k = 0; !better && k < 7; k++) {
         if (g[k]! > b[k]!) better = true;
         else if (g[k]! < b[k]!) break;
       }
@@ -295,12 +324,14 @@ function greedyDense(sets: readonly Int32Array[], n: number, nIds: number, cover
         b.set(g);
       }
     }
-    if (pick < 0 || (b[0] === 0 && b[1] === 0 && b[2] === 0 && b[3] === 0 && b[4] === 0)) break;
+    if (pick < 0) break;
+    const wantedGain = b[0] !== 0 || b[1] !== 0;
+    if (fewest ? (wanted[pick]!.length ? !wantedGain : b[3] === 0) : !wantedGain && b[3] === 0 && b[4] === 0 && b[5] === 0) break;
     used[pick] = 1;
     for (const id of sets[pick]!) count[id]!++;
     const levels = wanted[pick]!;
     for (let w = 0; w < levels.length; w++) best[w] = Math.max(best[w]!, levels[w]!);
-    picks.push({ index: pick, wellPlaced: b[0]!, wanted: b[1]!, families: b[2]!, second: b[3]!, third: b[4]! });
+    picks.push({ index: pick, wellPlaced: b[0]!, wanted: b[1]!, families: b[3]!, second: b[4]!, third: b[5]! });
   }
   return picks;
 }
@@ -357,11 +388,14 @@ export interface SuggestInput {
   readonly panels: readonly DetectorPanel[];
   readonly lambdaMin: number;
   readonly lambdaMax: number;
+  /** "coverage": n settings; "fewest": at most n (PlanGoal). */
   readonly n: number;
+  readonly goal?: PlanGoal;
   readonly maxCandidates?: number;
 }
 
 export interface SuggestResult {
+  readonly goal: PlanGoal;
   readonly settings: number[][];
   readonly picks: GreedyPick[];
   readonly step: number;
@@ -372,18 +406,27 @@ export interface SuggestResult {
   readonly recordedAfter: number;
   readonly wellBefore: number;
   readonly wellAfter: number;
+  /** Wanted reflections that some candidate (or the existing list) places well: what any number of settings could reach. */
+  readonly wellPossible: number;
+  /** Families recorded by the existing list with the suggestions, and by any candidate or the existing list. */
+  readonly familiesAfter: number;
+  readonly familiesReachable: number;
+  /** "fewest": the settings were fine-tuned off the grid to centre their wanted reflections. */
+  readonly refined: boolean;
 }
 
 export function suggestSettings(input: SuggestInput, onProgress?: (done: number, total: number) => void): SuggestResult {
   const panels = input.panels.map(preparePanel);
   const placement = input.placement ?? DEFAULT_PLACEMENT;
+  const goal = input.goal ?? "coverage";
   const c = compile(input.UB, input.reflections);
   const W = input.wanted.map((m) => compileMembers(input.UB, m));
   const stamp = new Int32Array(c.ids.length).fill(-1);
   let gen = 0;
   const evaluate = (angles: readonly number[]) => {
     const R = goniometerMatrix(input.model, angles);
-    return { families: familiesAt(R, c, panels, input.lambdaMin, input.lambdaMax, stamp, gen++), levels: Uint8Array.from(W, (m) => placementLevel(R, m, panels, input.lambdaMin, input.lambdaMax, placement)) };
+    const placed = W.map((m) => placementOf(R, m, panels, input.lambdaMin, input.lambdaMax, placement));
+    return { families: familiesAt(R, c, panels, input.lambdaMin, input.lambdaMax, stamp, gen++), levels: Uint8Array.from(placed, (p) => p.level), costs: Float64Array.from(placed, (p) => p.cost) };
   };
   const covered: number[] = [];
   const before = new Uint8Array(W.length);
@@ -395,19 +438,49 @@ export function suggestSettings(input: SuggestInput, onProgress?: (done: number,
   const grid = candidateGrid(input.model, input.base, input.maxCandidates);
   const sets: Int32Array[] = [];
   const levels: Uint8Array[] = [];
+  const costs: Float64Array[] = [];
   const every = Math.max(1, Math.floor(grid.settings.length / 50));
   grid.settings.forEach((s, i) => {
     const e = evaluate(s);
     sets.push(e.families);
     levels.push(e.levels);
+    costs.push(e.costs);
     if (onProgress && (i + 1) % every === 0) onProgress(i + 1, grid.settings.length);
   });
-  const picks = greedyDense(sets, input.n, c.ids.length, covered, levels, before);
+  const picks = greedyDense(sets, input.n, c.ids.length, covered, levels, before, costs, goal);
+
+  // "fewest": centre each pick's wanted reflections off the grid (quarter steps within ±1 step), keeping
+  // every wanted reflection it newly places or records at least as well.
+  const refined = goal === "fewest" && W.length > 0 && grid.step > 0;
+  const best = Uint8Array.from(before);
+  const settings = picks.map((p) => {
+    const start = grid.settings[p.index]!;
+    const owned = [...levels[p.index]!.keys()].filter((w) => levels[p.index]![w]! > best[w]!);
+    const need = owned.map((w) => levels[p.index]![w]!);
+    owned.forEach((w, k) => (best[w] = need[k]!));
+    return refined ? refine(input.model, start, grid.step, (a) => {
+      const e = evaluate(a);
+      return owned.every((w, k) => e.levels[w]! >= need[k]!) ? owned.reduce((s, w) => s + e.costs[w]!, 0) : Infinity;
+    }) : start;
+  });
+
   const after = Uint8Array.from(before);
-  for (const p of picks) levels[p.index]!.forEach((l, w) => (after[w] = Math.max(after[w]!, l)));
+  const familiesAfter = new Set(covered);
+  for (const s of settings) {
+    const e = evaluate(s);
+    e.levels.forEach((l, w) => (after[w] = Math.max(after[w]!, l)));
+    for (const f of e.families) familiesAfter.add(f);
+  }
+  const possible = Uint8Array.from(before);
+  const reachable = new Set(covered);
+  levels.forEach((l, i) => {
+    l.forEach((v, w) => (possible[w] = Math.max(possible[w]!, v)));
+    for (const f of sets[i]!) reachable.add(f);
+  });
   const tally = (a: Uint8Array, min: number) => a.reduce((n, l) => n + (l >= min ? 1 : 0), 0);
   return {
-    settings: picks.map((p) => grid.settings[p.index]!),
+    goal,
+    settings,
     picks,
     step: grid.step,
     candidates: grid.settings.length,
@@ -416,7 +489,46 @@ export function suggestSettings(input: SuggestInput, onProgress?: (done: number,
     recordedAfter: tally(after, 1),
     wellBefore: tally(before, 2),
     wellAfter: tally(after, 2),
+    wellPossible: tally(possible, 2),
+    familiesAfter: familiesAfter.size,
+    familiesReachable: reachable.size,
+    refined,
   };
+}
+
+/**
+ * The setting near `start` (free axes moved in quarter steps within ±step, inside their limits) with the
+ * lowest `score` (Infinity: not acceptable); `start` itself when nothing scores lower.
+ */
+function refine(model: GoniometerModel, start: readonly number[], step: number, score: (angles: readonly number[]) => number): number[] {
+  const free = model.axes.flatMap((ax, i) => (ax.fixed === undefined ? [i] : []));
+  const offsets = [-4, -3, -2, -1, 0, 1, 2, 3, 4].map((k) => (k * step) / 4);
+  let best = [...start];
+  let bestScore = score(start);
+  const idx = free.map(() => 0);
+  for (;;) {
+    const a = [...start];
+    let ok = true;
+    free.forEach((i, k) => {
+      const ax = model.axes[i]!;
+      const v = start[i]! + offsets[idx[k]!]!;
+      // A full-turn axis wraps (into min…min + 360); a narrower range is a hard limit.
+      if (ax.max - ax.min >= 360) a[i] = ax.min + (((v - ax.min) % 360) + 360) % 360;
+      else if (v < ax.min - 1e-9 || v > ax.max + 1e-9) ok = false;
+      else a[i] = v;
+    });
+    if (ok) {
+      const s = score(a);
+      if (s < bestScore - 1e-12) {
+        best = a;
+        bestScore = s;
+      }
+    }
+    let k = 0;
+    while (k < free.length && ++idx[k]! >= offsets.length) idx[k++] = 0;
+    if (k === free.length) break;
+  }
+  return best;
 }
 
 /** For each target, the number of settings that record it (same test as the search). */

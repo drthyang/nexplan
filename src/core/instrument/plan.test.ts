@@ -103,6 +103,71 @@ describe("greedy maximum coverage", () => {
   });
 });
 
+describe("greedy fewest settings (set cover)", () => {
+  it("stops once every wanted reflection is well placed, where coverage keeps adding families", () => {
+    const sets = [Int32Array.from([0, 1, 2, 3]), Int32Array.from([4]), Int32Array.from([5, 6, 7, 8, 9]), Int32Array.from([1])];
+    // Wanted 0 is well placed by set 1, wanted 1 by set 3; set 0 records both near an edge, set 2 neither.
+    const wanted = [Uint8Array.of(1, 1), Uint8Array.of(2, 0), Uint8Array.of(0, 0), Uint8Array.of(0, 2)];
+    expect(greedyCover(sets, 10, { wanted, goal: "fewest" }).map((p) => p.index)).toEqual([1, 3]);
+    expect(greedyCover(sets, 10, { wanted }).length).toBeGreaterThan(2);
+  });
+
+  it("among settings placing the same wanted reflections well, takes the most centred, not the one with the most families", () => {
+    const sets = [Int32Array.from([0, 1, 2, 3, 4]), Int32Array.from([0])];
+    const wanted = [Uint8Array.of(2), Uint8Array.of(2)];
+    const costs = [Float64Array.of(0.6), Float64Array.of(0.1)];
+    expect(greedyCover(sets, 1, { wanted, costs, goal: "fewest" })[0]!.index).toBe(1);
+    expect(greedyCover(sets, 1, { wanted, costs })[0]!.index).toBe(0);
+  });
+
+  it("with nothing wanted, stops once every reachable family is recorded", () => {
+    const sets = [Int32Array.from([0, 1]), Int32Array.from([1, 2]), Int32Array.from([2, 3]), Int32Array.from([0, 3])];
+    const picks = greedyCover(sets, 10, { goal: "fewest" });
+    expect(picks).toHaveLength(2);
+    expect(new Set(picks.flatMap((p) => [...sets[p.index]!])).size).toBe(4);
+  });
+
+  it("TOPAZ ambient: places every wanted reflection that can be placed well, in fewer settings than coverage, each within a step of its grid point", () => {
+    const wanted: Vec3[][] = [[[2, -1, 1]], [[1, 3, 0]], [[0, 2, -2]], [[3, 1, 1]], [[1, 1, 4]], [[-2, 2, 1]], [[1, 0, 0]]];
+    const common = { model: ambient.goniometer, base: [0, 135, 0], UB, reflections: refl, wanted, existing: [], panels, lambdaMin: 0.4, lambdaMax: 3.5, n: 10 };
+    const fewest = suggestSettings({ ...common, goal: "fewest" });
+    const coverage = suggestSettings({ ...common, goal: "coverage" });
+    console.log(`TOPAZ ambient, ${wanted.length} wanted: fewest ${fewest.settings.length} settings place ${fewest.wellAfter} well (${fewest.wellPossible} possible); coverage ${coverage.settings.length} settings place ${coverage.wellAfter}`);
+    expect(fewest.goal).toBe("fewest");
+    expect(fewest.refined).toBe(true);
+    expect(fewest.wellPossible).toBeGreaterThan(3);
+    expect(fewest.wellAfter).toBe(fewest.wellPossible);
+    expect(fewest.settings.length).toBeLessThan(wanted.length);
+    expect(fewest.settings.length).toBeLessThan(coverage.settings.length);
+    // The independent path agrees on what is placed well.
+    const status = wantedStatus(ambient.goniometer, fewest.settings, UB, wanted, panels, 0.4, 3.5);
+    expect(status.filter((s) => s.well > 0)).toHaveLength(fewest.wellAfter);
+    // Refined off the 5° grid by at most a step per free axis (ω and φ wrap over a full turn); χ stays at 135°.
+    const grid = candidateGrid(ambient.goniometer, [0, 135, 0]).settings;
+    fewest.settings.forEach((s, k) => {
+      const g = grid[fewest.picks[k]!.index]!;
+      for (const i of [0, 2]) expect(Math.abs(((s[i]! - g[i]! + 540) % 360) - 180)).toBeLessThanOrEqual(fewest.step + 1e-9);
+      expect(s[1]).toBe(135);
+    });
+  });
+
+  it("TOPAZ cryogenic, one wanted reflection: one setting, centred at least as well as its 1° grid point", () => {
+    const h: Vec3 = [2, -1, 1];
+    const res = suggestSettings({ model: cryo.goniometer, base: [0], UB, reflections: refl, wanted: [[h]], existing: [], panels: cryo.detectors!, lambdaMin: 0.4, lambdaMax: 3.5, n: 10, goal: "fewest" });
+    expect(res.settings).toHaveLength(1);
+    const cost = (angles: readonly number[]) => {
+      const hit = landingOf(cryo.goniometer, angles, UB, h, cryo.detectors!, 0.4, 3.5)!;
+      return Math.max(Math.abs(hit.lambda - 1.95) / 1.55, hit.offset);
+    };
+    const start = candidateGrid(cryo.goniometer, [0]).settings[res.picks[0]!.index]!;
+    expect(cost(res.settings[0]!)).toBeLessThanOrEqual(cost(start) + 1e-12);
+    // Well placed by the default criteria.
+    const hit = landingOf(cryo.goniometer, res.settings[0]!, UB, h, cryo.detectors!, 0.4, 3.5)!;
+    expect(Math.abs(hit.lambda - 1.95)).toBeLessThanOrEqual(0.5 * 1.55 + 1e-12);
+    expect(hit.offset).toBeLessThanOrEqual(0.8 + 1e-12);
+  });
+});
+
 describe("wanted placement", () => {
   it("counts a setting as well placed exactly when λ is near mid band and the hit is away from the panel edges", () => {
     const h: Vec3 = [2, -1, 1];
