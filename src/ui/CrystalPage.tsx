@@ -373,30 +373,15 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
         >
           {planKind === "list" ? (
             <>
-              <div className="ui-controls ui-controls--inline">
-                <button type="button" className="ui-btn-brand" onClick={addCurrent}>
-                  Add current setting
-                </button>
-                <span className="ui-control">
-                  <span className="ui-control-label">Fill</span>
-                  <UnitField label="Number of evenly spaced settings" value={fillN} unit={`× ${free[0]!.ax.name}`} min={1} max={72} width="4ch" onCommit={setFillN} />
-                  <button type="button" className="ui-pill" onClick={fillEven}>
-                    Fill evenly
-                  </button>
-                </span>
-                {exp.orientations.length > 0 && (
-                  <button type="button" className="ui-pill" onClick={() => onExp({ ...exp, orientations: [] })}>
-                    Clear
-                  </button>
-                )}
-              </div>
-              <div className="wanted-box">
+              <div className="plan-step">
                 <div className="wanted-head">
-                  <span className="ui-control-label">Wanted reflections</span>
+                  <span className="plan-step__title">
+                    <span className="plan-step__n">1</span> Wanted reflections
+                  </span>
                   <HklAdder onAdd={addWanted} />
                 </div>
                 {wantedTargets.length === 0 ? (
-                  <p className="empty-note">The peaks this measurement is for. Add them here or with "Add to wanted" on a selected reflection; the list below shows which settings record them, and Suggest puts them first.</p>
+                  <p className="empty-note">The peaks this measurement is for: type them, or use "Add to wanted" on a reflection picked in the slice below.</p>
                 ) : (
                   <div className="wanted-list">
                     {wantedTargets.map((t, k) => {
@@ -430,40 +415,58 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
                     })}
                   </div>
                 )}
-                <div className="ui-controls ui-controls--inline placement-row" title="A recording of a wanted reflection is well placed when its wavelength is near the middle of the band and it lands away from the panel edges. Suggest places wanted reflections well first.">
-                  <span className="ui-control-label">Well placed</span>
-                  <span className="ui-control">
-                    <span className="dim-note">λ in the inner</span>
-                    <UnitField label="Inner fraction of the band counted as mid band" value={Math.round(exp.placement.bandFraction * 100)} unit="%" min={5} max={100} width="3.5ch" onCommit={(v) => onExp({ ...exp, placement: { ...exp.placement, bandFraction: v / 100 } })} />
-                    <span className="dim-note">of the band, ≥</span>
-                    <UnitField label="Margin from the panel edges, as a fraction of the panel" value={Math.round(exp.placement.edgeFraction * 100)} unit="%" min={0} max={45} width="3.5ch" onCommit={(v) => onExp({ ...exp, placement: { ...exp.placement, edgeFraction: v / 100 } })} />
-                    <span className="dim-note">of a panel from its edges</span>
+              </div>
+              <div className="plan-step">
+                <div className="wanted-head">
+                  <span className="plan-step__title">
+                    <span className="plan-step__n">2</span> Settings
+                  </span>
+                  <span className="ui-controls ui-controls--inline">
+                    <UnitField label="Number of settings to suggest" value={suggestN} unit="settings" min={1} max={40} width="4ch" onCommit={setSuggestN} />
+                    {search ? (
+                      <>
+                        <span className="dim-note">Searching{search.total ? ` ${Math.round((100 * search.done) / search.total)} %` : "…"}</span>
+                        <button type="button" className="ui-pill" onClick={() => search.cancel()}>
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <button type="button" className="ui-btn-brand" onClick={runSuggest} title="Search a grid of goniometer settings for the ones that place the wanted reflections well first, then record the most new families, then add redundancy; they are added after the settings already in the list">
+                        {exp.orientations.length ? "Suggest more" : "Suggest settings"}
+                      </button>
+                    )}
                   </span>
                 </div>
-                <div className="ui-controls ui-controls--inline" style={{ marginTop: "0.55rem" }}>
+                <div className="ui-controls ui-controls--inline placement-row" title="A recording of a wanted reflection is well placed when its wavelength is near the middle of the band and it lands away from the panel edges. Suggest places wanted reflections well first.">
+                  <span className="dim-note">Well placed: λ in the inner</span>
+                  <UnitField label="Inner fraction of the band counted as mid band" value={Math.round(exp.placement.bandFraction * 100)} unit="%" min={5} max={100} width="3.5ch" onCommit={(v) => onExp({ ...exp, placement: { ...exp.placement, bandFraction: v / 100 } })} />
+                  <span className="dim-note">of the band, at least</span>
+                  <UnitField label="Margin from the panel edges, as a fraction of the panel" value={Math.round(exp.placement.edgeFraction * 100)} unit="%" min={0} max={45} width="3.5ch" onCommit={(v) => onExp({ ...exp, placement: { ...exp.placement, edgeFraction: v / 100 } })} />
+                  <span className="dim-note">of a panel from its edges</span>
+                </div>
+                {suggestNote && <p className="empty-note">{suggestNote}</p>}
+                <div className="ui-controls ui-controls--inline plan-manual">
+                  <span className="dim-note">By hand:</span>
+                  <button type="button" className="ui-pill" onClick={addCurrent} title="Add the goniometer setting shown on the right">
+                    Add current setting
+                  </button>
                   <span className="ui-control">
-                    <span className="ui-control-label">Suggest</span>
-                    <UnitField label="Number of settings to suggest" value={suggestN} unit="settings" min={1} max={40} width="4ch" onCommit={setSuggestN} />
+                    <UnitField label="Number of evenly spaced settings" value={fillN} unit={`× ${free[0]!.ax.name}`} min={1} max={72} width="4ch" onCommit={setFillN} />
+                    <button type="button" className="ui-pill" onClick={fillEven}>
+                      Fill evenly
+                    </button>
                   </span>
-                  {search ? (
-                    <>
-                      <span className="dim-note">Searching{search.total ? ` ${Math.round((100 * search.done) / search.total)} %` : "…"}</span>
-                      <button type="button" className="ui-pill" onClick={() => search.cancel()}>
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <button type="button" className="ui-btn-brand" onClick={runSuggest} title="Search a grid of goniometer settings for the ones that record the wanted reflections first, then the most new families; they are added after the settings already in the list">
-                      {exp.orientations.length ? "Add suggested settings" : "Suggest settings"}
+                  {exp.orientations.length > 0 && (
+                    <button type="button" className="ui-pill" onClick={() => onExp({ ...exp, orientations: [] })}>
+                      Clear list
                     </button>
                   )}
                 </div>
-                {suggestNote && <p className="empty-note">{suggestNote}</p>}
               </div>
               {"error" in plan ? (
                 <p className="error-note">{plan.error}</p>
               ) : exp.orientations.length === 0 ? (
-                <p className="empty-note">No settings yet. Turn the goniometer (or use "Find a setting" for a wanted reflection) and add it, or fill the list evenly.</p>
+                <p className="empty-note">No settings yet: suggest them, or add them by hand.</p>
               ) : (
                 <div className="ui-table-wrap" style={{ maxHeight: "20rem" }}>
                   <table className="ui-table">

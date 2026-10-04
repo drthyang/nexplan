@@ -14,7 +14,7 @@ import type { GoniometerModel } from "../core/ub/goniometer.ts";
 import { axisAngle, directBasisInSample, latticeFromUB, nearestIndices, orientationFromUB, transformUB } from "../core/ub/ub.ts";
 import { formatIsawUB, IsawParseError, parseIsawUB } from "../io/isaw.ts";
 import { BASIS_PRESETS, hklTransformText, linearText, parseRatio, ratioText, supercell } from "../core/ub/basis.ts";
-import { Card, Segmented, UnitField } from "./components.tsx";
+import { Card, cx, Segmented, UnitField } from "./components.tsx";
 import { downloadText, fmt, hklText } from "./format.ts";
 import { presentReflections, useViewUB, type UbState } from "./ubShared.ts";
 
@@ -40,7 +40,7 @@ export interface GonioState {
   readonly showEwald: boolean;
 }
 
-export const DEFAULT_GONIO: GonioState = { angles: [0, 0, 0], lambdaMin: 0.4, lambdaMax: 3.5, frame: "lab", showEwald: true };
+export const DEFAULT_GONIO: GonioState = { angles: [0, 0, 0], lambdaMin: 0.4, lambdaMax: 3.5, frame: "lab", showEwald: false };
 
 export function MatrixBlock({ M, digits = 6 }: { M: Mat3; digits?: number }) {
   return (
@@ -111,6 +111,22 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
   const cifCell = result.structure.cell;
   const fileInput = useRef<HTMLInputElement>(null);
   const [selected, setSelected] = useState<number | null>(null);
+  // The 3D Laue construction is opt-in (it is for understanding the frames, not for planning); remembered per browser.
+  const [explore, setExploreState] = useState(() => {
+    try {
+      return localStorage.getItem("nexplan-explore-3d") === "open";
+    } catch {
+      return false;
+    }
+  });
+  const setExplore = (open: boolean) => {
+    setExploreState(open);
+    try {
+      localStorage.setItem("nexplan-explore-3d", open ? "open" : "closed");
+    } catch {
+      // Storage unavailable: the choice lasts for this page only.
+    }
+  };
   const [loadError, setLoadError] = useState<string | null>(null);
   const [P, setP] = useState<Mat3>(IDENTITY);
   const [cell, setCell] = useState<[number, number, number]>([1, 1, 1]);
@@ -170,54 +186,20 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
     }
   }, [viewUB, P]);
   const sel = selected !== null ? points[selected] : undefined;
+  // Indices to convert: typed, or the reflection picked in the 3D view or its table.
+  const [tryText, setTryText] = useState("1 0 0");
+  useEffect(() => {
+    if (sel) setTryText(sel.h.join(" "));
+  }, [sel]);
+  const tryH = useMemo(() => {
+    const v = tryText.trim().split(/[\s,]+/).map(Number);
+    return v.length === 3 && v.every((x) => Number.isFinite(x)) ? (v as unknown as Vec3) : undefined;
+  }, [tryText]);
   const selSpot = sel ? laueCondition(mulVec(R, mulVec(viewUB, sel.h))) : undefined;
 
   return (
     <div className="ui-stack">
       <div className="ui-grid ui-grid--split">
-        <Card
-          title="Reciprocal space"
-          meta={`${points.length.toLocaleString()} reflections · ${laue.rows.length.toLocaleString()} in the λ band`}
-          info="Laue (white-beam / TOF) Ewald construction in 1/Å without 2π. Points are reciprocal-lattice nodes q = UB·h sized by |F|²; a point is coloured by the wavelength at which it diffracts when that lies in the band. The two spheres are the Ewald spheres for λmin and λmax: everything between them diffracts. Click a point to draw its k_i, k_f and q. Drag to rotate, scroll to zoom."
-          className="viewer-card"
-          actions={
-            <>
-              <Segmented label="Frame" value={gonio.frame} onChange={(frame) => onGonio({ ...gonio, frame })} options={[{ value: "lab", label: "Lab frame" }, { value: "sample", label: "Sample frame" }]} />
-              <label className="ui-check" style={{ fontSize: "var(--fs-80)" }}>
-                <input type="checkbox" checked={gonio.showEwald} onChange={(e) => onGonio({ ...gonio, showEwald: e.target.checked })} /> Ewald spheres
-              </label>
-            </>
-          }
-        >
-          <Suspense fallback={<p className="empty-note">Loading the 3D view…</p>}>
-            <ReciprocalView
-              UB={viewUB}
-              R={R}
-              qSign={1}
-              lambdaMin={lambdaMin}
-              lambdaMax={lambdaMax}
-              points={points}
-              frame={gonio.frame}
-              selected={selected}
-              onSelect={setSelected}
-              theme={theme}
-              showEwald={gonio.showEwald}
-              fileStem={result.blockName}
-              status={laue.status}
-              lambdas={laue.lambdas}
-              hasDetectors={false}
-            />
-          </Suspense>
-          {sel && (
-            <p className="selection-note">
-              <b>({hklText(sel.h)})</b> d {fmt(sel.d, 4)} Å · |F|² {sel.f2.toPrecision(4)} ·{" "}
-              {selSpot && Number.isFinite(selSpot.lambda) ? `λ ${fmt(selSpot.lambda, 4)} Å, 2θ ${fmt(selSpot.twoTheta, 2)}°, azimuth ${fmt(selSpot.azimuth, 1)}°${selSpot.lambda < lambdaMin || selSpot.lambda > lambdaMax ? " (outside the band)" : ""}` : "cannot diffract at this setting (q points along the beam)"}
-              <span className="dim"> · Mantid's default Inelastic convention labels this reflection ({hklText([-sel.h[0], -sel.h[1], -sel.h[2]])}).</span>
-            </p>
-          )}
-        </Card>
-
-        <div className="ui-stack">
           <Card
             title="UB matrix"
             meta={ub.fileName ?? "from the CIF cell, U = I"}
@@ -303,24 +285,6 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
                   {fmt(aa.angleDeg, 2)}° <small>about [{aa.axis.map((v) => v.toFixed(3)).join(", ")}]</small>
                 </dd>
               </div>
-              <div>
-                <dt>Along beam</dt>
-                <dd>
-                  ({hklText(along.beamHkl.indices)}) <small>{fmt(along.beamHkl.angleDeg, 1)}° off</small>
-                </dd>
-              </div>
-              <div>
-                <dt>Along beam, real</dt>
-                <dd>
-                  [{hklText(along.beamUvw.indices)}] <small>{fmt(along.beamUvw.angleDeg, 1)}° off</small>
-                </dd>
-              </div>
-              <div>
-                <dt>Vertical</dt>
-                <dd>
-                  ({hklText(along.upHkl.indices)}) <small>[{hklText(along.upUvw.indices)}]</small>
-                </dd>
-              </div>
             </dl>
           </Card>
 
@@ -350,47 +314,29 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
               </div>
               )}
             </div>
+            <dl className="ui-stats ui-stats--three" style={{ marginTop: "0.75rem" }} title="Directions of the crystal along the beam and the vertical at this goniometer setting">
+              <div>
+                <dt>Along beam</dt>
+                <dd>
+                  ({hklText(along.beamHkl.indices)}) <small>{fmt(along.beamHkl.angleDeg, 1)}° off</small>
+                </dd>
+              </div>
+              <div>
+                <dt>Along beam, real</dt>
+                <dd>
+                  [{hklText(along.beamUvw.indices)}] <small>{fmt(along.beamUvw.angleDeg, 1)}° off</small>
+                </dd>
+              </div>
+              <div>
+                <dt>Vertical</dt>
+                <dd>
+                  ({hklText(along.upHkl.indices)}) <small>[{hklText(along.upUvw.indices)}]</small>
+                </dd>
+              </div>
+            </dl>
             <p className="empty-note">Lab frame: beam +z, up +y. q_lab = R·UB·h{instrument ? `, R from the ${instrument.name} goniometer.` : " with R = R_y(ω)·R_z(χ)·R_y(φ) (Mantid Universal)."}</p>
           </Card>
-        </div>
       </div>
-
-      <div className="ui-grid ui-grid--split">
-        <Card title="Reflections in the band" meta={`${laue.rows.length.toLocaleString()} at this goniometer setting · strongest first`} flush>
-          <div className="ui-table-wrap" style={{ maxHeight: "22rem" }}>
-            <table className="ui-table">
-              <thead>
-                <tr>
-                  <th className="left">hkl</th>
-                  <th>d (Å)</th>
-                  <th>λ (Å)</th>
-                  <th>2θ (°)</th>
-                  <th>azimuth (°)</th>
-                  <th>|F|²</th>
-                </tr>
-              </thead>
-              <tbody>
-                {laue.rows
-                  .slice()
-                  .sort((a, b) => points[b.i]!.f2 - points[a.i]!.f2)
-                  .slice(0, 400)
-                  .map((row) => {
-                    const p = points[row.i]!;
-                    return (
-                      <tr key={row.i} className={`is-clickable${row.i === selected ? " is-selected" : ""}`} onClick={() => setSelected(row.i === selected ? null : row.i)}>
-                        <th>({hklText(p.h)})</th>
-                        <td>{fmt(p.d, 4)}</td>
-                        <td>{fmt(row.lambda, 4)}</td>
-                        <td>{fmt(row.twoTheta, 2)}</td>
-                        <td>{fmt(row.azimuth, 1)}</td>
-                        <td>{p.f2.toPrecision(5)}</td>
-                      </tr>
-                    );
-                  })}
-              </tbody>
-            </table>
-          </div>
-        </Card>
 
         <Card
           title="Re-index for another cell"
@@ -402,6 +348,8 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
             </button>
           }
         >
+          <div className="reindex-grid">
+            <div>
           <p className="card-lead">
             Writes the UB for a different unit cell of the same crystal: a supercell to index superlattice or magnetic peaks, the primitive cell, or another program's setting. Reflections stay where they are in reciprocal space; only their indices change.
           </p>
@@ -455,6 +403,8 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
               </div>
             ))}
           </div>
+            </div>
+            <div>
           {"error" in transformed ? (
             <p className="error-note">{transformed.error}</p>
           ) : (
@@ -484,15 +434,17 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
                       ? ": a smaller cell. Old reflections with fractional new indices are not lattice points of the new cell (for centred → primitive, exactly those the centring forbids)."
                       : "."}
               </p>
-              <p className="empty-note">
-                {sel ? (
-                  <>
-                    Selected <b>({hklText(sel.h)})</b> becomes <b>({hklText(mulVec(transpose(P), sel.h).map((v) => Number(v.toFixed(4))) as unknown as Vec3)})′</b>.
-                  </>
-                ) : (
-                  "Click a reflection in the table or the 3D view to see its new indices."
-                )}
-              </p>
+              <div className="form-row reindex-try">
+                <span className="ui-control-label">Indices</span>
+                <span className="ui-controls ui-controls--inline">
+                  <span className={cx("ui-unit-field", tryText.trim() !== "" && !tryH && "is-invalid")}>
+                    <input className="ui-unit-field__input" aria-label="Old indices h k l" placeholder="h k l" value={tryText} style={{ width: "8ch" }} onChange={(e) => setTryText(e.target.value)} />
+                    <span className="ui-unit-field__unit">hkl</span>
+                  </span>
+                  <span className="dim-note">becomes</span>
+                  <b className="mono">{tryH ? `(${hklText(mulVec(transpose(P), tryH).map((v) => Number(v.toFixed(4))) as unknown as Vec3)})′` : "(h′ k′ l′)"}</b>
+                </span>
+              </div>
               <div className="basis-out">
                 <button type="button" className="ui-btn-brand" disabled={transformed.det <= 0} onClick={() => downloadText(`${result.blockName}-transformed.mat`, formatIsawUB(transformed.UB!))}>
                   Export UB′ (ISAW)
@@ -506,8 +458,102 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
               </div>
             </>
           )}
+            </div>
+          </div>
         </Card>
-      </div>
+
+      <Card
+        title="Reciprocal space in 3D"
+        meta={explore ? undefined : "hidden"}
+        actions={
+          <button type="button" className="ui-pill" aria-expanded={explore} onClick={() => setExplore(!explore)}>
+            {explore ? "Hide" : "Show the 3D view"}
+          </button>
+        }
+      >
+        <p className="explore-lead">The Laue construction at this goniometer setting: lattice points, the Ewald spheres of the band, and the lab and sample frames, with the reflections in the band. For checking the UB and the frames; the Detectors page shows what the instrument records.</p>
+      </Card>
+      {explore && (
+          <div className="ui-grid ui-grid--split">
+        <Card
+          title="Laue construction"
+          meta={`${points.length.toLocaleString()} reflections · ${laue.rows.length.toLocaleString()} in the λ band`}
+          info="Laue (white-beam / TOF) Ewald construction in 1/Å without 2π. Points are reciprocal-lattice nodes q = UB·h sized by |F|²; a point is coloured by the wavelength at which it diffracts when that lies in the band. The two spheres are the Ewald spheres for λmin and λmax: everything between them diffracts. Click a point to draw its k_i, k_f and q. Drag to rotate, scroll to zoom."
+          className="viewer-card"
+          actions={
+            <>
+              <Segmented label="Frame" value={gonio.frame} onChange={(frame) => onGonio({ ...gonio, frame })} options={[{ value: "lab", label: "Lab frame" }, { value: "sample", label: "Sample frame" }]} />
+              <label className="ui-check" style={{ fontSize: "var(--fs-80)" }}>
+                <input type="checkbox" checked={gonio.showEwald} onChange={(e) => onGonio({ ...gonio, showEwald: e.target.checked })} /> Ewald spheres
+              </label>
+            </>
+          }
+        >
+          <Suspense fallback={<p className="empty-note">Loading the 3D view…</p>}>
+            <ReciprocalView
+              UB={viewUB}
+              R={R}
+              qSign={1}
+              lambdaMin={lambdaMin}
+              lambdaMax={lambdaMax}
+              points={points}
+              frame={gonio.frame}
+              selected={selected}
+              onSelect={setSelected}
+              theme={theme}
+              showEwald={gonio.showEwald}
+              fileStem={result.blockName}
+              status={laue.status}
+              lambdas={laue.lambdas}
+              hasDetectors={false}
+            />
+          </Suspense>
+          {sel && (
+            <p className="selection-note">
+              <b>({hklText(sel.h)})</b> d {fmt(sel.d, 4)} Å · |F|² {sel.f2.toPrecision(4)} ·{" "}
+              {selSpot && Number.isFinite(selSpot.lambda) ? `λ ${fmt(selSpot.lambda, 4)} Å, 2θ ${fmt(selSpot.twoTheta, 2)}°, azimuth ${fmt(selSpot.azimuth, 1)}°${selSpot.lambda < lambdaMin || selSpot.lambda > lambdaMax ? " (outside the band)" : ""}` : "cannot diffract at this setting (q points along the beam)"}
+              <span className="dim"> · Mantid's default Inelastic convention labels this reflection ({hklText([-sel.h[0], -sel.h[1], -sel.h[2]])}).</span>
+            </p>
+          )}
+        </Card>
+        <Card title="Reflections in the band" meta={`${laue.rows.length.toLocaleString()} at this goniometer setting · strongest first`} flush>
+          <div className="ui-table-wrap" style={{ maxHeight: "22rem" }}>
+            <table className="ui-table">
+              <thead>
+                <tr>
+                  <th className="left">hkl</th>
+                  <th>d (Å)</th>
+                  <th>λ (Å)</th>
+                  <th>2θ (°)</th>
+                  <th>azimuth (°)</th>
+                  <th>|F|²</th>
+                </tr>
+              </thead>
+              <tbody>
+                {laue.rows
+                  .slice()
+                  .sort((a, b) => points[b.i]!.f2 - points[a.i]!.f2)
+                  .slice(0, 400)
+                  .map((row) => {
+                    const p = points[row.i]!;
+                    return (
+                      <tr key={row.i} className={`is-clickable${row.i === selected ? " is-selected" : ""}`} onClick={() => setSelected(row.i === selected ? null : row.i)}>
+                        <th>({hklText(p.h)})</th>
+                        <td>{fmt(p.d, 4)}</td>
+                        <td>{fmt(row.lambda, 4)}</td>
+                        <td>{fmt(row.twoTheta, 2)}</td>
+                        <td>{fmt(row.azimuth, 1)}</td>
+                        <td>{p.f2.toPrecision(5)}</td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+
+          </div>
+      )}
     </div>
   );
 }

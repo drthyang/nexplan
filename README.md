@@ -55,7 +55,8 @@ definition (always neutron scattering).
   - *Reflections*: every signed hkl with d, Q and complex F, folded into symmetry families, absences flagged.
 - **Setup**
   - *Orientation*: the UB matrix (ISAW/Mantid files in and out, matched to the CIF setting, re-indexing for another cell) and
-    the selected instrument's goniometer, with a 3D reciprocal-space view and the Ewald spheres of the band.
+    the selected instrument's goniometer, with what lies along the beam and the vertical. The 3D Laue construction
+    (lattice points, Ewald spheres of the band, lab and sample frames) is there on request, for checking the frames.
 - **Instrument**
   - *Detectors*: the instrument's detector array in 3D and unrolled. Single crystals: the spots at the current
     setting, or the exact coverage of a chosen reflection over the goniometer ranges, coloured by wavelength (as in

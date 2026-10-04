@@ -1953,12 +1953,6 @@ input.ui-range {
 }
 
 /* Wanted reflections (orientation lists) */
-.wanted-box {
-  margin-top: 0.75rem;
-  padding-top: 0.7rem;
-  border-top: 1px solid var(--border);
-}
-
 .wanted-head {
   display: flex;
   flex-wrap: wrap;
@@ -2018,5 +2012,59 @@ input.ui-range {
 
 .scan-presets {
   margin-top: 0.4rem;
+  font-size: var(--fs-80);
+}
+
+/* Orientation: the opt-in 3D Laue construction. */
+.explore-lead {
+  margin: 0;
+  max-width: 62rem;
+  color: var(--muted);
+  font-size: var(--fs-84);
+  line-height: 1.45;
+}
+
+/* Re-index: the editor beside its result on wide screens. */
+.reindex-grid {
+  display: grid;
+  gap: 0.5rem 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+  align-items: start;
+}
+
+.reindex-grid > :last-child > .ui-stats:first-child {
+  margin-top: 0 !important;
+}
+
+/* Orientation-list steps: wanted reflections, then settings. */
+.plan-step + .plan-step {
+  margin-top: 0.8rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.plan-step__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text-strong);
+  font-size: var(--fs-85);
+  font-weight: 650;
+}
+
+.plan-step__n {
+  display: inline-grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--fs-74);
+  font-weight: 700;
+}
+
+.plan-manual {
+  margin-top: 0.5rem;
   font-size: var(--fs-80);
 }
