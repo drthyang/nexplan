@@ -145,6 +145,29 @@ export function PowderPlot({
   const sel = selected !== null && pos[selected] !== undefined && pos[selected]! >= x0 && pos[selected]! <= x1 ? selected : null;
   const tip = hover ? peaks[hover.index] : undefined;
 
+  // Shaded range: the band is drawn under the pattern, its label over it, so peak lines never cross the text.
+  const shadeBox = (() => {
+    if (!shade || Math.max(shade.from, shade.to) <= x0 || Math.min(shade.from, shade.to) >= x1) return null;
+    const left = sx(Math.max(x0, Math.min(shade.from, shade.to)));
+    const right = sx(Math.min(x1, Math.max(shade.from, shade.to)));
+    // The label sits inside the shaded range when it fits, else beside it where there is room, else from the band's
+    // inner edge: on a narrow plot a wide band (Q above d_min) leaves room on neither side.
+    const need = 7 * shade.label.length;
+    const roomRight = m.l + W - right - 6;
+    const roomLeft = left - 6 - m.l;
+    const place: { x: number; anchor: "middle" | "start" | "end" } =
+      right - left > need
+        ? { x: (left + right) / 2, anchor: "middle" }
+        : roomRight >= need && roomRight >= roomLeft
+          ? { x: right + 6, anchor: "start" }
+          : roomLeft >= need
+            ? { x: left - 6, anchor: "end" }
+            : right >= m.l + W - 1
+              ? { x: right - 6, anchor: "end" }
+              : { x: left + 6, anchor: "start" };
+    return { left, right, label: shade.label, ...place };
+  })();
+
   return (
     <div ref={wrapRef} className="plot-wrap" tabIndex={0} onKeyDown={onKey} aria-label="Powder pattern; arrow keys step through peaks">
       <svg
@@ -185,25 +208,22 @@ export function PowderPlot({
           <rect x={m.l} y={m.t} width={W} height={H + tickBand.height + 8} />
         </clipPath>
         <g clipPath="url(#plot-clip)">
-          {shade && Math.max(shade.from, shade.to) > x0 && Math.min(shade.from, shade.to) < x1 && (() => {
-            const left = sx(Math.max(x0, Math.min(shade.from, shade.to)));
-            const right = sx(Math.min(x1, Math.max(shade.from, shade.to)));
-            // The label sits inside the shaded range when it fits, else just beside it (on the side with room).
-            const fits = right - left > 7 * shade.label.length;
-            const besideRight = right < m.l + W / 2;
-            return (
-              <g className="plot-shade">
-                <rect x={left} y={m.t} width={Math.max(0, right - left)} height={H} />
-                <text x={fits ? (left + right) / 2 : besideRight ? right + 6 : left - 6} y={m.t + 18} textAnchor={fits ? "middle" : besideRight ? "start" : "end"}>
-                  {shade.label}
-                </text>
-              </g>
-            );
-          })()}
+          {shadeBox && (
+            <g className="plot-shade">
+              <rect x={shadeBox.left} y={m.t} width={Math.max(0, shadeBox.right - shadeBox.left)} height={H} />
+            </g>
+          )}
           {sel !== null && <line className="selection-line" x1={sx(pos[sel]!)} x2={sx(pos[sel]!)} y1={m.t} y2={tickBand.top + tickBand.height} />}
           {showSticks &&
             visibleIdx.map((i) => <line key={`s${i}`} className="series-stick" x1={sx(pos[i]!)} x2={sx(pos[i]!)} y1={sy(0)} y2={sy((100 * peaks[i]!.intensity) / iMax)} />)}
           {path && <path className="series-profile" d={path} />}
+          {shadeBox && (
+            <g className="plot-shade">
+              <text x={shadeBox.x} y={m.t + 18} textAnchor={shadeBox.anchor}>
+                {shadeBox.label}
+              </text>
+            </g>
+          )}
           {marker !== undefined && marker >= x0 && marker <= x1 && <line className="slice-line" x1={sx(marker)} x2={sx(marker)} y1={m.t} y2={m.t + H} />}
           {hover && hover.index !== sel && <line className="hover-line" x1={sx(pos[hover.index]!)} x2={sx(pos[hover.index]!)} y1={m.t} y2={m.t + H} />}
           {/* Reflection ticks */}
