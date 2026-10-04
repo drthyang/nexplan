@@ -1043,6 +1043,22 @@ details.ui-fold > .ui-fold__body {
   }
 }
 
+/* Touch tablets set selects in 16 px type (no zoom on focus), which cut instrument names at 12.5rem
+   ("TOPAZ · cryogenic (" on an iPad Pro 11"). The picker takes the header row's spare width, up to 18.5rem:
+   measured, spare = 100vw − 716 px below 981 px and 100vw − 897 px from there (beta pill and label shown),
+   less 12 px. Should the actions grow, the row wraps rather than overflows. */
+@media (hover: none) and (pointer: coarse) and (min-width: 761px) and (max-width: 980px) {
+  .header-actions .instrument-pick .ui-select {
+    max-width: clamp(12.5rem, 12.5rem + 100vw - 728px, 18.5rem);
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (min-width: 981px) and (max-width: 1040px) {
+  .header-actions .instrument-pick .ui-select {
+    max-width: clamp(12.5rem, 12.5rem + 100vw - 909px, 18.5rem);
+  }
+}
+
 .page-tabs {
   grid-column: 1 / -1;
   grid-row: 2;
