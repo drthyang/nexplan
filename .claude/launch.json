@@ -24,16 +24,6 @@
       ],
       "port": 4187,
       "url": "http://localhost:4187"
-    },
-    {
-      "name": "nexplan-preview-b",
-      "runtimeExecutable": "sh",
-      "runtimeArgs": [
-        "-c",
-        "npx tsc -b && npx vite build --outDir /private/tmp/claude-501/-Users-thyang-GitHub-scatterplan/35530c5f-7547-4963-b8aa-d809ac3d939e/scratchpad/dist-b --emptyOutDir && npx vite preview --outDir /private/tmp/claude-501/-Users-thyang-GitHub-scatterplan/35530c5f-7547-4963-b8aa-d809ac3d939e/scratchpad/dist-b --port 4191 --strictPort"
-      ],
-      "port": 4191,
-      "url": "http://localhost:4191"
     }
   ]
 }
