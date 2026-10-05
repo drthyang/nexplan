@@ -1,6 +1,6 @@
 /* UI kit: the RMCProfile Workbench classes (rmc-toolkits web_app/frontend/
-   src/ui/ui.css) that NEXPLAN uses, with MATERIA's beta pill and
-   disclaimer bar. Colours, radii and sizes come only from tokens.css. */
+   src/ui/ui.css) that NEXPLAN uses, with MATERIA's disclaimer bar.
+   Colours, radii and sizes come only from tokens.css. */
 
 /* ---------------------------------------------------------------- shell */
 .app-container {
@@ -90,32 +90,6 @@
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.09em;
-}
-
-/* MATERIA's header meta pill ("beta v0.2.0"). */
-.beta-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 20px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  border-radius: var(--radius-pill);
-  padding: 0 8px;
-  white-space: nowrap;
-  color: var(--pill-beta-ink);
-  background: var(--pill-beta-bg);
-  border: 1px solid var(--pill-beta-border);
-}
-
-.beta-pill .ver {
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: none;
-  opacity: 0.72;
 }
 
 /* MATERIA's public-beta disclaimer bar. */
@@ -1034,9 +1008,8 @@ details.ui-fold > .ui-fold__body {
 }
 
 /* Tablet widths: the brand and actions share one row, and the tabs fit without scrolling. The tab groups keep
-   their dividers (and aria labels); the beta pill and the text labels return on wider screens. */
+   their dividers (and aria labels); the text labels return on wider screens. */
 @media (max-width: 980px) {
-  .beta-pill,
   .instrument-pick > .ui-control-label,
   .tab-group__label {
     display: none;
@@ -1045,8 +1018,8 @@ details.ui-fold > .ui-fold__body {
 
 /* Touch tablets set selects in 16 px type (no zoom on focus), which cut instrument names at 12.5rem
    ("TOPAZ · cryogenic (" on an iPad Pro 11"). The picker takes the header row's spare width, up to 18.5rem:
-   measured, spare = 100vw − 716 px below 981 px and 100vw − 897 px from there (beta pill and label shown),
-   less 12 px. Should the actions grow, the row wraps rather than overflows. */
+   measured, spare = 100vw − 716 px below 981 px and 100vw − 798 px from there (label shown), less 12 px.
+   Should the actions grow, the row wraps rather than overflows. */
 @media (hover: none) and (pointer: coarse) and (min-width: 761px) and (max-width: 980px) {
   .header-actions .instrument-pick .ui-select {
     max-width: clamp(12.5rem, 12.5rem + 100vw - 728px, 18.5rem);
@@ -1055,7 +1028,7 @@ details.ui-fold > .ui-fold__body {
 
 @media (hover: none) and (pointer: coarse) and (min-width: 981px) and (max-width: 1040px) {
   .header-actions .instrument-pick .ui-select {
-    max-width: clamp(12.5rem, 12.5rem + 100vw - 909px, 18.5rem);
+    max-width: clamp(12.5rem, 12.5rem + 100vw - 810px, 18.5rem);
   }
 }
 
@@ -1117,10 +1090,6 @@ details.ui-fold > .ui-fold__body {
 
   .ui-controls {
     gap: 0.55rem 1rem;
-  }
-
-  .beta-pill {
-    display: none;
   }
 }
 

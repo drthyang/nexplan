@@ -1,6 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type DragEvent } from "react";
 import type { CalcInput, CalcResult, CalcSuccess, TofInput } from "../app/compute.ts";
-import { APP_VERSION } from "../app/version.ts";
 import type { Polarization, PowderAxis } from "../core/diffraction/powder.ts";
 import { difcFromGeometry, type TofShape } from "../core/diffraction/tof.ts";
 import { neutronEnergyMeV, neutronWavelengthA, xrayEnergyKeV, xrayWavelengthA } from "../core/physics/energy.ts";
@@ -240,9 +239,6 @@ export function App() {
               <div className="brand-copy">
                 <h1 title="NEXPLAN · Neutron Experiment Planner">NEXPLAN</h1>
               </div>
-              <span className="beta-pill">
-                beta<span className="ver">v{APP_VERSION}</span>
-              </span>
             </div>
             <nav className="page-tabs" aria-label="Pages">
               {TAB_GROUPS.map((g) => (
