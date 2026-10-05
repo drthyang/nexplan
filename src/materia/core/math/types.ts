@@ -1,4 +1,4 @@
-// Copied from MATERIA (drthyang/web-refinement) src/core/math/types.ts @ 0ee9a7e. Do not edit; see scripts/materia-sync.ts.
+// Copied from MATERIA (drthyang/web-refinement) src/core/math/types.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
 /**
  * Small linear-algebra primitives shared across the scientific core.
  *

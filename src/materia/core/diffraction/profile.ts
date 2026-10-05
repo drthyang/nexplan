@@ -1,4 +1,4 @@
-// Copied from MATERIA (drthyang/web-refinement) src/core/diffraction/profile.ts @ 0ee9a7e. Do not edit; see scripts/materia-sync.ts.
+// Copied from MATERIA (drthyang/web-refinement) src/core/diffraction/profile.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
 /**
  * Powder profile synthesis: spread integrated peak intensities into a
  * continuous pattern using a peak-shape function plus a polynomial background.

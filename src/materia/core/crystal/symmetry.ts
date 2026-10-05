@@ -1,4 +1,4 @@
-// Copied from MATERIA (drthyang/web-refinement) src/core/crystal/symmetry.ts @ 0ee9a7e. Do not edit; see scripts/materia-sync.ts.
+// Copied from MATERIA (drthyang/web-refinement) src/core/crystal/symmetry.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
 /**
  * Symmetry operations: parsing Jones-Faithful strings (as found in CIF
  * `_space_group_symop_operation_xyz` loops), applying them, expanding an

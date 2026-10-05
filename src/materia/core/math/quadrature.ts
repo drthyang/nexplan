@@ -1,4 +1,4 @@
-// Copied from MATERIA (drthyang/web-refinement) src/core/math/quadrature.ts @ 0ee9a7e. Do not edit; see scripts/materia-sync.ts.
+// Copied from MATERIA (drthyang/web-refinement) src/core/math/quadrature.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
 /**
  * Gauss–Legendre quadrature: nodes and weights for numerical integration.
  *

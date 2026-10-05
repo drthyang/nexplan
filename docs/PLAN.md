@@ -27,8 +27,8 @@ research release waits on print certification of the scattering tables. Nothing 
 | Source registry, pinned and hashed; NIST snapshot | done |
 | WK1995 X-ray table + report | done: 209/209 crosschecked; print audit pending |
 | Sears 1992 neutron table + report | done: 324 crosschecked, 6 discrepant, 6 unresolved; print audit pending |
-| MATERIA table audit | done (`docs/data-verification/MATERIA_TABLES.md`); upstream fixes pending |
-| MATERIA module copy with pin and check | done (19 files, `npm run materia:check`) |
+| MATERIA table audit | done (`docs/data-verification/MATERIA_TABLES.md`); fixed in MATERIA (web-refinement PR #27) and re-audited at `93eac17`: 88 of 89 neutron rows equal Sears 1992, complex parts included; Hf kept at 7.77 on purpose |
+| MATERIA module copy with pin and check | done (23 files at `93eac17`, `npm run materia:check`) |
 | Space groups, all 564 gemmi settings; absences vs gemmi | done |
 | CIF 1.1 reader, block selection, species, U_eq | done |
 | Expansion, signed reflections, complex F (vs gemmi 1e-8) | done |
@@ -108,7 +108,7 @@ limits and progress reporting. Errors are explicit: a limit stops with a message
 Scattering data and dependencies are bundled and pinned. Python, gemmi and Mantid may run in development and CI to
 generate reference fixtures, never on the user's machine.
 
-### 3.1 What is reused from MATERIA (pinned at `0ee9a7e`)
+### 3.1 What is reused from MATERIA (pinned at `93eac17`)
 
 | Module | Use | Verification required before use |
 |---|---|---|
@@ -128,7 +128,11 @@ generate reference fixtures, never on the user's machine.
 | Unknown H-M symbol falls back to P1. | Silent wrong symmetry. | Hard error naming the symbol. |
 | Reflection list capped at 12 000, truncated in loop order. | Missing reflections, silently. | Signed enumerator with a d-ordered explicit limit and an error. |
 | `ScatteringTable.factor` returns a real number. | No complex b; Gd neutron intensities several-fold too low. | Complex per-species amplitude provider (`src/core/scattering`). |
-| Neutron table: In = 2.08 fm (should be 4.065); Pu/Cm use isotope values; imaginary parts dropped; Au labeled Sears but is Rauch 2003. | Wrong neutron \|F\|² for In, Gd, Sm, Cd, B, Eu, Dy compounds. | `src/data/neutron-sears1992.json` with tiers. Findings reported back to MATERIA. |
+| Neutron table: In = 2.08 fm (should be 4.065); Pu/Cm use isotope values; imaginary parts dropped; Au labeled Sears but is Rauch 2003. | Wrong neutron \|F\|² for In, Gd, Sm, Cd, B, Eu, Dy compounds. | `src/data/neutron-sears1992.json` with tiers. Fixed in MATERIA too (PR #27). |
+
+MATERIA fixed all six in web-refinement PR #27 (merged 2026-10-02); NEXPLAN's table audit, re-run at `93eac17`,
+confirms the tables. PR #32 closes gaps #27 left in the CIF reader, isotope input and symbol-less export. NEXPLAN
+keeps its own implementations.
 
 Changes that would also fix MATERIA are made upstream in MATERIA first when practical. `npm run materia:sync`
 re-copies the pinned files and fails if any copied file was edited locally.
@@ -228,10 +232,11 @@ f0(s) = Σ₁⁵ aᵢ exp(−bᵢ s²) + c, for 0 ≤ s ≤ 6 Å⁻¹. Outside t
    These give unphysical curves; Bi5+ reaches f(2 Å⁻¹) = −0.68 e. DABAX's 0.039042 and 0.036495 reproduce the WK
    curves within 0.04 e. This is probably a dropped digit in the ITC Vol. C reprint.
 2. **DABAX `f0_InterTables`:** the Pu, Np3+, Np4+ and Np6+ rows are shuffled, giving f(0) − N of −5.0, +5.0, +3.0 and
-   −3.0 e. This is why MATERIA omits Pu; the cctbx, gemmi and GSAS-II Pu row is valid.
+   −3.0 e. This is why MATERIA omitted Pu up to `0ee9a7e`; it now uses the cctbx, gemmi and GSAS-II Pu row, which is
+   valid.
 3. **GSAS-II Tl3+:** a2 is 18.3481 where the other three sources have 18.3841. It looks like a digit transposition,
    and gives f(0) − N = −0.041 e.
-4. **MATERIA neutron table:** In = 2.08 fm (Sears 4.065); imaginary parts dropped for B, Cd, Sm, Eu, Gd, Dy, In; Pu and
+4. **MATERIA neutron table** (at `0ee9a7e`; fixed in PR #27): In = 2.08 fm (Sears 4.065); imaginary parts dropped for B, Cd, Sm, Eu, Gd, Dy, In; Pu and
    Cm take isotope values; Au = 7.9 fm is Rauch 2003, not Sears 1992. MATERIA's X-ray CM table matches all four
    transcriptions for 96 of 97 rows. The 97th, Si, is absent from cctbx under that label and identical to the other
    three.
@@ -401,8 +406,9 @@ panel structure, header with status chips, light and dark themes, and phone/tabl
 
 1. **License: decided.** AGPL-3.0-only, the same as MATERIA, whose code NEXPLAN includes. The full text is in
    `LICENSE` (2026-10-05).
-2. **Upstream fixes to MATERIA:** the In value, complex b, Pu/Cm, origin choice, P1 fallback, silent truncation and
-   CIF species. These are tracked as a separate task in MATERIA.
+2. **Upstream fixes to MATERIA: done.** The In value, complex b, Pu/Cm, origin choice, P1 fallback, silent truncation
+   and CIF species were fixed in web-refinement PR #27 (merged 2026-10-02). PR #32 closes the gaps #27 left in the CIF
+   reader, isotope input and symbol-less export. NEXPLAN pins `93eac17`.
 3. **Reviewer** for print certification of the WK and Sears rows.
 4. **COD direct import** stays deferred until the CORS gate passes.
 

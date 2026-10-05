@@ -1,4 +1,4 @@
-// Copied from MATERIA (drthyang/web-refinement) src/core/magnetic/propagation.ts @ 0ee9a7e. Do not edit; see scripts/materia-sync.ts.
+// Copied from MATERIA (drthyang/web-refinement) src/core/magnetic/propagation.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
 /**
  * Propagation-vector classification — the one place that decides how a
  * single-k magnetic structure is parameterized and how its satellites count.

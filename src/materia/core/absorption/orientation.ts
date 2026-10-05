@@ -1,4 +1,4 @@
-// Copied from MATERIA (drthyang/web-refinement) src/core/absorption/orientation.ts @ 0ee9a7e. Do not edit; see scripts/materia-sync.ts.
+// Copied from MATERIA (drthyang/web-refinement) src/core/absorption/orientation.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
 /**
  * Crystal orientation from matched face normals — the core of the symmetry
  * route to an absorption correction.

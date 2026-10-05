@@ -1,4 +1,4 @@
-// Copied from MATERIA (drthyang/web-refinement) src/core/diffraction/profile.test.ts @ 0ee9a7e. Do not edit; see scripts/materia-sync.ts.
+// Copied from MATERIA (drthyang/web-refinement) src/core/diffraction/profile.test.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
 import { describe, it, expect } from "vitest";
 import {
   tchPseudoVoigt, lorentzianFwhm, cagliotiFwhm, fcjSubPeaks, gaussian, pseudoVoigt, synthesizePattern,

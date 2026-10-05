@@ -1,4 +1,4 @@
-// Copied from MATERIA (drthyang/web-refinement) src/core/math/linalg.ts @ 0ee9a7e. Do not edit; see scripts/materia-sync.ts.
+// Copied from MATERIA (drthyang/web-refinement) src/core/math/linalg.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
 /**
  * Dense linear algebra for the refinement normal equations.
  *

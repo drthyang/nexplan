@@ -333,12 +333,20 @@ export function parsePeriodictableNsf(text: string): SimpleNeutronRow[] {
   return rows;
 }
 
-/** MATERIA neutronData.ts: `  Sym: value,` lines inside NEUTRON_B. */
+/**
+ * MATERIA neutronData.ts, the element table NEUTRON_B: `  Sym: { re: x, im: y },` (b′ − i·b″ as Sears prints
+ * it, from 4d37fd4) or `  Sym: value,` (real only, up to 0ee9a7e). Isotope tables after it are not read.
+ */
 export function parseMateriaNeutronB(text: string): SimpleNeutronRow[] {
-  const start = text.indexOf("NEUTRON_B");
+  const decl = text.indexOf("export const NEUTRON_B:");
+  const start = decl >= 0 ? decl : text.indexOf("NEUTRON_B");
+  const end = text.indexOf("\n};", start);
+  const body = text.slice(start, end >= 0 ? end : undefined);
   const rows: SimpleNeutronRow[] = [];
-  for (const m of text.slice(start).matchAll(/^\s*([A-Z][a-z]?):\s*([-+0-9.eE]+),/gm)) {
-    rows.push({ symbol: m[1]!, cohBRe: num(m[2]!) });
+  const re = /^\s*([A-Z][a-z]?):\s*(?:\{\s*re:\s*([-+0-9.eE]+),\s*im:\s*([-+0-9.eE]+)\s*\}|([-+0-9.eE]+)),/gm;
+  for (const m of body.matchAll(re)) {
+    const im = m[3] !== undefined && Number(m[3]) !== 0 ? { cohBIm: num(m[3]) } : {};
+    rows.push({ symbol: m[1]!, cohBRe: num(m[2] ?? m[4]!), ...im });
   }
   return rows;
 }

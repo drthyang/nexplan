@@ -16,6 +16,7 @@
  * status "discrepant" and listed in the report for resolution against the
  * printed publication.
  */
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { compareDecimals, halfUlpPrinted, type Agreement } from "./decimal.ts";
@@ -44,7 +45,21 @@ import { flattenIdf } from "./idf.ts";
 
 const RETRIEVED = "2026-10-02";
 const MATERIA_DIR = process.env.MATERIA_DIR ?? join(REPO_ROOT, "../web-refinement");
-const MATERIA_COMMIT = "0ee9a7e96700e4ee7da239812096e863be250fec";
+/** The MATERIA audit reads the pinned commit (src/materia/UPSTREAM.json) from MATERIA's git objects, never its working tree. */
+const MATERIA_COMMIT = (JSON.parse(readFileSync(join(REPO_ROOT, "src/materia/UPSTREAM.json"), "utf8")) as { commit: string }).commit;
+
+function materiaFile(path: string): string {
+  return execFileSync("git", ["-C", MATERIA_DIR, "show", `${MATERIA_COMMIT}:${path}`], { encoding: "utf8", maxBuffer: 64 << 20 });
+}
+
+function materiaCommitAvailable(): boolean {
+  try {
+    execFileSync("git", ["-C", MATERIA_DIR, "cat-file", "-e", `${MATERIA_COMMIT}^{commit}`], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const outputs = new Map<string, string>();
 /**
@@ -340,9 +355,8 @@ Check these against Waasmaier & Kirfel (1995), Table 1 (printed). Tick each one 
 // ===================================================== MATERIA X-ray (Cromer–Mann) audit
 
 function auditMateriaXray() {
-  const materiaPath = join(MATERIA_DIR, "src/core/scattering/cromerMannData.ts");
-  const materiaText = readFileSync(materiaPath, "utf8");
-  const materia = parseMateriaCromerMann(materiaText);
+  const materiaPath = "src/core/scattering/cromerMannData.ts";
+  const materia = parseMateriaCromerMann(materiaFile(materiaPath));
   const sources = {
     "cctbx it1992": indexSpecies(parseCctbxGaussianTable(readSource("cctbx-it1992").text, 4)).byId,
     "gemmi it92": indexSpecies(parseGemmiIt92(readSource("gemmi-it92").text).filter((r) => r.label !== "X=O")).byId,
@@ -371,7 +385,8 @@ function auditMateriaXray() {
     if (allIdentical && Math.abs(dz) <= 0.1) agreeAll++;
     else rows.push(`| ${r.label} | ${fmt(dz)} | ${cells.join(" | ")} |`);
   }
-  // Pu: MATERIA omits it because the DABAX row gives f(0) ≠ Z. Check the other transcriptions.
+  // Pu: the DABAX row gives f(0) ≠ Z (MATERIA omitted Pu up to 0ee9a7e). Check the other transcriptions.
+  const hasPu = materia.some((r) => r.label === "Pu");
   const puRows = Object.entries(sources).map(([name, map]) => {
     const pu = map.get("Pu");
     return pu ? `| ${name} | ${[...pu.a, ...pu.b, pu.c].map((v) => v.raw).join(", ")} | ${fmt(f0(pu, 0) - 94)} |` : `| ${name} | absent | — |`;
@@ -398,7 +413,7 @@ function auditMateriaXray() {
     });
     disputes.push(`| ${id} | ${cells.join("<br>")} |`);
   }
-  return { materiaPath, total: materia.length, agreeAll, rows, puRows, disputes, sourceNames: Object.keys(sources) };
+  return { materiaPath, total: materia.length, agreeAll, rows, hasPu, puRows, disputes, sourceNames: Object.keys(sources) };
 }
 
 // ===================================================================== Neutron
@@ -691,8 +706,8 @@ ${newerRows.join("\n")}
 // ===================================================== MATERIA neutron audit + report
 
 function auditMateriaNeutron(neutron: ReturnType<typeof buildNeutron>) {
-  const path = join(MATERIA_DIR, "src/core/scattering/neutronData.ts");
-  const rows = parseMateriaNeutronB(readFileSync(path, "utf8"));
+  const path = "src/core/scattering/neutronData.ts";
+  const rows = parseMateriaNeutronB(materiaFile(path));
   const out: string[] = [];
   let same = 0;
   for (const r of rows) {
@@ -701,12 +716,23 @@ function auditMateriaNeutron(neutron: ReturnType<typeof buildNeutron>) {
     const sears = e?.bCoh;
     const itc = neutron.dans.get(r.symbol === "D" ? "2H" : r.symbol);
     const rauch = neutron.gsas.get(r.symbol === "D" ? "2H" : r.symbol);
-    const eq = sears && Math.abs(sears.re - r.cohBRe.value) < 1e-9;
-    if (eq && !sears!.im) same++;
-    else
-      out.push(
-        `| ${r.symbol} | ${r.cohBRe.raw} | ${sears ? sears.raw : "—"} | ${itc ? itc.cohBRe.raw + (itc.cohBIm ? ` (im ${itc.cohBIm.raw})` : "") : "—"} | ${rauch ? fmt(rauch.cohBRe.value, 3) : "—"} | ${!eq ? "value differs from Sears 1992" : "imaginary part dropped"} |`,
-      );
+    // MATERIA stores b as Sears prints it (b′ − i·b″), so both parts compare directly with NIST's entry.
+    const im = r.cohBIm?.value ?? 0;
+    const reEq = sears !== undefined && Math.abs(sears.re - r.cohBRe.value) < 1e-9;
+    const imEq = sears !== undefined && Math.abs(sears.im - im) < 1e-9;
+    if (reEq && imEq) {
+      same++;
+      continue;
+    }
+    const finding = !reEq
+      ? `value differs from Sears 1992${e?.status === "discrepant" ? " (NIST's row is discrepant; see NEUTRON_SEARS1992.md)" : ""}`
+      : im === 0
+        ? "imaginary part dropped"
+        : "imaginary part differs from Sears 1992";
+    const materiaB = r.cohBIm ? `${r.cohBRe.raw} (im ${r.cohBIm.raw})` : r.cohBRe.raw;
+    out.push(
+      `| ${r.symbol} | ${materiaB} | ${sears ? sears.raw : "—"} | ${itc ? itc.cohBRe.raw + (itc.cohBIm ? ` (im ${itc.cohBIm.raw})` : "") : "—"} | ${rauch ? fmt(rauch.cohBRe.value, 3) : "—"} | ${finding} |`,
+    );
   }
   return { path, total: rows.length, same, out };
 }
@@ -729,7 +755,7 @@ Compared with: ${x.sourceNames.join(", ")}.
 |---|---:|${x.sourceNames.map(() => "---").join("|")}|
 ${x.rows.join("\n")}
 
-### Plutonium (omitted by MATERIA because its DABAX row gives f(0) ≠ Z)
+### Plutonium (${x.hasPu ? "MATERIA uses the row that cctbx, gemmi and GSAS-II share" : "omitted by MATERIA"}; DABAX's row gives f(0) ≠ Z)
 
 | Source | a1..a4, b1..b4, c | f(0) − 94 |
 |---|---|---:|
@@ -748,11 +774,15 @@ ${x.disputes.join("\n")}
 
 ## Neutron: bound coherent b
 
-MATERIA documents its source as "Sears, ITC Vol. C §4.4.4, via Dans_Diffraction", with Ti, Mn, Zn and Au pinned to
-"GSAS-II's Sears (1992) Neutron News values". GSAS-II's \`AtmBlens\` table is in fact Rauch & Waschkowski (2003) plus
-newer measurements, not Sears (1992). The columns below separate the three evaluations.
+Each MATERIA element row is compared with Sears (1992) as NIST enters it, real and imaginary parts (b′ − i·b″ as
+printed). The ITC Vol. C edition (Dans_Diffraction) and GSAS-II's \`AtmBlens\` (Rauch & Waschkowski 2003 plus newer
+measurements, not Sears 1992) are shown for reference.
 
-- MATERIA rows: **${n.total}**. Rows equal to Sears (1992) and real: **${n.same}**. Other rows: ${n.out.length}.
+The audit of MATERIA at \`0ee9a7e\` (2026-10-02) found In = 2.08 fm, the imaginary parts of B, Cd, In, Sm, Eu, Gd and Dy
+dropped, isotope values under the element symbols Pu and Cm, Au at the Rauch value, and the table labelled as Sears
+when it mixed three evaluations. MATERIA fixed these in web-refinement PR #27 (merged 2026-10-02).
+
+- MATERIA rows: **${n.total}**. Rows equal to Sears (1992), both parts: **${n.same}**. Other rows: ${n.out.length}.
 
 | Symbol | MATERIA (fm) | Sears 1992 / NIST | ITC edition (Dans) | GSAS-II AtmBlens (fm) | Finding |
 |---|---:|---|---|---:|---|
@@ -808,9 +838,9 @@ function buildInstruments() {
 const xrayStats = buildXray();
 buildInstruments();
 const neutron = buildNeutron();
-const materiaX = existsSync(join(MATERIA_DIR, "src")) ? auditMateriaXray() : undefined;
+const materiaX = materiaCommitAvailable() ? auditMateriaXray() : undefined;
 if (materiaX) writeMateriaReport(materiaX, auditMateriaNeutron(neutron));
-else console.warn(`MATERIA not found at ${MATERIA_DIR}; skipping MATERIA audit (set MATERIA_DIR).`);
+else console.warn(`MATERIA commit ${MATERIA_COMMIT.slice(0, 7)} not found in ${MATERIA_DIR}; skipping MATERIA audit (set MATERIA_DIR to a web-refinement clone).`);
 
 const manifest = {
   description: "Generated scattering datasets. Regenerate with `npm run data:build`; never edit generated files by hand.",

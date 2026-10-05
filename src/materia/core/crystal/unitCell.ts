@@ -1,4 +1,4 @@
-// Copied from MATERIA (drthyang/web-refinement) src/core/crystal/unitCell.ts @ 0ee9a7e. Do not edit; see scripts/materia-sync.ts.
+// Copied from MATERIA (drthyang/web-refinement) src/core/crystal/unitCell.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
 /**
  * Unit-cell geometry: metric tensors, volume, d-spacings, and the
  * fractional↔Cartesian transform. All derived from the six cell parameters on

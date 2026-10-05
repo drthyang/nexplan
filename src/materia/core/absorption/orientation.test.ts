@@ -1,4 +1,4 @@
-// Copied from MATERIA (drthyang/web-refinement) src/core/absorption/orientation.test.ts @ 0ee9a7e. Do not edit; see scripts/materia-sync.ts.
+// Copied from MATERIA (drthyang/web-refinement) src/core/absorption/orientation.test.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
 import { describe, it, expect } from "vitest";
 import type { Mat3, Vec3 } from "@materia/core/math/types";
 import { mulVec, mulMat, transpose, determinant } from "@materia/core/math/mat3";

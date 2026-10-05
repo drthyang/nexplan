@@ -1,4 +1,4 @@
-// Copied from MATERIA (drthyang/web-refinement) src/core/crystal/cellExpansion.ts @ 0ee9a7e. Do not edit; see scripts/materia-sync.ts.
+// Copied from MATERIA (drthyang/web-refinement) src/core/crystal/cellExpansion.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
 /**
  * Pure geometry for expanding a structure's asymmetric unit into the atoms of a
  * unit cell (or magnetic supercell), with each atom's **moment-placing

@@ -126,7 +126,7 @@ Every table is generated from pinned upstream files (URL, commit and SHA-256 in
 - [Consistency with Mantid](docs/data-verification/MANTID_CONSISTENCY.md): constants, DIFC and TOF, E ↔ λ, the B
   matrix, the goniometer and the wavelength of a reflection, transcribed from Mantid's source and tested.
 - [MATERIA's tables](docs/data-verification/MATERIA_TABLES.md): a wrong In value and dropped imaginary parts in
-  MATERIA's neutron table; and X-ray Cromer–Mann rows that fail physical checks, flagged in DABAX and in the copy
+  MATERIA's neutron table, since fixed in MATERIA; and X-ray Cromer–Mann rows that fail physical checks, flagged in DABAX and in the copy
   shared by cctbx, gemmi and GSAS-II.
 
 Instrument parameters and their sources (Mantid definitions, ORNL resolution files, POWGEN characterisation) are

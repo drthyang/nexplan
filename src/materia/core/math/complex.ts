@@ -1,4 +1,4 @@
-// Copied from MATERIA (drthyang/web-refinement) src/core/math/complex.ts @ 0ee9a7e. Do not edit; see scripts/materia-sync.ts.
+// Copied from MATERIA (drthyang/web-refinement) src/core/math/complex.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
 import type { Complex } from "@materia/core/math/types";
 
 export const ZERO: Complex = { re: 0, im: 0 };
@@ -20,3 +20,11 @@ export function modulusSquared(a: Complex): number {
   return a.re * a.re + a.im * a.im;
 }
 
+
+export function mul(a: Complex, b: Complex): Complex {
+  return { re: a.re * b.re - a.im * b.im, im: a.re * b.im + a.im * b.re };
+}
+
+export function conj(a: Complex): Complex {
+  return { re: a.re, im: -a.im };
+}

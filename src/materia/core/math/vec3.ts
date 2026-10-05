@@ -1,4 +1,4 @@
-// Copied from MATERIA (drthyang/web-refinement) src/core/math/vec3.ts @ 0ee9a7e. Do not edit; see scripts/materia-sync.ts.
+// Copied from MATERIA (drthyang/web-refinement) src/core/math/vec3.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
 import type { Vec3 } from "@materia/core/math/types";
 
 
