@@ -626,9 +626,9 @@
       "l1": 20,
       "idf": {
         "id": "idf-corelli",
-        "url": "https://raw.githubusercontent.com/mantidproject/mantid/67c2f43ef79ea4ce4f3c92f417f5c74f8fedcf30/instrument/CORELLI_Definition.xml",
-        "sha256": "8150db787f7266206d9153921f4a15c6836a9d78798cfa4b52dbb8bbca68c5e6",
-        "validFrom": "2014-02-25 00:00:00"
+        "url": "https://raw.githubusercontent.com/mantidproject/mantid/67c2f43ef79ea4ce4f3c92f417f5c74f8fedcf30/instrument/CORELLI_Definition_2017-04-04.xml",
+        "sha256": "2be06c2c2273d45644a5b9e614b0d11b59bb60a2fefafe1787a7ea8e7aa5fd1a",
+        "validFrom": "2017-04-04 00:00:00"
       },
       "panels": [
         {
@@ -650,7 +650,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -674,7 +674,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -698,7 +698,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -722,7 +722,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -746,7 +746,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -770,7 +770,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -794,7 +794,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -818,7 +818,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -842,7 +842,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -866,7 +866,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -890,7 +890,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -914,7 +914,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -938,7 +938,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -962,7 +962,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -986,7 +986,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1010,7 +1010,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1034,7 +1034,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1058,7 +1058,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1082,7 +1082,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1106,7 +1106,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1130,7 +1130,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1154,7 +1154,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1178,7 +1178,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1202,7 +1202,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1226,7 +1226,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1250,7 +1250,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1274,7 +1274,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1298,7 +1298,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1322,7 +1322,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1346,7 +1346,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1370,7 +1370,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1394,7 +1394,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1418,7 +1418,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1442,7 +1442,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1466,7 +1466,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1490,7 +1490,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1514,7 +1514,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1538,7 +1538,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1562,7 +1562,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1586,7 +1586,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1610,7 +1610,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1634,7 +1634,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1658,7 +1658,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1682,7 +1682,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1706,7 +1706,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1730,7 +1730,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1754,7 +1754,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1778,7 +1778,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1802,7 +1802,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1826,7 +1826,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1850,7 +1850,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1874,7 +1874,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1898,7 +1898,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1922,7 +1922,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1946,7 +1946,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1970,7 +1970,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -1994,7 +1994,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2018,7 +2018,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2042,7 +2042,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2066,7 +2066,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2090,7 +2090,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2114,7 +2114,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2138,7 +2138,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2162,7 +2162,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2186,7 +2186,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2210,7 +2210,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2234,7 +2234,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2258,7 +2258,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2282,7 +2282,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2306,7 +2306,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2330,7 +2330,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2354,7 +2354,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2378,7 +2378,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2402,7 +2402,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2426,7 +2426,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2450,7 +2450,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2474,7 +2474,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2498,7 +2498,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2522,7 +2522,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2546,7 +2546,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2570,7 +2570,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2594,7 +2594,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2618,7 +2618,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2642,7 +2642,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2666,7 +2666,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2690,7 +2690,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2714,7 +2714,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2738,7 +2738,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2762,7 +2762,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2786,7 +2786,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0
@@ -2810,7 +2810,7 @@
             0
           ],
           "width": 0.22352,
-          "height": 0.8392,
+          "height": 0.904,
           "nCols": 16,
           "nRows": 256,
           "planarity": 0

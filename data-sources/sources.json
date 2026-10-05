@@ -203,12 +203,12 @@
       "id": "idf-corelli",
       "role": "primary",
       "dataset": "instrument-geometry",
-      "description": "Mantid CORELLI instrument definition (valid from 2014-02-25): 91 sixteen-packs of 256-pixel tubes, L1 20 m.",
+      "description": "Mantid CORELLI instrument definition valid from 2017-04-04, the one Mantid loads for runs since then: 91 sixteen-packs of 256-pixel tubes 0.904 m long (3.531 mm pixels), L1 20 m. Supersedes CORELLI_Definition.xml (valid from 2014-02-25), whose tubes are 0.839 m long.",
       "urls": [
-        "https://raw.githubusercontent.com/mantidproject/mantid/67c2f43ef79ea4ce4f3c92f417f5c74f8fedcf30/instrument/CORELLI_Definition.xml"
+        "https://raw.githubusercontent.com/mantidproject/mantid/67c2f43ef79ea4ce4f3c92f417f5c74f8fedcf30/instrument/CORELLI_Definition_2017-04-04.xml"
       ],
-      "file": "CORELLI_Definition.xml",
-      "sha256": "8150db787f7266206d9153921f4a15c6836a9d78798cfa4b52dbb8bbca68c5e6",
+      "file": "CORELLI_Definition_2017-04-04.xml",
+      "sha256": "2be06c2c2273d45644a5b9e614b0d11b59bb60a2fefafe1787a7ea8e7aa5fd1a",
       "license": "GPL-3.0-or-later (Mantid instrument definitions). Only numerical detector geometry is extracted, with attribution."
     },
     {

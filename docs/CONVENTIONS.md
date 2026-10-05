@@ -185,7 +185,7 @@ F(h) = Σⱼ oⱼ · aⱼ(s) · exp(−Bⱼ s²) · exp(+2πi h·xⱼ)
   - Every observed peak lands on its recorded detector within 0.1 pixel.
   - Peaks predicted from UB and the goniometer land on the right detector, within the UB fit's angular residual
     (≤ 5.4 pixels).
-- **Instruments:** TOPAZ (2022-11-21), CORELLI, NOMAD (2022-05-05), POWGEN (2018-05-05), ARCS (2012-10-11),
+- **Instruments:** TOPAZ (2022-11-21), CORELLI (2017-04-04), NOMAD (2022-05-05), POWGEN (2018-05-05), ARCS (2012-10-11),
   SEQUOIA (2019-04-04) and CNCS (2026-02-02) definitions at Mantid commit 67c2f43, generated into
   `src/data/instruments.json` and loaded with the Instrument page.
 
