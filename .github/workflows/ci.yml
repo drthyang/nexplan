@@ -22,8 +22,16 @@ jobs:
       # The pinned sources (sha256-checked), before the tests: the TOPAZ detector and UB tests read the Mantid IDF and .mat files.
       - run: npm run data:fetch
       - run: npm test
+      # MATERIA at the pinned commit, for the two checks below. Only that commit's objects are fetched; an explicit
+      # MATERIA_DIR makes a missing commit an error rather than a skipped check.
+      - name: Fetch MATERIA at the pinned commit
+        run: |
+          dir="$RUNNER_TEMP/web-refinement"
+          git init -q "$dir"
+          git -C "$dir" fetch -q --depth 1 https://github.com/drthyang/web-refinement.git "$(jq -r .commit src/materia/UPSTREAM.json)"
+          echo "MATERIA_DIR=$dir" >> "$GITHUB_ENV"
       # Copied MATERIA modules must be byte-identical to the pinned upstream commit.
       - run: npm run materia:check
-      # Generated tables must match what the pinned sources produce.
+      # Generated tables and reports, the MATERIA audit included, must match what the pinned sources produce.
       - run: npm run data:check
       - run: npm run build

@@ -16,7 +16,6 @@
  * status "discrepant" and listed in the report for resolution against the
  * printed publication.
  */
-import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { compareDecimals, halfUlpPrinted, type Agreement } from "./decimal.ts";
@@ -42,24 +41,11 @@ import {
 import { REPO_ROOT, readSource, sha256, type SourceEntry } from "./sources.ts";
 import { canonicalSpecies, parseSpeciesLabel } from "./species.ts";
 import { flattenIdf } from "./idf.ts";
+import { materiaAvailable, materiaShow as materiaFile, upstream } from "../materia.ts";
 
 const RETRIEVED = "2026-10-02";
-const MATERIA_DIR = process.env.MATERIA_DIR ?? join(REPO_ROOT, "../web-refinement");
 /** The MATERIA audit reads the pinned commit (src/materia/UPSTREAM.json) from MATERIA's git objects, never its working tree. */
-const MATERIA_COMMIT = (JSON.parse(readFileSync(join(REPO_ROOT, "src/materia/UPSTREAM.json"), "utf8")) as { commit: string }).commit;
-
-function materiaFile(path: string): string {
-  return execFileSync("git", ["-C", MATERIA_DIR, "show", `${MATERIA_COMMIT}:${path}`], { encoding: "utf8", maxBuffer: 64 << 20 });
-}
-
-function materiaCommitAvailable(): boolean {
-  try {
-    execFileSync("git", ["-C", MATERIA_DIR, "cat-file", "-e", `${MATERIA_COMMIT}^{commit}`], { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
-}
+const MATERIA_COMMIT = upstream.commit;
 
 const outputs = new Map<string, string>();
 /**
@@ -838,9 +824,7 @@ function buildInstruments() {
 const xrayStats = buildXray();
 buildInstruments();
 const neutron = buildNeutron();
-const materiaX = materiaCommitAvailable() ? auditMateriaXray() : undefined;
-if (materiaX) writeMateriaReport(materiaX, auditMateriaNeutron(neutron));
-else console.warn(`MATERIA commit ${MATERIA_COMMIT.slice(0, 7)} not found in ${MATERIA_DIR}; skipping MATERIA audit (set MATERIA_DIR to a web-refinement clone).`);
+if (materiaAvailable()) writeMateriaReport(auditMateriaXray(), auditMateriaNeutron(neutron));
 
 const manifest = {
   description: "Generated scattering datasets. Regenerate with `npm run data:build`; never edit generated files by hand.",
