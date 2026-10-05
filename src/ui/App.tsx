@@ -3,14 +3,14 @@ import type { CalcInput, CalcResult, CalcSuccess, TofInput } from "../app/comput
 import type { Polarization, PowderAxis } from "../core/diffraction/powder.ts";
 import { difcFromGeometry, type TofShape } from "../core/diffraction/tof.ts";
 import { neutronEnergyMeV, neutronWavelengthA, xrayEnergyKeV, xrayWavelengthA } from "../core/physics/energy.ts";
-import { calculate } from "../workers/client.ts";
+import { calculate, prewarmWorker } from "../workers/client.ts";
 import { Chip, cx, InfoBadge, Segmented, UnitField } from "./components.tsx";
 import { DEMOS } from "./demos.ts";
 import { CATALOG_GROUPS, GENERIC_INSTRUMENT } from "../core/ub/instrumentCatalog.ts";
-import { catalogEntry, chooseInstrument, DEFAULT_EXPERIMENT, limitedGoniometer, sampleKind, withEi, type ExperimentState } from "./experimentState.ts";
+import { catalogEntry, chooseInstrument, DEFAULT_EXPERIMENT, DEFAULT_GONIO, limitedGoniometer, sampleKind, withEi, type ExperimentState, type GonioState } from "./experimentState.ts";
 import { clearSession, loadSession, MAX_SAVED_CIF, saveSession, savedChoice, savedNumber, savedObject } from "./session.ts";
-import { PowderPage, ReflectionsPage, StructurePage, type CwProfileSettings } from "./pages.tsx";
-import { DEFAULT_GONIO, UbPage, type GonioState, type UbState } from "./UbPage.tsx";
+import type { CwProfileSettings } from "./pages.tsx";
+import type { UbState } from "./ubShared.ts";
 
 const TABS = ["structure", "reflections", "orientation", "detectors", "powder", "crystal"] as const;
 type Tab = (typeof TABS)[number];
@@ -22,6 +22,28 @@ const TAB_GROUPS: readonly { readonly label: string; readonly tabs: readonly (re
   { label: "Instrument", tabs: [["detectors", "Detectors"]] },
   { label: "Simulation", tabs: [["powder", "Powder"], ["crystal", "Single crystal"]] },
 ];
+
+/** Pages behind the tabs, loaded after the landing screen (see prefetchNextStep). */
+const StructurePage = lazy(() => import("./pages.tsx").then((m) => ({ default: m.StructurePage })));
+const ReflectionsPage = lazy(() => import("./pages.tsx").then((m) => ({ default: m.ReflectionsPage })));
+const PowderPage = lazy(() => import("./pages.tsx").then((m) => ({ default: m.PowderPage })));
+const UbPage = lazy(() => import("./UbPage.tsx").then((m) => ({ default: m.UbPage })));
+
+/**
+ * Once the landing screen is up, fetch what loading a structure needs next: the pages, the 3D structure view
+ * (three.js) and the calculation worker. Not when the browser asks to save data.
+ */
+function prefetchNextStep() {
+  if ((navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData) return;
+  const run = () => {
+    void import("./pages.tsx");
+    void import("./UbPage.tsx");
+    void import("../views/CrystalView.tsx");
+    prewarmWorker();
+  };
+  if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 3000 });
+  else setTimeout(run, 1500);
+}
 
 /** Detector and simulation pages, loaded with the SNS detector geometry only when one is opened. */
 const DetectorsPage = lazy(() => import("./DetectorsPage.tsx").then((m) => ({ default: m.DetectorsPage })));
@@ -55,6 +77,7 @@ const README = "https://github.com/drthyang/nexplan#readme";
 
 export function App() {
   const [theme, setTheme] = useState<Theme>(readTheme);
+  useEffect(prefetchNextStep, []);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     try {
@@ -525,36 +548,38 @@ export function App() {
               />
             )}
 
-            {ok && tab === "structure" && (
-              <StructurePage
-                result={ok}
-                radiation={radiation}
-                theme={theme}
-                onXrayIon={(label, id) =>
-                  setXrayIons((m) => {
-                    const next = { ...m };
-                    if (id === undefined) delete next[label];
-                    else next[label] = id;
-                    return next;
-                  })
-                }
-              />
-            )}
-            {ok && tab === "reflections" && <ReflectionsPage result={ok} wavelength={wavelength} radiation={radiation} positions={!sns} />}
-            {ok && tab === "orientation" && (
-              <UbPage
-                result={ok}
-                theme={theme}
-                ub={ub}
-                onUb={setUb}
-                gonio={gonio}
-                onGonio={setGonio}
-                instrument={entry ? { id: entry.id, name: entry.label, goniometer: limitedGoniometer(entry.goniometer, experiment.limits[entry.id]), angles: experiment.angles, onAngles: (angles) => setExperiment({ ...experiment, angles }), lambdaMin: experiment.lambdaMin, lambdaMax: experiment.lambdaMax } : undefined}
-              />
-            )}
-            {ok && tab === "powder" && !sns && (
-              <PowderPage result={ok} axis={axis} onAxis={changeAxis} cwProfile={cwProfile} onCwProfile={setCwProfile} tofShape={tof.shape} onTofShape={(shape: TofShape) => setTof({ ...tof, shape })} />
-            )}
+            <Suspense fallback={<p className="empty-note">Loading the page…</p>}>
+              {ok && tab === "structure" && (
+                <StructurePage
+                  result={ok}
+                  radiation={radiation}
+                  theme={theme}
+                  onXrayIon={(label, id) =>
+                    setXrayIons((m) => {
+                      const next = { ...m };
+                      if (id === undefined) delete next[label];
+                      else next[label] = id;
+                      return next;
+                    })
+                  }
+                />
+              )}
+              {ok && tab === "reflections" && <ReflectionsPage result={ok} wavelength={wavelength} radiation={radiation} positions={!sns} />}
+              {ok && tab === "orientation" && (
+                <UbPage
+                  result={ok}
+                  theme={theme}
+                  ub={ub}
+                  onUb={setUb}
+                  gonio={gonio}
+                  onGonio={setGonio}
+                  instrument={entry ? { id: entry.id, name: entry.label, goniometer: limitedGoniometer(entry.goniometer, experiment.limits[entry.id]), angles: experiment.angles, onAngles: (angles) => setExperiment({ ...experiment, angles }), lambdaMin: experiment.lambdaMin, lambdaMax: experiment.lambdaMax } : undefined}
+                />
+              )}
+              {ok && tab === "powder" && !sns && (
+                <PowderPage result={ok} axis={axis} onAxis={changeAxis} cwProfile={cwProfile} onCwProfile={setCwProfile} tofShape={tof.shape} onTofShape={(shape: TofShape) => setTof({ ...tof, shape })} />
+              )}
+            </Suspense>
             {simReady && (tab === "detectors" || tab === "crystal" || (tab === "powder" && sns)) && (
               <Suspense fallback={<p className="empty-note">Loading the detector geometry…</p>}>
                 {tab === "detectors" && simProps && <DetectorsPage {...simProps} />}

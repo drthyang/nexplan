@@ -39,6 +39,11 @@ function spawn(): Worker {
   return w;
 }
 
+/** Start the worker ahead of the first calculation, so its script and tables load while the user is choosing a file. */
+export function prewarmWorker(): void {
+  worker ??= spawn();
+}
+
 /** Resolves with the result, or undefined if superseded by a newer call. */
 export function calculate(input: CalcInput): Promise<CalcResult | undefined> {
   if (pending) {

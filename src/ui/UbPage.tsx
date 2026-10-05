@@ -18,6 +18,7 @@ import { BASIS_PRESETS, hklTransformText, linearText, parseRatio, ratioText, sup
 import { Card, cx, Segmented, UnitField } from "./components.tsx";
 import { downloadText, fmt, hklText } from "./format.ts";
 import { byHkl, byNumber, byText, SortTh, useSort } from "./sortable.tsx";
+import type { GonioState } from "./experimentState.ts";
 import { presentReflections, useViewUB, type UbState } from "./ubShared.ts";
 
 export type { UbState } from "./ubShared.ts";
@@ -35,16 +36,6 @@ const IDENTITY: Mat3 = [
   [0, 1, 0],
   [0, 0, 1],
 ];
-
-export interface GonioState {
-  readonly angles: readonly number[];
-  readonly lambdaMin: number;
-  readonly lambdaMax: number;
-  readonly frame: "lab" | "sample";
-  readonly showEwald: boolean;
-}
-
-export const DEFAULT_GONIO: GonioState = { angles: [0, 0, 0], lambdaMin: 0.4, lambdaMax: 3.5, frame: "lab", showEwald: false };
 
 export function MatrixBlock({ M, digits = 6 }: { M: Mat3; digits?: number }) {
   return (

@@ -6,6 +6,17 @@ import { neutronWavelengthA } from "../core/physics/energy.ts";
 import type { GoniometerModel } from "../core/ub/goniometer.ts";
 import { GENERIC_INSTRUMENT, SNS_CATALOG, type CatalogEntry } from "../core/ub/instrumentCatalog.ts";
 
+/** The Orientation page's goniometer and Laue-view settings. */
+export interface GonioState {
+  readonly angles: readonly number[];
+  readonly lambdaMin: number;
+  readonly lambdaMax: number;
+  readonly frame: "lab" | "sample";
+  readonly showEwald: boolean;
+}
+
+export const DEFAULT_GONIO: GonioState = { angles: [0, 0, 0], lambdaMin: 0.4, lambdaMax: 3.5, frame: "lab", showEwald: false };
+
 export interface ExperimentState {
   /** An SNS instrument id from the catalog, or GENERIC_INSTRUMENT for the generic beam. */
   readonly instrumentId: string;
