@@ -6,8 +6,7 @@ Open it at **https://drthyang.github.io/nexplan/**. It runs in the browser: noth
 are never uploaded.
 
 Status: **public beta.** The scattering tables are cross-checked against independent sources but are not yet
-certified against the printed literature. NEXPLAN is not an official SNS planning tool: check a plan with the
-instrument team before your beamtime.
+certified against the printed literature.
 
 ## Why NEXPLAN
 
@@ -175,5 +174,5 @@ Every push to `main` runs CI and deploys the site to GitHub Pages.
 
 ## License
 
-[GNU Affero General Public License v3.0 only](https://www.gnu.org/licenses/agpl-3.0.html) (AGPL-3.0-only), the same as
-MATERIA, whose code it includes. © 2026 Tsung-Han Yang.
+[GNU Affero General Public License v3.0 only](LICENSE) (AGPL-3.0-only), the same as MATERIA, whose code it
+includes. © 2026 Tsung-Han Yang.
