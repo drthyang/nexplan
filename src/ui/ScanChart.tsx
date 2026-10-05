@@ -32,7 +32,8 @@ export function ScanChart({ steps, axisIndex, axisName, current, onPick }: { ste
     });
     return best;
   };
-  const nTicks = [0, 0.5, 1].map((f) => Math.round(f * nMax));
+  // Distinct counts: with nMax = 1 the half-way tick rounds onto the top one.
+  const nTicks = [...new Set([0, 0.5, 1].map((f) => Math.round(f * nMax)))];
   const xTickStep = [5, 10, 15, 30, 45, 60, 90, 180].find((s) => (x1 - x0) / s <= Math.max(3, W / 70)) ?? 180;
   const xTicks: number[] = [];
   for (let t = Math.ceil(x0 / xTickStep) * xTickStep; t <= x1 + 1e-9; t += xTickStep) xTicks.push(t);
