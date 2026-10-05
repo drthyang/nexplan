@@ -105,6 +105,51 @@ export function paintMap(cells: ElementCells & { readonly panel: Int16Array }, w
 /* ---------------------------------------------------------------- reflection coverage */
 
 const GREY: readonly [number, number, number] = [188, 194, 204];
+const EDGE: readonly [number, number, number] = [52, 64, 84];
+const NEIGHBOURS: readonly (readonly [number, number])[] = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+];
+
+/**
+ * Display only. Swept by one goniometer axis, a reflection reaches a curve one cell wide, too thin to see.
+ * Each reachable cell is spread over an ellipse of rx × ry cells (exact cells keep their own λ), and the
+ * result is ringed by a one-cell dark edge so the pale end of the λ ramp stands out on grey. Both stay on
+ * detector cells. The page's counts and percentages use the exact cells, not this.
+ */
+export function widenCoverage(lam: Float32Array, nx: number, ny: number, rx: number, ry: number, onDetector: (c: number) => boolean = () => true): { lam: Float32Array; edge: Uint8Array } {
+  const out = Float32Array.from(lam);
+  const spread: [number, number][] = [];
+  for (let dy = -ry; dy <= ry; dy++) for (let dx = -rx; dx <= rx; dx++) if ((dx / rx) ** 2 + (dy / ry) ** 2 <= 1.5) spread.push([dx, dy]);
+  for (let j = 0; j < ny; j++)
+    for (let i = 0; i < nx; i++) {
+      const v = lam[j * nx + i]!;
+      if (Number.isNaN(v)) continue;
+      for (const [dx, dy] of spread) {
+        const x = i + dx;
+        const y = j + dy;
+        if (x < 0 || y < 0 || x >= nx || y >= ny) continue;
+        const c = y * nx + x;
+        if (Number.isNaN(out[c]!) && onDetector(c)) out[c] = v;
+      }
+    }
+  const edge = new Uint8Array(nx * ny);
+  for (let j = 0; j < ny; j++)
+    for (let i = 0; i < nx; i++) {
+      const c = j * nx + i;
+      if (!Number.isNaN(out[c]!) || !onDetector(c)) continue;
+      edge[c] = NEIGHBOURS.some(([dx, dy]) => {
+        const x = i + dx;
+        const y = j + dy;
+        return x >= 0 && y >= 0 && x < nx && y < ny && !Number.isNaN(out[y * nx + x]!);
+      })
+        ? 1
+        : 0;
+    }
+  return { lam: out, edge };
+}
 
 /** A cell coloured by wavelength on the shared λ ramp. */
 function lambdaPixel(lambda: number, lambdaMin: number, lambdaMax: number): [number, number, number] {
@@ -112,26 +157,27 @@ function lambdaPixel(lambda: number, lambdaMin: number, lambdaMax: number): [num
   return [Math.round(rr * 255), Math.round(g * 255), Math.round(b * 255)];
 }
 
-/** Coverage on the panel images: grey detectors, each reachable cell coloured by its λ (NaN = not reachable). */
+/** Coverage on the panel images: grey detectors, each reachable cell coloured by its λ (NaN = not reachable), widened to about 1.5 % of the panel each way. */
 export function paintLambdaPanels(grids: readonly { readonly nx: number; readonly ny: number }[], lambdas: readonly Float32Array[], lambdaMin: number, lambdaMax: number): PanelImage[] {
   return grids.map(({ nx, ny }, k) => {
     const data = new Uint8Array(nx * ny * 4);
-    const lam = lambdas[k]!;
-    for (let c = 0; c < nx * ny; c++) data.set([...(Number.isNaN(lam[c]!) ? GREY : lambdaPixel(lam[c]!, lambdaMin, lambdaMax)), 255], 4 * c);
+    const { lam, edge } = widenCoverage(lambdas[k]!, nx, ny, Math.max(1, Math.round(0.015 * nx)), Math.max(1, Math.round(0.015 * ny)));
+    for (let c = 0; c < nx * ny; c++) data.set([...(edge[c] ? EDGE : Number.isNaN(lam[c]!) ? GREY : lambdaPixel(lam[c]!, lambdaMin, lambdaMax)), 255], 4 * c);
     return { width: nx, height: ny, data };
   });
 }
 
-/** The same on the unrolled-map raster (top row first) as a PNG data URL; off the detectors stays transparent. */
+/** The same on the unrolled-map raster (top row first, one cell per CSS pixel) as a PNG data URL, widened by 2 px; off the detectors stays transparent. */
 export function paintLambdaMap(panelOf: Int16Array, lambdas: Float32Array, width: number, height: number, lambdaMin: number, lambdaMax: number): string {
   canvas ??= document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d")!;
   const img = ctx.createImageData(width, height);
+  const { lam, edge } = widenCoverage(lambdas, width, height, 2, 2, (c) => panelOf[c]! >= 0);
   for (let c = 0; c < width * height; c++) {
     if (panelOf[c]! < 0) continue;
-    img.data.set([...(Number.isNaN(lambdas[c]!) ? GREY : lambdaPixel(lambdas[c]!, lambdaMin, lambdaMax)), 255], 4 * c);
+    img.data.set([...(edge[c] ? EDGE : Number.isNaN(lam[c]!) ? GREY : lambdaPixel(lam[c]!, lambdaMin, lambdaMax)), 255], 4 * c);
   }
   ctx.putImageData(img, 0, 0);
   return canvas.toDataURL("image/png");
