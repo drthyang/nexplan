@@ -57,6 +57,7 @@ research release waits on print certification of the scattering tables. Nothing 
 | License: AGPL-3.0-only, full text in `LICENSE` | done |
 | Detector masks (edge pixels, panels, Mantid mask files by detector ID) and sample-environment shadows (lab or stage frame), in every hit test | done; gaps between the tubes of a pack are not modelled |
 | Counting time (flux) | not started |
+| Binning: recorded HKL range along chosen axes and bins from the resolution (TOPAZ, CORELLI: garnet-tools' Q model; ARCS, SEQUOIA, CNCS: PyChop ΔE and a geometric Q estimate), as MDNorm parameters | done; tested against garnet-tools and PyChop run on pinned files |
 
 ## 1. Product objective
 

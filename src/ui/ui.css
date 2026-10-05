@@ -1970,6 +1970,29 @@ input.ui-range {
   min-width: 0;
 }
 
+/* A Mantid call to copy (the Binning card). */
+.mantid-call {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.mantid-call pre {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-soft);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--fs-74);
+  line-height: 1.45;
+  overflow-x: auto;
+}
+
 .basis-mantid code {
   padding: 0.2rem 0.45rem;
   border: 1px solid var(--border);

@@ -52,6 +52,16 @@ header, then work through the pages from left to right: **Sample**, **Setup**, *
     separated from its neighbours (≥ 1 FWHM apart) in this bank.
 - **ARCS, SEQUOIA, CNCS.** The elastic powder pattern and Debye–Scherrer rings at the chosen Ei, and ψ scans for
   single crystals with the Bragg crossings solved exactly.
+- **Binning** (Single crystal page). The HKL range the plan records along chosen axes, down to a d_min, and a bin
+  per axis from the instrument's resolution, as Mantid MDNorm parameters ready to copy: a 3D volume, or a slice
+  that integrates one axis over a slab.
+  - TOPAZ and CORELLI: Q resolution from ORNL's garnet-tools model, which is fitted to measured peak shapes but not
+    published. Incident divergence dominates it and is the least documented input.
+  - ARCS, SEQUOIA and CNCS: an energy-transfer axis from Mantid PyChop's resolution for the chosen chopper, which is
+    within about 10 % of ORNL's vanadium widths; ARCS reads 10–16 % narrow. These instruments have no published Q
+    resolution, so the Q bins are a geometric estimate.
+  - Bins are the sharpest quarter's FWHM over the bins per FWHM. Real peaks are wider, because of the sample's
+    mosaic and size.
 - **Generic X-ray or neutron beam.** Reflection lists and powder patterns at constant wavelength (X-ray
   polarization models included) or at one neutron TOF bank, on 2θ, TOF, d or Q.
 
@@ -134,6 +144,10 @@ Every table is generated from pinned upstream files (URL, commit and SHA-256 in
   d = 0.8 Å.
 - [Consistency with Mantid](docs/data-verification/MANTID_CONSISTENCY.md): constants, DIFC and TOF, E ↔ λ, the B
   matrix, the goniometer and the wavelength of a reflection, transcribed from Mantid's source and tested.
+- The energy resolution equals Mantid PyChop's (`67c2f43`) to 1e-6 for 1200 chopper settings, energies and energy
+  transfers, including where the chopper does not transmit.
+- The Q resolution equals ORNL garnet-tools' model (`4eb3206`, its own code run on the pinned file) to 1e-9 for
+  280 directions and wavelengths on TOPAZ and CORELLI.
 - [MATERIA's tables](docs/data-verification/MATERIA_TABLES.md): a wrong In value and dropped imaginary parts in
   MATERIA's neutron table, since fixed in MATERIA; and X-ray Cromer–Mann rows that fail physical checks, flagged in DABAX and in the copy
   shared by cctbx, gemmi and GSAS-II.

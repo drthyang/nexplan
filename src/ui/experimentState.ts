@@ -53,6 +53,34 @@ export interface ExperimentState {
   readonly masks: Readonly<Record<string, MaskSettings>>;
   /** Sample-environment shadows per instrument id. */
   readonly shadows: Readonly<Record<string, readonly ShadowShape[]>>;
+  /** Suggested binning: projection axes (r.l.u., rows), bins per resolution FWHM in Q and in energy, the sample's mosaic (FWHM, deg), and the d down to which it bins (Å; absent: the calculation's d_min). */
+  readonly binning: Binning;
+  /** Chopper spectrometers, per instrument id: the chopper setting for the energy resolution, and the binning inputs. */
+  readonly dgs: Readonly<Record<string, DgsSettings>>;
+}
+
+export interface Binning {
+  readonly axes: readonly (readonly number[])[];
+  readonly perFwhmQ: number;
+  readonly perFwhmE: number;
+  readonly mosaicDeg: number;
+  readonly dMin?: number;
+  /** A slice: this axis is integrated over a slab about `centre` (r.l.u.) instead of binned. */
+  readonly slab?: { readonly axis: number; readonly centre: number };
+}
+
+/**
+ * A chopper spectrometer's chopper (a Fermi package and its frequency, or a CNCS mode and the double-disk frequency),
+ * its energy-transfer range (meV; absent: −0.2 Ei to 0.95 Ei, SNS autoreduction's default), and for the Q estimate
+ * the sample size (mm) and the incident divergence (FWHM, mrad).
+ */
+export interface DgsSettings {
+  readonly chopper: string;
+  readonly frequency: number;
+  readonly eMin?: number;
+  readonly eMax?: number;
+  readonly sampleMm: number;
+  readonly divergenceMrad: number;
 }
 
 export const DEFAULT_EXPERIMENT: ExperimentState = {
@@ -75,6 +103,8 @@ export const DEFAULT_EXPERIMENT: ExperimentState = {
   eRes: 0.04,
   masks: {},
   shadows: {},
+  binning: { axes: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], perFwhmQ: 2, perFwhmE: 3, mosaicDeg: 0 },
+  dgs: {},
 };
 
 export const catalogEntry = (id: string): CatalogEntry | undefined => SNS_CATALOG.find((i) => i.id === id);
@@ -173,3 +203,31 @@ export function shadowsOf(exp: ExperimentState): readonly ShadowShape[] {
 
 export const withShadows = (exp: ExperimentState, list: readonly ShadowShape[]): ExperimentState => ({ ...exp, shadows: { ...(exp.shadows ?? {}), [exp.instrumentId]: list } });
 
+/** The binning inputs (checked, since they come from browser storage). */
+export function binningOf(exp: ExperimentState): Binning {
+  const b = exp.binning as Partial<Binning> | undefined;
+  const axes = Array.isArray(b?.axes) && b.axes.length === 3 && b.axes.every((r) => Array.isArray(r) && r.length === 3 && r.every((v) => finite(v, -100, 100))) ? b.axes : DEFAULT_EXPERIMENT.binning.axes;
+  return {
+    axes,
+    perFwhmQ: finite(b?.perFwhmQ, 1, 10) ? b.perFwhmQ : 2,
+    perFwhmE: finite(b?.perFwhmE, 1, 10) ? b.perFwhmE : 3,
+    mosaicDeg: finite(b?.mosaicDeg, 0, 20) ? b.mosaicDeg : 0,
+    ...(finite(b?.dMin, 0.05, 100) ? { dMin: b.dMin } : {}),
+    ...(b?.slab && [0, 1, 2].includes(b.slab.axis) && finite(b.slab.centre, -1000, 1000) ? { slab: { axis: b.slab.axis, centre: b.slab.centre } } : {}),
+  };
+}
+
+/** The current chopper spectrometer's settings, or its defaults (PyChop's: 300 Hz; the resolution packages; CNCS High Flux). */
+export function dgsOf(exp: ExperimentState, defaults: { chopper: string; frequency: number }): DgsSettings {
+  const d = (exp.dgs ?? {})[exp.instrumentId] as Partial<DgsSettings> | undefined;
+  return {
+    chopper: typeof d?.chopper === "string" ? d.chopper : defaults.chopper,
+    frequency: finite(d?.frequency, 1, 1000) ? d.frequency : defaults.frequency,
+    ...(finite(d?.eMin, -1e5, 1e5) ? { eMin: d.eMin } : {}),
+    ...(finite(d?.eMax, -1e5, 1e5) ? { eMax: d.eMax } : {}),
+    sampleMm: finite(d?.sampleMm, 0, 1000) ? d.sampleMm : 5,
+    divergenceMrad: finite(d?.divergenceMrad, 0, 1000) ? d.divergenceMrad : 0,
+  };
+}
+
+export const withDgs = (exp: ExperimentState, d: DgsSettings): ExperimentState => ({ ...exp, dgs: { ...(exp.dgs ?? {}), [exp.instrumentId]: d } });

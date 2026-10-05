@@ -270,6 +270,114 @@
       "file": "CNCS_Definition.xml",
       "sha256": "ae0366b449e36dd568aa750a94dbe791f5e1c93e25d7a9970f82ab488eb98ab2",
       "license": "GPL-3.0-or-later (Mantid instrument definitions). Only numerical detector geometry is extracted, with attribution."
+    },
+    {
+      "id": "pychop-init",
+      "role": "crosscheck",
+      "dataset": "dgs-resolution",
+      "description": "Mantid PyChop scripts/pychop/__init__.py @ 67c2f43: package entry point. Run by scripts/data/gen_pychop_reference.py to make fixtures/pychop-resolution.json, the reference for src/core/instrument/pychop.ts.",
+      "urls": [
+        "https://raw.githubusercontent.com/mantidproject/mantid/67c2f43ef79ea4ce4f3c92f417f5c74f8fedcf30/scripts/pychop/__init__.py"
+      ],
+      "file": "__init__.py",
+      "sha256": "9255b98153f55a2961dbc12dca6f458918430e33ce8533e716ce6bf25ad360e1",
+      "license": "GPL-3.0-or-later (Mantid). Used to generate a reference fixture; the formulas and parameters ported to TypeScript are attributed."
+    },
+    {
+      "id": "pychop-instruments",
+      "role": "crosscheck",
+      "dataset": "dgs-resolution",
+      "description": "Mantid PyChop scripts/pychop/Instruments.py @ 67c2f43: the resolution model (getVanVar, getResolution). Run by scripts/data/gen_pychop_reference.py to make fixtures/pychop-resolution.json, the reference for src/core/instrument/pychop.ts.",
+      "urls": [
+        "https://raw.githubusercontent.com/mantidproject/mantid/67c2f43ef79ea4ce4f3c92f417f5c74f8fedcf30/scripts/pychop/Instruments.py"
+      ],
+      "file": "Instruments.py",
+      "sha256": "89cc8d053e60e13241a1d8167202a202309fdc042f6e8408c66313e39a3f3578",
+      "license": "GPL-3.0-or-later (Mantid). Used to generate a reference fixture; the formulas and parameters ported to TypeScript are attributed."
+    },
+    {
+      "id": "pychop-chop",
+      "role": "crosscheck",
+      "dataset": "dgs-resolution",
+      "description": "Mantid PyChop scripts/pychop/Chop.py @ 67c2f43: moderator (tikeda), Fermi chopper (tchop), detector depth (tube_mts) and sample (sam0) terms. Run by scripts/data/gen_pychop_reference.py to make fixtures/pychop-resolution.json, the reference for src/core/instrument/pychop.ts.",
+      "urls": [
+        "https://raw.githubusercontent.com/mantidproject/mantid/67c2f43ef79ea4ce4f3c92f417f5c74f8fedcf30/scripts/pychop/Chop.py"
+      ],
+      "file": "Chop.py",
+      "sha256": "a93f3c5cdbe7ae20e5fe2efadab4831fe661f99656dee9412c3b3086dd4cff41",
+      "license": "GPL-3.0-or-later (Mantid). Used to generate a reference fixture; the formulas and parameters ported to TypeScript are attributed."
+    },
+    {
+      "id": "pychop-mulpyrep",
+      "role": "crosscheck",
+      "dataset": "dgs-resolution",
+      "description": "Mantid PyChop scripts/pychop/MulpyRep.py @ 67c2f43: disk-chopper opening times (CNCS). Run by scripts/data/gen_pychop_reference.py to make fixtures/pychop-resolution.json, the reference for src/core/instrument/pychop.ts.",
+      "urls": [
+        "https://raw.githubusercontent.com/mantidproject/mantid/67c2f43ef79ea4ce4f3c92f417f5c74f8fedcf30/scripts/pychop/MulpyRep.py"
+      ],
+      "file": "MulpyRep.py",
+      "sha256": "2f9b322b7414464afe6ea6f416af5a9ebbad0d44a14dfcc45982a4bbac866393",
+      "license": "GPL-3.0-or-later (Mantid). Used to generate a reference fixture; the formulas and parameters ported to TypeScript are attributed."
+    },
+    {
+      "id": "pychop-arcs",
+      "role": "crosscheck",
+      "dataset": "dgs-resolution",
+      "description": "Mantid PyChop scripts/pychop/arcs.yaml @ 67c2f43: ARCS parameters (tuned to ORNL vanadium data, mantid PR #38591). Run by scripts/data/gen_pychop_reference.py to make fixtures/pychop-resolution.json, the reference for src/core/instrument/pychop.ts.",
+      "urls": [
+        "https://raw.githubusercontent.com/mantidproject/mantid/67c2f43ef79ea4ce4f3c92f417f5c74f8fedcf30/scripts/pychop/arcs.yaml"
+      ],
+      "file": "arcs.yaml",
+      "sha256": "0af8701f867329e9c9a41841757690bb90a6eec670d41e5d9862c6b3d460d10b",
+      "license": "GPL-3.0-or-later (Mantid). Used to generate a reference fixture; the formulas and parameters ported to TypeScript are attributed."
+    },
+    {
+      "id": "pychop-sequoia",
+      "role": "crosscheck",
+      "dataset": "dgs-resolution",
+      "description": "Mantid PyChop scripts/pychop/sequoia.yaml @ 67c2f43: SEQUOIA parameters (tuned to ORNL vanadium data, mantid PR #38591). Run by scripts/data/gen_pychop_reference.py to make fixtures/pychop-resolution.json, the reference for src/core/instrument/pychop.ts.",
+      "urls": [
+        "https://raw.githubusercontent.com/mantidproject/mantid/67c2f43ef79ea4ce4f3c92f417f5c74f8fedcf30/scripts/pychop/sequoia.yaml"
+      ],
+      "file": "sequoia.yaml",
+      "sha256": "18a8bf3d94c752101bbe15cc7b84b7e7d70afa7f4dbc9ae0a75114170e56dd7a",
+      "license": "GPL-3.0-or-later (Mantid). Used to generate a reference fixture; the formulas and parameters ported to TypeScript are attributed."
+    },
+    {
+      "id": "pychop-cncs",
+      "role": "crosscheck",
+      "dataset": "dgs-resolution",
+      "description": "Mantid PyChop scripts/pychop/cncs.yaml @ 67c2f43: CNCS parameters. Run by scripts/data/gen_pychop_reference.py to make fixtures/pychop-resolution.json, the reference for src/core/instrument/pychop.ts.",
+      "urls": [
+        "https://raw.githubusercontent.com/mantidproject/mantid/67c2f43ef79ea4ce4f3c92f417f5c74f8fedcf30/scripts/pychop/cncs.yaml"
+      ],
+      "file": "cncs.yaml",
+      "sha256": "f2e655a207f8ea91c0978e5ba199dcad6b24b030ba21ab609cb4554d4a6d42a4",
+      "license": "GPL-3.0-or-later (Mantid). Used to generate a reference fixture; the formulas and parameters ported to TypeScript are attributed."
+    },
+    {
+      "id": "garnet-resolution",
+      "role": "crosscheck",
+      "dataset": "q-resolution",
+      "description": "ORNL garnet-tools src/garnet/reduction/resolution.py @ 4eb3206: the single-crystal resolution model (_model_design_lab, after Stoica 1975 and Forsyth 1988). Run by scripts/data/gen_qres_reference.py to make fixtures/qres-garnet.json, the reference for src/core/instrument/qResolution.ts.",
+      "urls": [
+        "https://raw.githubusercontent.com/neutrons/garnet-tools/4eb32068bb31eafc90b28767fd26bd91f7b8bb97/src/garnet/reduction/resolution.py"
+      ],
+      "file": "resolution.py",
+      "sha256": "6a889d6c8b7c52179e64c531557b3bb8586993f7456741e0a08f6ba0124b8633",
+      "license": "BSD-3-Clause (neutrons/garnet-tools). The model form and the fitted parameters are ported with attribution."
+    },
+    {
+      "id": "garnet-instruments",
+      "role": "crosscheck",
+      "dataset": "q-resolution",
+      "description": "ORNL garnet-tools src/garnet/config/instruments.py @ 4eb3206: instrument settings, with the fitted DivergenceParams for TOPAZ and CORELLI. Run by scripts/data/gen_qres_reference.py to make fixtures/qres-garnet.json, the reference for src/core/instrument/qResolution.ts.",
+      "urls": [
+        "https://raw.githubusercontent.com/neutrons/garnet-tools/4eb32068bb31eafc90b28767fd26bd91f7b8bb97/src/garnet/config/instruments.py"
+      ],
+      "file": "instruments.py",
+      "sha256": "6e32ccab8de03279e0829051bf4aae83ec440633e4290abf1e30753fc613b20b",
+      "license": "BSD-3-Clause (neutrons/garnet-tools). The model form and the fitted parameters are ported with attribution."
     }
   ]
 }

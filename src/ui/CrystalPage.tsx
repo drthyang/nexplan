@@ -27,6 +27,7 @@ import { Card, cx, Segmented, UnitField } from "./components.tsx";
 import { downloadText, fmt, hklText } from "./format.ts";
 import { ScanChart } from "./ScanChart.tsx";
 import { SliceChart, type SlicePoint } from "./SliceChart.tsx";
+import { BinningCard } from "./BinningCard.tsx";
 import { masksOf, shadowsOf } from "./experimentState.ts";
 import { AcceptanceNote, DMinNote, findHkl, GoniometerLimits, HklField, HklNotice, InstrumentRequired, lam, useHklPick, useObservations, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
 import { hklMiss, PRESENT_CAP } from "./ubShared.ts";
@@ -799,6 +800,8 @@ function CrystalPlan({
           </Card>
         </div>
       </div>
+
+      <BinningCard exp={exp} onExp={onExp} model={model} settings={planOk?.settings ?? []} UB={viewUB} panels={panels} shadows={shadows} calcDMin={result.provenance.dMin} />
     </div>
   );
 }

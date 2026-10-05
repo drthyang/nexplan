@@ -332,6 +332,29 @@ neutron scattering); code in
     `observeAt` with masks and shadows, coverage never in a shadow and solvable wherever the stepped sweep lands,
     and mask files mapping each ID to its own pixel (monitor IDs and unknown components reported, not placed).
 
+- **Binning** (`src/core/instrument/hklRange.ts`, `binning.ts`, `qResolution.ts`, `pychop.ts`):
+  - Range: a pixel along u records q = (u − ẑ)/λ (white beam) or q = k_f·u − k_i·ẑ (chopper spectrometer, energy
+    transfer E, k = √(E/81.8042)); in the crystal x = (UB·W)⁻¹·Rᵀ·q along the projection axes W. Along a pixel q is
+    linear in 1/λ or k_f, so the box over settings, recording pixels (masks and shadows applied) and band ends is the
+    recorded extent; each segment is clipped exactly to |q| ≤ 1/d_min. Pixels are sampled on a grid per panel that
+    includes its edges.
+  - Q resolution, TOPAZ and CORELLI: Σ = k²[σ_γi(λ)²·x̂x̂ᵀ + σ_νi(λ)²·ŷŷᵀ + σ_γf²·γ̂fγ̂fᵀ + σ_νf²·ν̂fν̂fᵀ +
+    (σ_dl² + σ_dlb²/λ²)·qqᵀ] + η²(Q²I − QQᵀ) (Stoica 1975; Forsyth 1988), as ORNL garnet-tools models peak shapes
+    (`resolution.py` `_model_design_lab` @ 4eb3206), with its fitted DivergenceParams. These are in degrees on a
+    99.7 % containment scale, so a Gaussian σ is the value / √χ²₃(0.997) = value / 3.7325. The calibration crystal's
+    mosaic is dropped and the sample's η is an input. Tested against garnet's own code on the pinned file.
+  - Energy resolution, ARCS, SEQUOIA, CNCS: Mantid PyChop's closed-form model at 67c2f43 (moderator, choppers,
+    aperture, sample and ³He-tube depth propagated to the detector), with its arcs/sequoia/cncs.yaml parameters;
+    tested against PyChop's output.
+  - Q for chopper spectrometers (estimate; nothing is published): outgoing angular σ from the median pixel and the
+    sample size over L2 (uniform widths, σ = w/√12), the incident divergence if given, and σ_E as a spread
+    0.482596·σ_E/(2k_f) of |k_f| along k̂_f.
+  - Bins: FWHM along axis i is 2.3548·√C_ii, C = M·Σ·Mᵀ/(2π)², M = (UB·W)⁻¹·Rᵀ. These are sampled at up to 24
+    settings, the pixel grid and 5 wavelengths (or energy transfers) where the plan records within d_min. The bin is
+    the 25th percentile over the bins per FWHM (2 by default; 3 for energy, from the elastic FWHM), rounded to the
+    nearest of 1, 2, 2.5, 5 × 10ⁿ, and the range is rounded out to whole bins. A slice integrates one axis over
+    2 × its median FWHM.
+
 ## 11. Scattering power (comparing materials)
 
 On the Structure page; code in `src/core/scattering/power.ts`. Everything is per unit volume of material, so no
