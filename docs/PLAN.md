@@ -1,7 +1,8 @@
 # NEXPLAN: scientific implementation and validation plan
 
 Revision 2 · 2026-10-02 · supersedes the 2026-10-02 draft.
-Status: implementation started. The data pipeline and verification reports exist; nothing is certified for research use.
+Status: public beta at `https://drthyang.github.io/nexplan/` (2026-10-05). The M0–M4 deliverables are built; the M5
+research release waits on print certification of the scattering tables. Nothing is certified for research use.
 
 ## 0. What changed from the draft, and why
 
@@ -18,7 +19,7 @@ Status: implementation started. The data pipeline and verification reports exist
 | UI unspecified. | Match the MATERIA / NEBULA3D / RMCProfile Workbench design system (§11). | User requirement. |
 | — | Deployment origin `https://drthyang.github.io/nexplan/`; license AGPL-3.0-only (§13). | COD CORS must be tested at the real origin. Copied MATERIA code is AGPL. |
 
-## Progress (2026-10-02)
+## Progress (2026-10-05)
 
 | Item | State |
 |---|---|
@@ -38,13 +39,24 @@ Status: implementation started. The data pipeline and verification reports exist
 | Folded reflection families; per-site X-ray ion opt-in (neutral default); energy ↔ λ | done |
 | Structure viewer (ported from MATERIA, RMCProfile export/theming) | done |
 | UB workbench: ISAW I/O, lattice/orientation, setting match, basis change, TOPAZ cryo/ambient + Universal goniometers, 3D Laue view | done; validated on Mantid TOPAZ_3007 peaks |
+| Re-indexing: any integer supercell, primitive cell or ITA transformation (fractional P); exported as a UB or as Mantid's TransformHKL call | done |
 | Detector geometry from Mantid IDFs (TOPAZ, CORELLI, NOMAD, POWGEN, ARCS, SEQUOIA, CNCS) + real-space instrument view | done; pixel mapping validated on TOPAZ_3007 |
 | Instrument page: single crystal (3D detectors, unrolled detector map, rotation scan with family completeness, reflections on panels) and powder (sample fixed: 2θ–d coverage, panels per reflection, per-panel TOF pattern) | done; UB page is now orientation-only |
-| CI and Pages workflows | written; repo not yet pushed |
-| Anisotropic Debye–Waller, anomalous X-ray terms | not started |
+| CI and Pages workflows | done; every push to `main` fetches the pinned sources, runs CI and deploys `https://drthyang.github.io/nexplan/` |
+| Anisotropic Debye–Waller, anomalous X-ray terms | not started; anisotropic ADPs enter as U_eq |
 | Powder rings on the detectors (TOF slices, ray-traced check); ARCS, SEQUOIA, CNCS (elastic, exact monochromatic scans); Instrument page neutron-only | done |
 | Pages grouped Sample · Setup · Instrument · Simulation; instrument chosen in the header; Detectors, Powder (per panel) and Single-crystal pages; exact per-pixel coverage; orientation lists (TOPAZ), interleaved scans (CORELLI); reciprocal slices with plan coverage | done |
-| M4 planning extras: masks, goniometer limits, orientation optimizer, counting time (flux), calibrated banks | not started |
+| TOPAZ planner: wanted reflections, Find a setting, Suggest settings (Full coverage or Fewest settings, greedy, fine-tuned off the grid), user goniometer limits, plan CSV export with provenance | done |
+| Focused banks as the data are reduced (NOMAD six, POWGEN one); powder export per bank; TOF, d and Q axes; warning where d_min cuts the pattern, with a one-click fix | done |
+| Calibrated banks | partly: NOMAD banks 1–5 use calibrated DIFC (ORNL 2023A GSAS-II file), POWGEN's DIFC comes from the characterisation file's effective L2 and 2θ; NOMAD bank 6 and the other instruments use geometric DIFC |
+| Instrument peak widths: NOMAD measured Δd/d per bank; POWGEN GSAS-II profile for each of seven standard chopper frames; resolved-line check (≥ 1 FWHM apart) | done; POWGEN 0.8 Å frame within 25 % of the LaB₆ widths in Huq et al. (2019) |
+| Forbidden reflections (absent, \|F\| ≈ 0 or below d_min) simulated, wanted and planned on request, with a notice | done |
+| Scattering power against a reference material (V, diamond, Si, CeO₂, corundum or a demo structure) | done; relative, no counting time |
+| Consistency with Mantid: constants, DIFC and TOF, E ↔ λ, B matrix, goniometer, Laue wavelength | done (`docs/data-verification/MANTID_CONSISTENCY.md`) |
+| Session kept across reloads; layouts for phones, tablets and 1080p–4K monitors; sortable reflection tables | done |
+| License: AGPL-3.0-only, full text in `LICENSE` | done |
+| Detector masks, gaps and sample-environment shadows | not started |
+| Counting time (flux) | not started |
 
 ## 1. Product objective
 
@@ -378,17 +390,17 @@ panel structure, header with status chips, light and dark themes, and phone/tabl
 
 | Milestone | Deliverables | Exit |
 |---|---|---|
-| **M0 Contracts & data** (in progress) | Conventions; sources registry; WK1995 and Sears 1992 tables with reports; MATERIA module copy with pin; full-settings space-group table | `data:check` and conventions tests green; human audit list issued |
+| **M0 Contracts & data** (done; the print-audit list awaits a reviewer) | Conventions; sources registry; WK1995 and Sears 1992 tables with reports; MATERIA module copy with pin; full-settings space-group table | `data:check` and conventions tests green; human audit list issued |
 | **M1 CIF → reflections** | CIF 1.1 reader, block selection, species resolution, expansion, signed reflections, complex F, absences, minimal UI | Parser, analytic and gemmi-matched tests pass; tiers shown in UI |
 | **M2 Powder** | Sticks, CW corrections, profiles, axes, exports | Multiplicity, overlap, area, axis and matched-reference tests |
 | **M3 UB workbench** | ISAW round trip, orientation inspection, basis changes, supercells | Non-diagonal real fixtures; invariants |
 | **M4 Planning** | Slices, Ewald accessibility, rotation scans, one adapter | Analytic and independent geometry comparisons |
-| **M5 Research release** | Validation report, licenses, citations, limitations, DOI | Domain-expert review; all deployed rows ≥ crosschecked, validated-mode rows certified |
+| **M5 Research release** (next) | Validation report, licenses, citations, limitations, DOI | Domain-expert review; all deployed rows ≥ crosschecked, validated-mode rows certified |
 
 ## 13. Open decisions
 
-1. **License.** Copied MATERIA code is AGPL-3.0-only, so NEXPLAN defaults to AGPL-3.0-only. As MATERIA's
-   author, you can relicense if you want something more permissive.
+1. **License: decided.** AGPL-3.0-only, the same as MATERIA, whose code NEXPLAN includes. The full text is in
+   `LICENSE` (2026-10-05).
 2. **Upstream fixes to MATERIA:** the In value, complex b, Pu/Cm, origin choice, P1 fallback, silent truncation and
    CIF species. These are tracked as a separate task in MATERIA.
 3. **Reviewer** for print certification of the WK and Sears rows.
