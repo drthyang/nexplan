@@ -1,6 +1,6 @@
 {
   "name": "nexplan",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "Browser-native X-ray and neutron diffraction calculator, UB workbench and experiment planner",
