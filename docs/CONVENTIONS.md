@@ -345,7 +345,10 @@ neutron scattering); code in
     mosaic is dropped and the sample's η is an input. Tested against garnet's own code on the pinned file.
   - Energy resolution, ARCS, SEQUOIA, CNCS: Mantid PyChop's closed-form model at 67c2f43 (moderator, choppers,
     aperture, sample and ³He-tube depth propagated to the detector), with its arcs/sequoia/cncs.yaml parameters;
-    tested against PyChop's output.
+    tested against PyChop's output. The chopper setting in the header gives the elastic width ΔE/E = FWHM(0)/Ei
+    for the simulations' band (Δλ/λ = ΔE/2E) as well. Defaults are PyChop's 300 Hz with ARCS-100-1.5,
+    SEQ-100-2.0 or CNCS High Flux. A typed ΔE/E ("Custom") is kept, and so is the last width where a chopper does
+    not transmit.
   - Q for chopper spectrometers (estimate; nothing is published): outgoing angular σ from the median pixel and the
     sample size over L2 (uniform widths, σ = w/√12), the incident divergence if given, and σ_E as a spread
     0.482596·σ_E/(2k_f) of |k_f| along k̂_f.

@@ -7,7 +7,8 @@ import { calculate, prewarmWorker } from "../workers/client.ts";
 import { Chip, cx, InfoBadge, Segmented, UnitField } from "./components.tsx";
 import { DEMOS } from "./demos.ts";
 import { CATALOG_GROUPS, GENERIC_INSTRUMENT } from "../core/ub/instrumentCatalog.ts";
-import { catalogEntry, chooseInstrument, DEFAULT_EXPERIMENT, DEFAULT_GONIO, limitedGoniometer, masksOf, sampleKind, shadowsOf, withEi, type ExperimentState, type GonioState } from "./experimentState.ts";
+import { catalogEntry, chooseInstrument, DEFAULT_EXPERIMENT, DEFAULT_GONIO, limitedGoniometer, masksOf, sampleKind, shadowsOf, withIncident, type ExperimentState, type GonioState } from "./experimentState.ts";
+import { ChopperControls } from "./ChopperControls.tsx";
 import { clearSession, loadSession, MAX_SAVED_CIF, saveSession, savedChoice, savedNumber, savedObject } from "./session.ts";
 import type { CwProfileSettings } from "./pages.tsx";
 import type { UbState } from "./ubShared.ts";
@@ -123,7 +124,9 @@ export function App() {
   const [gonio, setGonio] = useState<GonioState>(() => savedObject(saved?.gonio, DEFAULT_GONIO));
   const [experiment, setExperiment] = useState<ExperimentState>(() => {
     const e = savedObject(saved?.experiment, DEFAULT_EXPERIMENT);
-    return e.instrumentId === GENERIC_INSTRUMENT || catalogEntry(e.instrumentId) ? e : DEFAULT_EXPERIMENT;
+    if (e.instrumentId !== GENERIC_INSTRUMENT && !catalogEntry(e.instrumentId)) return DEFAULT_EXPERIMENT;
+    // A chopper spectrometer's elastic width follows its chopper setting (sessions saved before it did included).
+    return catalogEntry(e.instrumentId)?.incident ? withIncident(e, e.eiMeV) : e;
   });
   // Save the session (debounced); "Start over" clears it and reloads.
   const [storageOk, setStorageOk] = useState(true);
@@ -363,14 +366,11 @@ export function App() {
                         <span className="sym">E</span>
                         <sub>i</sub>
                       </span>
-                      <UnitField label="Incident energy" value={Number(experiment.eiMeV.toPrecision(6))} unit="meV" min={entry.incident.eiMin} max={entry.incident.eiMax} width="5ch" onCommit={(v) => setExperiment(withEi(experiment, v, experiment.eRes))} />
+                      <UnitField label="Incident energy" value={Number(experiment.eiMeV.toPrecision(6))} unit="meV" min={entry.incident.eiMin} max={entry.incident.eiMax} width="5ch" onCommit={(v) => setExperiment(withIncident(experiment, v))} />
                       <span className="dim-note">
                         <span className="sym">λ</span> {Number(((experiment.lambdaMin + experiment.lambdaMax) / 2).toPrecision(5))} Å
                       </span>
-                      <span className="ui-control-label">
-                        Δ<span className="sym">E</span>/<span className="sym">E</span>
-                      </span>
-                      <UnitField label="Elastic resolution (FWHM)" value={Number((100 * experiment.eRes).toPrecision(6))} unit="%" min={0.01} max={50} width="4ch" onCommit={(v) => setExperiment(withEi(experiment, experiment.eiMeV, v / 100))} />
+                      <ChopperControls exp={experiment} onExp={setExperiment} />
                     </span>
                   ) : (
                     <span className="ui-control">

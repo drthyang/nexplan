@@ -6,6 +6,7 @@ import { neutronWavelengthA } from "../core/physics/energy.ts";
 import type { GoniometerModel } from "../core/ub/goniometer.ts";
 import { GENERIC_INSTRUMENT, SNS_CATALOG, type CatalogEntry } from "../core/ub/instrumentCatalog.ts";
 import { NO_MASKS, type MaskFile, type MaskSettings, type ShadowShape } from "../core/instrument/acceptance.ts";
+import { energyResolution, type ChopperSetting, type CncsMode, type FermiInstrument } from "../core/instrument/pychop.ts";
 
 /** The Orientation page's goniometer and Laue-view settings. */
 export interface GonioState {
@@ -116,6 +117,16 @@ export function withEi(exp: ExperimentState, eiMeV: number, eRes: number): Exper
   return { ...exp, eiMeV, eRes, lambdaMin: lambda * (1 - half), lambdaMax: lambda * (1 + half) };
 }
 
+/**
+ * Set Ei and the band it gives. With a chopper setting (not "custom"), the elastic width ΔE/E is PyChop's at that Ei
+ * (pychop.ts); where that chopper does not transmit, or with a custom width, the current ΔE/E is kept.
+ */
+export function withIncident(exp: ExperimentState, eiMeV: number): ExperimentState {
+  const c = chopperOf(exp);
+  const fwhm = c ? energyResolution(c, eiMeV, 0) : undefined;
+  return withEi(exp, eiMeV, fwhm !== undefined ? fwhm / eiMeV : exp.eRes);
+}
+
 /** Switch instrument: its goniometer at zero (fixed axes at their values), its band or Ei, its sample kind. */
 export function chooseInstrument(exp: ExperimentState, id: string): ExperimentState {
   const ins = catalogEntry(id);
@@ -132,7 +143,8 @@ export function chooseInstrument(exp: ExperimentState, id: string): ExperimentSt
     scan: ins.plan?.kind === "scan" ? { axis: firstFree, start: ins.plan.start, end: ins.plan.end, step: ins.plan.step, interleave: false } : { ...exp.scan, axis: firstFree },
     orientations: [],
   };
-  return ins.incident ? withEi(next, ins.incident.eiMeV, ins.incident.elasticFwhm) : { ...next, lambdaMin: ins.lambdaMin, lambdaMax: ins.lambdaMax };
+  // A chopper spectrometer's elastic width from its chopper setting; the catalog's where that cannot give one.
+  return ins.incident ? withIncident({ ...next, eRes: ins.incident.elasticFwhm }, ins.incident.eiMeV) : { ...next, lambdaMin: ins.lambdaMin, lambdaMax: ins.lambdaMax };
 }
 
 /** The sample kind simulated on this instrument (the one it supports, or the chosen one when it takes both). */
@@ -217,8 +229,27 @@ export function binningOf(exp: ExperimentState): Binning {
   };
 }
 
-/** The current chopper spectrometer's settings, or its defaults (PyChop's: 300 Hz; the resolution packages; CNCS High Flux). */
-export function dgsOf(exp: ExperimentState, defaults: { chopper: string; frequency: number }): DgsSettings {
+/** Chopper settings by default: PyChop's 300 Hz, with the resolution packages, and CNCS High Flux. */
+export const DGS_DEFAULT_CHOPPER: Readonly<Record<string, { readonly chopper: string; readonly frequency: number }>> = {
+  arcs: { chopper: "ARCS-100-1.5-AST", frequency: 300 },
+  sequoia: { chopper: "SEQ-100-2.0-AST", frequency: 300 },
+  cncs: { chopper: "High Flux", frequency: 300 },
+};
+
+/** The chopper value for a ΔE/E typed by hand instead of PyChop's. */
+export const CUSTOM_CHOPPER = "custom";
+
+/** The current instrument's PyChop setting, or undefined (not a chopper spectrometer, or a custom ΔE/E). */
+export function chopperOf(exp: ExperimentState): ChopperSetting | undefined {
+  const def = DGS_DEFAULT_CHOPPER[exp.instrumentId];
+  if (!def) return undefined;
+  const d = dgsOf(exp, def);
+  if (d.chopper === CUSTOM_CHOPPER) return undefined;
+  return exp.instrumentId === "cncs" ? { instrument: "cncs", mode: d.chopper as CncsMode, frequency: d.frequency } : { instrument: exp.instrumentId as FermiInstrument, package: d.chopper, frequency: d.frequency };
+}
+
+/** The current chopper spectrometer's settings, or its defaults (DGS_DEFAULT_CHOPPER). */
+export function dgsOf(exp: ExperimentState, defaults: { chopper: string; frequency: number } = DGS_DEFAULT_CHOPPER[exp.instrumentId] ?? { chopper: CUSTOM_CHOPPER, frequency: 300 }): DgsSettings {
   const d = (exp.dgs ?? {})[exp.instrumentId] as Partial<DgsSettings> | undefined;
   return {
     chopper: typeof d?.chopper === "string" ? d.chopper : defaults.chopper,
@@ -230,4 +261,5 @@ export function dgsOf(exp: ExperimentState, defaults: { chopper: string; frequen
   };
 }
 
-export const withDgs = (exp: ExperimentState, d: DgsSettings): ExperimentState => ({ ...exp, dgs: { ...(exp.dgs ?? {}), [exp.instrumentId]: d } });
+/** Set the chopper spectrometer's settings; a new chopper setting sets the elastic width (withIncident). */
+export const withDgs = (exp: ExperimentState, d: DgsSettings): ExperimentState => withIncident({ ...exp, dgs: { ...(exp.dgs ?? {}), [exp.instrumentId]: d } }, exp.eiMeV);

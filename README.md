@@ -51,7 +51,9 @@ header, then work through the pages from left to right: **Sample**, **Setup**, *
   - The page warns when the bank records d below the calculated d_min, and says whether a selected line is
     separated from its neighbours (≥ 1 FWHM apart) in this bank.
 - **ARCS, SEQUOIA, CNCS.** The elastic powder pattern and Debye–Scherrer rings at the chosen Ei, and ψ scans for
-  single crystals with the Bragg crossings solved exactly.
+  single crystals with the Bragg crossings solved exactly. The chopper setting in the header (a Fermi package and
+  frequency, or a CNCS mode and disk frequency) sets the elastic width ΔE/E through Mantid PyChop's resolution, and
+  with it the band; or type ΔE/E by hand.
 - **Binning** (Single crystal page). The HKL range the plan records along chosen axes, down to a d_min, and a bin
   per axis from the instrument's resolution, as Mantid MDNorm parameters ready to copy: a 3D volume, or a slice
   that integrates one axis over a slab.

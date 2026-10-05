@@ -11,18 +11,12 @@ import { blockedAt } from "../core/instrument/acceptance.ts";
 import { energyBinning, niceStep, suggestBinning, type Binning } from "../core/instrument/binning.ts";
 import type { DetectorPanel } from "../core/instrument/detectors.ts";
 import { kOfEnergy, panelSamples, type Beam } from "../core/instrument/hklRange.ts";
-import { CNCS_SLOTS, energyResolution, FERMI_PACKAGES, FREQUENCIES, type ChopperSetting, type CncsMode, type FermiInstrument } from "../core/instrument/pychop.ts";
+import { energyResolution } from "../core/instrument/pychop.ts";
 import { directCovariance, FWHM_PER_SIGMA, GARNET_RESOLUTION, whiteBeamCovariance } from "../core/instrument/qResolution.ts";
 import { goniometerMatrix, type GoniometerModel } from "../core/ub/goniometer.ts";
 import { Card, Segmented, UnitField } from "./components.tsx";
-import { binningOf, catalogEntry, dgsOf, withDgs, type ExperimentState } from "./experimentState.ts";
+import { binningOf, catalogEntry, chopperOf, DGS_DEFAULT_CHOPPER, dgsOf, withDgs, type ExperimentState } from "./experimentState.ts";
 import { fmt } from "./format.ts";
-
-const DGS_DEFAULT: Record<string, { chopper: string; frequency: number }> = {
-  arcs: { chopper: "ARCS-100-1.5-AST", frequency: 300 },
-  sequoia: { chopper: "SEQ-100-2.0-AST", frequency: 300 },
-  cncs: { chopper: "High Flux", frequency: 300 },
-};
 
 const AXIS_NAMES = ["Q₁", "Q₂", "Q₃"];
 const vecText = (v: readonly number[]) => v.map((x) => Number(x.toFixed(4))).join(" ");
@@ -59,12 +53,13 @@ export function BinningCard({
   const setB = (patch: Partial<typeof b>) => onExp({ ...exp, binning: { ...b, ...patch } });
   const geometry = catalogEntry(exp.instrumentId)?.geometry;
   const white = geometry === "TOPAZ" || geometry === "CORELLI" ? GARNET_RESOLUTION[geometry] : undefined;
-  const dgsId = DGS_DEFAULT[exp.instrumentId] ? exp.instrumentId : undefined;
-  const dgs = dgsId ? dgsOf(exp, DGS_DEFAULT[dgsId]!) : undefined;
+  const dgsId = DGS_DEFAULT_CHOPPER[exp.instrumentId] ? exp.instrumentId : undefined;
+  const dgs = dgsId ? dgsOf(exp) : undefined;
   const ei = exp.eiMeV;
   const eMin = dgs?.eMin ?? Number((-0.2 * ei).toPrecision(4));
   const eMax = dgs?.eMax ?? Number((0.95 * ei).toPrecision(4));
-  const chopper: ChopperSetting | undefined = !dgsId || !dgs ? undefined : dgsId === "cncs" ? { instrument: "cncs", mode: dgs.chopper as CncsMode, frequency: dgs.frequency } : { instrument: dgsId as FermiInstrument, package: dgs.chopper, frequency: dgs.frequency };
+  // The chopper set in the header; with a custom ΔE/E there is no PyChop resolution to bin by.
+  const chopper = chopperOf(exp);
   const elastic = chopper ? energyResolution(chopper, ei, 0) : undefined;
   const atMax = chopper ? energyResolution(chopper, ei, Math.min(eMax, 0.999 * ei)) : undefined;
   const W = useMemo<Mat3>(() => transpose(b.axes as unknown as Mat3), [b.axes]);
@@ -143,7 +138,9 @@ export function BinningCard({
 
   const status = singular
     ? "The three axes are coplanar: choose independent ones."
-    : !settings.length
+    : !white && !chopper
+      ? "No resolution to bin by: TOPAZ and CORELLI use ORNL's Q model, the chopper spectrometers a chopper setting chosen in the header."
+      : !settings.length
       ? "Add settings to the plan (an orientation list, or a scan) to see what it records."
       : !current
         ? "Calculating…"
@@ -249,25 +246,6 @@ export function BinningCard({
         {dgsId && dgs && (
           <>
             <div className="form-row">
-              <span className="ui-control-label">Chopper</span>
-              <span className="supercell">
-                <select className="ui-select" aria-label="Chopper setting" value={dgs.chopper} onChange={(e) => onExp(withDgs(exp, { ...dgs, chopper: e.target.value }))}>
-                  {(dgsId === "cncs" ? Object.keys(CNCS_SLOTS).map((m) => [m, m] as const) : Object.entries(FERMI_PACKAGES[dgsId as FermiInstrument]).map(([k, p]) => [k, `${k}: ${p.label}`] as const)).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                <select className="ui-select" aria-label="Chopper frequency" value={dgs.frequency} onChange={(e) => onExp(withDgs(exp, { ...dgs, frequency: Number(e.target.value) }))}>
-                  {FREQUENCIES[dgsId === "cncs" ? "cncs" : (dgsId as FermiInstrument)].map((f) => (
-                    <option key={f} value={f}>
-                      {f} Hz
-                    </option>
-                  ))}
-                </select>
-              </span>
-            </div>
-            <div className="form-row">
               <span className="ui-control-label">Energy transfer</span>
               <span className="supercell">
                 <UnitField label="Energy transfer from" value={eMin} unit="meV" min={-10 * ei} max={ei} width="5ch" onCommit={(v) => onExp(withDgs(exp, { ...dgs, eMin: v }))} />
@@ -282,10 +260,12 @@ export function BinningCard({
                 <UnitField label="Incident divergence, FWHM" value={dgs.divergenceMrad} unit="mrad divergence" min={0} max={200} width="3.5ch" onCommit={(v) => onExp(withDgs(exp, { ...dgs, divergenceMrad: v }))} />
               </span>
             </div>
-            <p className={elastic === undefined ? "warn-note" : "dim-note"}>
-              {elastic === undefined
-                ? `This chopper does not transmit ${fmt(ei, 4)} meV at ${dgs.frequency} Hz (PyChop): choose another package or frequency.`
-                : `Energy resolution (PyChop): ${fmt(elastic, 3)} meV FWHM at the elastic line (${fmt((100 * elastic) / ei, 2)} % of Ei)${atMax !== undefined ? `, ${fmt(atMax, 3)} meV at ${fmt(Math.min(eMax, 0.999 * ei), 3)} meV transfer` : ""}.`}
+            <p className={chopper && elastic === undefined ? "warn-note" : "dim-note"}>
+              {!chopper
+                ? "With a custom ΔE/E there is no energy resolution to bin by: choose a chopper setting in the header."
+                : elastic === undefined
+                  ? `This chopper does not transmit ${fmt(ei, 4)} meV at ${dgs.frequency} Hz (PyChop): choose another package or frequency in the header.`
+                  : `Energy resolution (PyChop, ${dgs.chopper} at ${dgs.frequency} Hz, set in the header): ${fmt(elastic, 3)} meV FWHM at the elastic line (${fmt((100 * elastic) / ei, 2)} % of Ei)${atMax !== undefined ? `, ${fmt(atMax, 3)} meV at ${fmt(Math.min(eMax, 0.999 * ei), 3)} meV transfer` : ""}.`}
             </p>
           </>
         )}
