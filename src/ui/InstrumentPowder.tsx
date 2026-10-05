@@ -8,7 +8,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { cwPeaks } from "../core/diffraction/powder.ts";
 import { backToBackFwhm, backToBackValidFrom, synthesizeTof, tofFromWavelength, tofPeaks, type TofBank, type TofShape } from "../core/diffraction/tof.ts";
-import { focusedBank, focusedPeaks, focusedTofBank } from "../core/instrument/focus.ts";
+import { focusedBank, focusedPeaks, focusedTofBank, meanSinTheta } from "../core/instrument/focus.ts";
+import type { ChopperFrame } from "../core/ub/instruments.ts";
 import { elasticPattern } from "../core/instrument/powderRings.ts";
 import { coveredTwoTheta, dRangeAt, panelDifc } from "../core/instrument/simulate.ts";
 import { angleCss } from "../views/colormaps.ts";
@@ -17,6 +18,16 @@ import { CoverageChart, type CoverageLine } from "./CoverageChart.tsx";
 import { downloadText, exact, fmt, hklText } from "./format.ts";
 import { PowderPlot } from "./PowderPlot.tsx";
 import { DMinNote, defaultPanel, InstrumentRequired, lam, LOWEST_SUGGESTED_DMIN, suggestDMin, usePowderGroups, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
+
+/** GSAS-II TOF profile of a POWGEN frame, held at the shortest d where the fitted parameters are physical. */
+function frameShape(pr: NonNullable<ChopperFrame["profile"]>): Extract<TofShape, { kind: "backToBack" }> {
+  const base = { kind: "backToBack" as const, alpha1: pr.alpha, beta0: pr.beta0, beta1: pr.beta1, betaq: pr.betaq, sig0: pr.sig0, sig1: pr.sig1, sig2: pr.sig2, sigq: pr.sigq };
+  const validFrom = backToBackValidFrom(base);
+  return { ...base, ...(validFrom !== undefined ? { validFrom } : {}) };
+}
+
+/** FWHM in d (Å) of a line at d for a TOF peak shape on a bank of the given DIFC. */
+const fwhmInD = (shape: TofShape, difc: number, d: number) => (shape.kind === "gaussian" ? shape.dOverD * d : backToBackFwhm(shape, d) / difc);
 
 export function InstrumentPowder(props: SimPageProps) {
   const { result, exp, onExp, onDMin } = props;
@@ -72,9 +83,8 @@ export function InstrumentPowder(props: SimPageProps) {
       return { shape: { kind: "gaussian", dOverD: fb.spec.dOverD }, label: `Δd/d ${Number((100 * fb.spec.dOverD).toPrecision(3))} % (measured)`, detail: `Gaussian peaks of the bank's measured FWHM Δd/d = ${fb.spec.dOverD}` };
     const pr = frame?.profile;
     if (!pr) return undefined;
-    const base = { kind: "backToBack" as const, alpha1: pr.alpha, beta0: pr.beta0, beta1: pr.beta1, betaq: pr.betaq, sig0: pr.sig0, sig1: pr.sig1, sig2: pr.sig2, sigq: pr.sigq };
-    const validFrom = backToBackValidFrom(base);
-    const shape = { ...base, ...(validFrom !== undefined ? { validFrom } : {}) };
+    const shape = frameShape(pr);
+    const validFrom = shape.validFrom;
     const rel = (d: number) => backToBackFwhm(shape, d) / (fb.bank.difc * d);
     const d1 = Math.max(validFrom ?? 0, 0.5);
     return {
@@ -102,6 +112,42 @@ export function InstrumentPowder(props: SimPageProps) {
     );
 
   const peakSel = sel !== null ? peaks.findIndex((p) => p.d === groups[sel]!.d) : -1;
+  // For a selected line: its width here, whether the nearest line is at least one FWHM away (separated), and the
+  // sharpest bank (NOMAD) or POWGEN frame that records it, with the widths in use.
+  const selNote = useMemo(() => {
+    if (sel === null || mono || !bank) return null;
+    const g = groups[sel];
+    if (!g) return null;
+    const name = (x: { families: readonly { hkl: readonly number[] }[] }) => x.families.map((f) => `(${hklText(f.hkl)})`).join(" + ");
+    const parts = [`${name(g)} at d ${fmt(g.d, 4)} Å`];
+    const difcHere = fb ? fb.bank.difc : bank.difc;
+    if (!peaks.some((q) => q.d === g.d)) parts.push(fb ? "not recorded by this bank" : "not recorded by this panel");
+    else {
+      const w = fwhmInD(tofShape, difcHere, g.d);
+      parts.push(`FWHM ${fmt((100 * w) / g.d, 2)} % here`);
+      let near: (typeof peaks)[number] | undefined;
+      for (const q of peaks) if (q.d !== g.d && (!near || Math.abs(q.d - g.d) < Math.abs(near.d - g.d))) near = q;
+      if (near) {
+        const sep = Math.abs(near.d - g.d);
+        parts.push(`nearest line ${name(near)} ${fmt((100 * sep) / g.d, 2)} % away: ${sep >= w ? "separated (≥ 1 FWHM)" : `overlapping (${fmt(sep / w, 2)} FWHM)`}`);
+      }
+    }
+    if (byBank && focused.length > 1) {
+      const options = focused
+        .filter((f) => Number.isFinite(meanSinTheta(f.bank, g.d, exp.lambdaMin, exp.lambdaMax)))
+        .map((f) => ({ label: f.spec.name, rel: exp.peakWidth === "instrument" && f.spec.dOverD !== undefined ? f.spec.dOverD : exp.dOverD }));
+      const best = options.reduce<(typeof options)[number] | undefined>((b, o) => (!b || o.rel < b.rel ? o : b), undefined);
+      if (best) parts.push(`sharpest bank recording it: ${best.label} (${fmt(100 * best.rel, 2)} %)`);
+    } else if (byBank && exp.peakWidth === "instrument" && instrument?.frames) {
+      const options = instrument.frames.list
+        .filter((f) => f.profile && g.d >= f.dMin && g.d <= f.dMax)
+        .map((f) => ({ label: `${f.centre} Å`, rel: fwhmInD(frameShape(f.profile!), difcHere, g.d) / g.d }));
+      const best = options.reduce<(typeof options)[number] | undefined>((b, o) => (!b || o.rel < b.rel ? o : b), undefined);
+      if (best) parts.push(`sharpest POWGEN frame for it: ${best.label} (${fmt(100 * best.rel, 2)} %)`);
+    }
+    return parts.join(" · ");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel, mono, groups, peaks, fb, bank, tofShape, byBank, focused, exp.peakWidth, exp.dOverD, exp.lambdaMin, exp.lambdaMax, instrument]);
   const seen = dRangeAt(pa.twoThetaCenter, exp.lambdaMin, exp.lambdaMax);
   // What the pattern cannot show because reflections stop at d_min: the shortest d this view records, and the shaded range.
   const calcDMin = result.provenance.dMin;
@@ -207,6 +253,7 @@ export function InstrumentPowder(props: SimPageProps) {
         ) : (
           <p className="empty-note">{mono ? "No reflection lands on the detectors at this Ei (or above d_min)." : fb ? `No reflections fall in this bank's d range (${fmt(fb.bank.dMin, 3)}–${fmt(fb.bank.dMax, 2)} Å) above d_min.` : `No reflections fall in this panel's d range (${fmt(seen.dMin, 3)}–${fmt(seen.dMax, 2)} Å) above d_min.`}</p>
         )}
+        {selNote && <p className="selection-note">{selNote}</p>}
         <div className="plot-footer">
           <p className="plot-hint">Click a peak or tick to select it · drag to zoom · double-click to reset</p>
           {peaks.length > 0 && (
