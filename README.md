@@ -45,7 +45,8 @@ header, then work through the pages from left to right: **Sample**, **Setup**, *
   with completeness as the scan proceeds.
 - **NOMAD, POWGEN.** The powder pattern of a focused bank, built the way the data are reduced, or of any single
   panel, on TOF, d or Q.
-  - NOMAD's six banks use the per-bank Δd/d measured by ORNL (NOMAD overview, 2014).
+  - NOMAD's six banks use the per-bank Δd/d measured by ORNL (NOMAD overview, 2014, when 50 of the 99 eight-packs
+    were installed).
   - POWGEN's single bank uses ORNL's GSAS-II profile for the chosen chopper frame (seven standard frames). The
     0.8 Å frame is tested to be within 25 % of the LaB₆ widths in Huq et al., J. Appl. Cryst. 52, 1189 (2019).
   - The page warns when the bank records d below the calculated d_min, and says whether a selected line is
