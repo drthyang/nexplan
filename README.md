@@ -1,114 +1,156 @@
 # NEXPLAN · Neutron Experiment Planner
 
-**Plan neutron diffraction experiments in your browser, from a CIF file to the detectors, with scattering tables
-you can audit.**
+**Plan neutron diffraction on SNS instruments, and see where the Bragg peaks land on the real detectors.**
 
-Load a CIF file. NEXPLAN lists every reflection with its d, Q and complex structure factor, flags systematic and
-accidental absences, and draws neutron (or X-ray) powder patterns. It orients the crystal from a UB matrix and
-simulates the measurement on SNS instruments. Nothing is uploaded and there is nothing to install; the session
-(structure, orientation, plan) is kept in your browser so a reload resumes it, and "Start over" clears it. Plans
-export as CSV with their provenance.
+Open it at **https://drthyang.github.io/nexplan/**. It runs in the browser: nothing to install, and your files
+are never uploaded.
 
 Status: **public beta.** The scattering tables are cross-checked against independent sources but are not yet
-certified against the printed literature.
+certified against the printed literature. NEXPLAN is not an official SNS planning tool: check a plan with the
+instrument team before your beamtime.
 
-## What it does now
+## Why NEXPLAN
 
-- **CIF 1.1 reader.**
-  - Full grammar: quotes, semicolon fields, multi-line loops, standard uncertainties, `.` vs `?`.
-  - Block selection.
-  - Ion and isotope type symbols.
-  - U_eq from anisotropic ADPs.
-  - Every default and assumption is listed in the status card.
-- **Symmetry from all 564 gemmi settings.**
-  - Origin choices, rhombohedral/hexagonal axes and monoclinic cell choices are never guessed.
-  - Operations are parsed exactly.
-  - Absences come from the operations and are tested against gemmi for every setting.
-- **Structure factors.**
-  - X-ray f0 from Waasmaier & Kirfel (1995), including ions.
-  - Neutron b from Sears (1992), natural elements and isotopes, complex for absorbers. The sign convention is
-    derived in [CONVENTIONS](docs/CONVENTIONS.md#5-scattering-amplitudes-and-the-sign-of-complex-b).
-  - Results match gemmi to 1e-8, phases included.
-- **Powder patterns.**
-  - Intensity is an explicit sum over signed reflections.
-  - Constant wavelength (CW Lorentz and named X-ray polarization models) or neutron time-of-flight at one bank.
-  - Unit-area peaks on 2θ, TOF, d or Q.
-  - Full-precision CSV export with provenance.
-- **UB matrix.**
-  - ISAW/Mantid UB files in and out; lattice and orientation from the UB, matched to the CIF setting.
-  - Re-indexing for another cell (supercell, primitive cell or a standard ITA transformation), exported as an
-    ISAW UB or as the equivalent Mantid TransformHKL call; a 3D reciprocal-space view with the Ewald spheres for a
-    wavelength band.
+NEXPLAN grew out of running beamtimes on the diffractometers and spectrometers of ORNL's Spallation Neutron Source
+(SNS). It collects, in one place, the checks that experience shows are worth doing before and during an experiment:
 
-## Pages
+- Which reflections reach the detectors at a goniometer setting, and at what wavelength?
+- Which settings record the peaks the experiment is for, near mid band and away from panel edges?
+- Which d range does each detector bank record, and is d_min low enough to cover it?
+- Can two lines be separated in a given bank, or with a given chopper frame?
 
-The pages follow the work: **Sample** (what the crystal is), **Setup** (how it sits in the beam), **Instrument**
-(the detectors and what lands on them) and **Simulation** (what a measurement records). The instrument in the header sets the beam, goniometer and detectors for every page:
-a generic X-ray or neutron beam, or an SNS instrument with its detector geometry from the Mantid instrument
-definition (always neutron scattering).
+It is also a way to learn how scattering looks in a real detector geometry: Bragg spots coloured by wavelength on
+the actual TOPAZ or CORELLI panels, spots moving as the crystal turns, powder rings swept through a time-of-flight
+frame, and the Ewald construction behind them.
 
-- **Sample**
-  - *Structure*: cell, symmetry, sites, the scattering lengths used and their sources, a 3D view, and the
-    neutron scattering power against a reference material (V, diamond, Si, CeO₂, corundum or a demo structure):
-    coherent, incoherent and absorption cross-sections per
-    unit volume, attenuation length, and Bragg line strengths, with an optional TOF weighting (not a counting time).
-  - *Reflections*: every signed hkl with d, Q and complex F, folded into symmetry families, absences flagged.
-- **Setup**
-  - *Orientation*: the UB matrix (ISAW/Mantid files in and out, matched to the CIF setting, re-indexing for another cell) and
-    the selected instrument's goniometer, with what lies along the beam and the vertical. The 3D Laue construction
-    (lattice points, Ewald spheres of the band, lab and sample frames; with an SNS instrument, the reflections in the
-    band that miss every panel) is there on request, for checking the frames.
-- **Instrument**
-  - *Detectors*: the instrument's detector array in 3D and unrolled. Single crystals: the spots at the current
-    setting, or the exact coverage of a chosen reflection over the goniometer ranges, coloured by wavelength (as in
-    NeuXtalViz), and the reflections on each panel with pixel, λ and time of flight. Powders: Debye–Scherrer rings on
-    the panels in a time-of-flight slice (play sweeps the band), or at Ei for the chopper spectrometers.
-- **Simulation**
-  - *Powder*: the pattern for the generic beam (CW or one TOF bank), or for an SNS instrument the pattern of a focused
-    bank as the data are reduced (NOMAD's six banks, POWGEN's one, with ORNL's published resolution: NOMAD's measured
-    Δd/d per bank, POWGEN's GSAS-II profile for the chosen chopper frame), of any single panel, or the elastic 2θ pattern
-    (ARCS, SEQUOIA, CNCS), with the 2θ–d coverage of the detector array.
-  - *Single crystal*: the measurement plan as each instrument is run (TOPAZ: a list of about ten chosen
-    orientations, built from wanted reflections with "suggest settings" (a greedy search over the goniometer, within
-    limits you can set, that places the wanted peaks near mid band and away from panel edges first, then completeness,
-    then redundancy) or "find a setting" for one reflection; CORELLI: rotation scans in 3°
-    steps, optionally interleaved; ARCS, SEQUOIA, CNCS: ψ scans with exact Bragg crossings), its symmetry-family
-    completeness, and reciprocal-space slices shaded by what the plan records.
+## Planning an experiment
 
-Instruments: TOPAZ (cryogenic and ambient goniometers), CORELLI, NOMAD, POWGEN, ARCS, SEQUOIA, CNCS. The detector
-geometry loads only when a simulation page is opened.
+Load a CIF (or one of four demo structures from the Crystallography Open Database), choose an instrument in the
+header, then work through the pages from left to right: **Sample**, **Setup**, **Instrument**, **Simulation**.
+
+- **TOPAZ** (time-of-flight Laue, single crystal; cryogenic ω or ambient ω, φ with χ = 135° goniometers).
+  - Type the wanted reflections. *Find a setting* turns the goniometer so that one reflection lands near the
+    middle of a panel at a mid-band wavelength.
+  - *Suggest settings* searches a grid of goniometer angles, within limits you can narrow, with one of two goals.
+    *Full coverage* chooses N settings that place the wanted peaks well first, then record the most symmetry
+    families, then add second and third recordings for scaling. *Fewest settings* chooses as few settings as
+    place every wanted peak well, prefers the one that centres them best (mid band, panel centre), and fine-tunes
+    each off the grid.
+  - Both are greedy searches: Full coverage is within (1 − 1/e) of the best coverage for its number of settings,
+    and Fewest settings within a factor of ln n + 1 of the fewest. They are good starting plans, not guaranteed
+    optima.
+  - The page shows completeness over symmetry families, reciprocal-space slices shaded by what the plan records,
+    and exports the plan as CSV with its provenance.
+- **CORELLI.** Rotation scans in 3° steps, optionally interleaved, or a rocking scan about the current angle,
+  with completeness as the scan proceeds.
+- **NOMAD, POWGEN.** The powder pattern of a focused bank, built the way the data are reduced, or of any single
+  panel, on TOF, d or Q.
+  - NOMAD's six banks use the per-bank Δd/d measured by ORNL (NOMAD overview, 2014).
+  - POWGEN's single bank uses ORNL's GSAS-II profile for the chosen chopper frame (seven standard frames). The
+    0.8 Å frame is tested to be within 25 % of the LaB₆ widths in Huq et al., J. Appl. Cryst. 52, 1189 (2019).
+  - The page warns when the bank records d below the calculated d_min, and says whether a selected line is
+    separated from its neighbours (≥ 1 FWHM apart) in this bank.
+- **ARCS, SEQUOIA, CNCS.** The elastic powder pattern and Debye–Scherrer rings at the chosen Ei, and ψ scans for
+  single crystals with the Bragg crossings solved exactly.
+- **Generic X-ray or neutron beam.** Reflection lists and powder patterns at constant wavelength (X-ray
+  polarization models included) or at one neutron TOF bank, on 2θ, TOF, d or Q.
+
+Forbidden peaks are sometimes measured on purpose, since they can reveal an unreported phase, lower symmetry or
+multiple scattering. A reflection that is systematically absent, has |F| ≈ 0, or lies below d_min can still be
+simulated, wanted and planned. Its position needs no |F|, and a notice says what it is.
+
+## Learning what the detectors see
+
+- **Detectors** (Instrument): the panels from the Mantid instrument definition, in 3D and unrolled.
+  - Single crystals: the spots at the current setting, coloured by Laue wavelength, with pixel, λ and time of
+    flight for each; turn ω and watch them move.
+  - *Coverage*: every detector pixel a chosen reflection (or its equivalents) can reach over the goniometer range,
+    solved exactly per detector element. This is the continuous form of NeuXtalViz's stepped "individual peak"
+    coverage.
+  - Powders: Debye–Scherrer rings on the panels in one time-of-flight slice; *Play* sweeps the slice through the
+    band.
+- **Orientation** (Setup): on request, the 3D Laue construction: reciprocal lattice, the Ewald spheres of the band,
+  lab and sample frames, and, with an SNS instrument, the reflections in the band that miss every panel.
+- **Reflections** and **Structure** (Sample): every signed hkl with d, Q and complex F, folded into symmetry
+  families, with systematic and accidental absences flagged; a 3D view of the structure.
+- **Scattering power** (Structure page): coherent, incoherent and absorption cross-sections per unit volume,
+  attenuation length and Bragg line strengths, compared with a reference material (V, diamond, Si, CeO₂ or
+  corundum). This is a relative comparison, not a counting time.
+
+## Under the hood
+
+- **CIF 1.1.** Quoted strings, semicolon text fields, loops over several lines, standard uncertainties, and `.`
+  versus `?`. Block selection; ion and isotope type symbols. Defaults and assumptions are listed in the status
+  card. CIF 2.0 files and save frames are rejected with a message.
+- **Symmetry.** The 564 space-group settings tabulated by gemmi. Origin choices, rhombohedral or hexagonal axes and
+  monoclinic cell choices are not guessed: an ambiguous file stops with a choice to make.
+- **Structure factors.** X-ray f0 from Waasmaier & Kirfel (1995), neutral atoms and tabulated ions. Neutron b from
+  Sears (1992), natural elements and isotopes, complex for absorbers; the sign convention is derived in
+  [CONVENTIONS §5](docs/CONVENTIONS.md#5-scattering-amplitudes-and-the-sign-of-complex-b). Isotropic Debye–Waller
+  factor (anisotropic ADPs enter as U_eq).
+- **Orientation.** UB matrices in the ISAW format, as Mantid's SaveIsawUB writes them, in and out, matched to the
+  CIF setting. Re-indexing for another cell (integer supercell, primitive cell or any ITA transformation), exported
+  as a UB or as the equivalent Mantid TransformHKL call.
+- **Instruments.** Detector geometry from the Mantid instrument definitions (pinned, below). Laue condition,
+  goniometer composition, TOF and the B matrix follow Mantid's conventions
+  ([CONVENTIONS §8–10](docs/CONVENTIONS.md#10-instrument-simulations)).
+- **Your data stay in the browser.** The session (structure, orientation, instrument, plan) is kept in browser
+  storage, so a reload resumes it; *Start over* clears it. Layouts are made for phones, tablets and desktop monitors.
+
+## What NEXPLAN does not model
+
+Treat its numbers as geometry plus relative intensities, within these limits:
+
+- **No counting times or absolute intensities.** Intensities are |F|² with Lorentz (and, for X-rays, polarization)
+  factors, relative, per unit volume or normalised. TOF patterns assume data normalised by the incident spectrum.
+- **Not modelled:** detector efficiency, masked or dead pixels, sample-environment shadows, background, absorption,
+  extinction, multiple scattering, preferred orientation, magnetic scattering, X-ray anomalous dispersion, and
+  inelastic scattering (the chopper spectrometers are simulated at the elastic line).
+- **Complex b** for absorbing nuclei are the tabulated values at 2200 m/s.
+- **Geometry is nominal.** Detector positions come from the Mantid definition at a pinned commit, not from a
+  cycle's calibration. NOMAD banks 1–5 use calibrated DIFC values from ORNL's 2023A GSAS-II instrument file; other
+  banks use the geometric DIFC.
+- **"Recorded"** means the Laue wavelength is in the band and the scattered ray hits a panel.
 
 ## Data you can check
 
 Every table is generated from pinned upstream files (URL, commit and SHA-256 in
-[`data-sources/sources.json`](data-sources/sources.json)) and cross-checked row by row. The reports:
+[`data-sources/sources.json`](data-sources/sources.json)) and cross-checked row by row. The reports and tests:
 
-- [X-ray f0, Waasmaier & Kirfel 1995](docs/data-verification/XRAY_WK1995.md): 209/209 rows crosschecked.
-- [Neutron b, Sears 1992](docs/data-verification/NEUTRON_SEARS1992.md): 324 crosschecked, with 6 discrepant rows
-  listed for checking against the print.
-- [Consistency with Mantid](docs/data-verification/MANTID_CONSISTENCY.md): constants, TOF ↔ d, the B matrix, Q, the
-  goniometer and the wavelength of a reflection, each transcribed from Mantid's source and tested.
-- [MATERIA's tables](docs/data-verification/MATERIA_TABLES.md): findings include a wrong In value, dropped imaginary
-  parts, and transcription errors found in DABAX, cctbx/gemmi and GSAS-II.
+- [X-ray f0, Waasmaier & Kirfel 1995](docs/data-verification/XRAY_WK1995.md): all 209 species cross-checked.
+- [Neutron b, Sears 1992](docs/data-verification/NEUTRON_SEARS1992.md): 324 rows cross-checked; 6 discrepant rows
+  are listed for checking against the print.
+- Systematic absences equal gemmi's for every one of the 564 settings (all hkl with |h|, |k|, |l| ≤ 4).
+- Neutron structure factors equal gemmi 0.7.3's to a relative 1e-8, phases included, for five COD structures to
+  d = 0.8 Å.
+- [Consistency with Mantid](docs/data-verification/MANTID_CONSISTENCY.md): constants, DIFC and TOF, E ↔ λ, the B
+  matrix, the goniometer and the wavelength of a reflection, transcribed from Mantid's source and tested.
+- [MATERIA's tables](docs/data-verification/MATERIA_TABLES.md): a wrong In value and dropped imaginary parts in
+  MATERIA's neutron table; and X-ray Cromer–Mann rows that fail physical checks, flagged in DABAX and in the copy
+  shared by cctbx, gemmi and GSAS-II.
+
+Instrument parameters and their sources (Mantid definitions, ORNL resolution files, POWGEN characterisation) are
+in [CONVENTIONS §9–11](docs/CONVENTIONS.md#9-detector-geometry) and in `src/core/ub/instrumentCatalog.ts`.
 
 ## Develop
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173/nexplan/
-npm test           # unit, gemmi-reference and analytic tests
+npm run data:fetch   # download the pinned sources and verify their SHA-256 (some tests read them)
+npm run dev          # http://localhost:5173/nexplan/
+npm test             # unit, gemmi-reference, Mantid-consistency and analytic tests
 npm run typecheck
 ```
 
-Data pipeline (development only):
+Data pipeline:
 
 ```bash
-npm run data:fetch   # download pinned sources, verify SHA-256
 npm run data:build   # regenerate src/data/*.json and docs/data-verification/*.md
 npm run data:check   # fail if generated files are stale (CI)
 ```
 
-Python references (gemmi, pinned) are generated with `uv`. Their outputs are committed, so tests need only Node:
+Python references (gemmi, pinned) are generated with `uv`. Their outputs are committed, so the tests need only
+Node:
 
 ```bash
 uv run --no-project --with gemmi==0.7.3 python scripts/data/gen_space_groups.py
@@ -116,14 +158,21 @@ uv run --no-project --with gemmi==0.7.3 python scripts/data/gen_reference_sf.py
 ```
 
 The audited MATERIA modules live in `src/materia/`, copied from `drthyang/web-refinement` at a pinned commit. Do not
-edit them there: fix MATERIA, bump the commit in `src/materia/UPSTREAM.json`, then run `npm run materia:sync`.
+edit them here: fix MATERIA, bump the commit in `src/materia/UPSTREAM.json`, then run `npm run materia:sync`.
 
-## Family
+Every push to `main` runs CI and deploys the site to GitHub Pages.
 
-NEXPLAN shares its design system with [MATERIA](https://drthyang.github.io/web-refinement/), NEBULA3D and the
-RMCProfile Workbench.
+## Credits
+
+- Detector geometry: Mantid instrument definitions (GPL-3.0-or-later), commit `67c2f43`. Only numerical geometry is
+  extracted, with attribution.
+- Reflection coverage: after the "individual peak" planner in NeuXtalViz.
+- References: gemmi (space groups, absences, structure factors); Sears (1992); Waasmaier & Kirfel (1995).
+- Demo structures: the Crystallography Open Database.
+- Design system shared with [MATERIA](https://drthyang.github.io/web-refinement/), NEBULA3D and the RMCProfile
+  Workbench.
 
 ## License
 
-[GNU Affero General Public License v3.0](https://www.gnu.org/licenses/agpl-3.0.html), the same as MATERIA, whose
-code it includes. Bundled demo CIFs are from the Crystallography Open Database (public domain).
+[GNU Affero General Public License v3.0 only](https://www.gnu.org/licenses/agpl-3.0.html) (AGPL-3.0-only), the same as
+MATERIA, whose code it includes. © 2026 Tsung-Han Yang.
