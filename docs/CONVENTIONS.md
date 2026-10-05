@@ -282,8 +282,8 @@ neutron scattering); code in
     and 90° with L1 = 60 m (characterisation file), DIFC = 22585.7 µs/Å, as the 2024–25 autoreduction's FinalDIFC
     22585.8.
   - **Peak widths** from the instrument where ORNL publishes them (or the bar's Δd/d, by choice):
-    - NOMAD: the measured Δd/d (FWHM) per bank of ORNL's NOMAD overview (slide 5, 2014): 2.9, 1.9, 1.37, 0.69, 0.36,
-      3.9 % for banks 1–6, as constant-width Gaussians. The 2023A GSAS-II profiles give similar widths (within
+    - NOMAD: the measured Δd/d (FWHM) per bank of ORNL's NOMAD overview (slide 5, 2014, when 50 of the 99 eight-packs
+      were installed, slide 3): 2.9, 1.9, 1.37, 0.69, 0.36, 3.9 % for banks 1–6, as constant-width Gaussians. The 2023A GSAS-II profiles give similar widths (within
       10–25 %) but include Lorentzian terms that the app's TOF profile does not.
     - POWGEN: ORNL's 2026B GSAS-II instrument files (high-resolution guide, 60 Hz) for the 0.8, 1.5 and 2.665 Å
       frames, as GSAS-II's TOF profile: back-to-back exponentials, α = alpha/d and β = beta-0 + beta-1/d⁴ +
