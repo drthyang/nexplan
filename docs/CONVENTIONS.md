@@ -240,7 +240,8 @@ neutron scattering); code in
     Fisher, Math. Program. 14, 265 (1978)).
   - A wanted reflection counts when any symmetry equivalent in the reflection list is recorded. An hkl outside the
     list (absent, weak, or beyond the 6000 strongest) is targeted as that exact hkl.
-  - Not modelled: detector gaps inside a panel, masks, sample-environment shadows, and counting statistics.
+  - Not modelled: gaps between the tubes of a pack (packs are fitted rectangles), and counting statistics. Masks and
+    shadows apply as set (below).
   - Test: for P-1 families to d = 0.78 Å on a 5.431 Å cell, the suggestions record all 364 families after 8 settings,
     against 295 for ten settings evenly spaced in ω.
 - **Time of flight of a spot:** t = (m_n/h)·(L1 + L2)·λ, with L2 to the pixel. This is Mantid's TOF ↔ λ relation,
@@ -307,6 +308,29 @@ neutron scattering); code in
     - ARCS: −28° to 135°, −27° to 26°.
     - SEQUOIA: −30° to 60°, and ±18° for rows B–D; the A row reaches −30° vertically.
     - CNCS: ±16° vertically. ORNL quotes −50° to +140° horizontally; the current IDF spans −53.6° to 132.6°.
+
+- **Masks and shadows** (`src/core/instrument/acceptance.ts`), applied by every hit test (single-crystal spots,
+  scans and lists, the planner, exact and stepped coverage, powder rings, focused banks):
+  - A mask is a per-pixel bitmap on each panel, row-major from pixel (1, 1) in the peaks-file numbering of §9:
+    edge pixels (rows at the tube ends or panel top and bottom, columns at the sides), panels switched off, and the
+    detector IDs and components of a Mantid mask file (SaveMask XML; `<ids>` spectrum numbers are refused).
+  - Detector IDs follow the IDF (`scripts/data/idf.ts`): an `idlist` hands out its IDs in document order to the
+    detectors and monitors under its component and must be used up exactly; a rectangular detector numbers pixel
+    (i, j) as idstart + i·idstepbyrow + j·idstep when filled along y first (the default). Each panel's IDs are
+    stored as id = start + column·a + row·b, checked pixel by pixel when the tables are built, and unique per
+    instrument (TOPAZ bank n starts at n·65536; CORELLI bank n at (n − 1)·4096, 256 per tube).
+  - A ray stops at the first panel it meets: a masked pixel is not recorded and hides nothing behind it.
+  - A shadow blocks directions in the detector-map angles (γ, ν) of the environment's frame: an opening keeps
+    |ν| ≤ ν₀, a leg blocks |γ − γ₀| ≤ Δγ at every ν, a box blocks γ₁…γ₂ × ν₁…ν₂. Fixed in the lab, or mounted on
+    goniometer axis k so that it turns with axes 0…k (R = R₀·R₁·…, axis 0 outermost): a lab direction u is tested
+    at (R₀…R_k)ᵀ·u. Exact coverage tests stage-mounted shadows at each solution's angles. Powder pages use the
+    current setting (the sample does not turn).
+  - Focused banks count, per cell, only the pixels that record, at their centroid; with one cell per pixel this is
+    exactly the pixel sum of solid angles (tested).
+  - Tested: masks pixel by pixel, a masked front panel hiding the one behind, shadows across the ±180° seam and on
+    a stage against the explicit rotation, the planner's compiled test reflection by reflection against
+    `observeAt` with masks and shadows, coverage never in a shadow and solvable wherever the stepped sweep lands,
+    and mask files mapping each ID to its own pixel (monitor IDs and unknown components reported, not placed).
 
 ## 11. Scattering power (comparing materials)
 

@@ -55,7 +55,7 @@ research release waits on print certification of the scattering tables. Nothing 
 | Consistency with Mantid: constants, DIFC and TOF, E ↔ λ, B matrix, goniometer, Laue wavelength | done (`docs/data-verification/MANTID_CONSISTENCY.md`) |
 | Session kept across reloads; layouts for phones, tablets and 1080p–4K monitors; sortable reflection tables | done |
 | License: AGPL-3.0-only, full text in `LICENSE` | done |
-| Detector masks, gaps and sample-environment shadows | not started |
+| Detector masks (edge pixels, panels, Mantid mask files by detector ID) and sample-environment shadows (lab or stage frame), in every hit test | done; gaps between the tubes of a pack are not modelled |
 | Counting time (flux) | not started |
 
 ## 1. Product objective

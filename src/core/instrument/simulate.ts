@@ -18,7 +18,8 @@ import type { Mat3, Vec3 } from "@materia/core/math/types";
 import { mulMat, mulVec } from "@materia/core/math/mat3";
 import { difcFromGeometry } from "../diffraction/tof.ts";
 import { goniometerMatrix, laueCondition, type GoniometerModel } from "../ub/goniometer.ts";
-import { rayHit, type DetectorHit, type DetectorPanel } from "./detectors.ts";
+import { blockedAt, type Shadows } from "./acceptance.ts";
+import { rayHit, type Blocked, type DetectorHit, type DetectorPanel } from "./detectors.ts";
 
 const DEG = 180 / Math.PI;
 
@@ -175,14 +176,14 @@ export interface ObservedReflection {
   readonly hit: DetectorHit;
 }
 
-/** Reflections observed at one goniometer setting R. */
-export function observeAt(R: Mat3, UB: Mat3, refl: readonly ScanReflection[], panels: readonly DetectorPanel[], lambdaMin: number, lambdaMax: number): ObservedReflection[] {
+/** Reflections observed at one goniometer setting R; `blocked`: the sample environment's shadows at that setting. */
+export function observeAt(R: Mat3, UB: Mat3, refl: readonly ScanReflection[], panels: readonly DetectorPanel[], lambdaMin: number, lambdaMax: number, blocked?: Blocked): ObservedReflection[] {
   const RUB = mulMat(R, UB);
   const out: ObservedReflection[] = [];
   refl.forEach((r, index) => {
     const s = laueCondition(mulVec(RUB, r.h));
     if (!(s.lambda >= lambdaMin && s.lambda <= lambdaMax)) return;
-    const hit = rayHit(panels, s.kf);
+    const hit = rayHit(panels, s.kf, blocked);
     if (hit) out.push({ index, lambda: s.lambda, twoTheta: s.twoTheta, azimuth: s.azimuth, hit });
   });
   return out;
@@ -203,8 +204,9 @@ export function simulateScan(
   panels: readonly DetectorPanel[],
   lambdaMin: number,
   lambdaMax: number,
+  shadows?: Shadows,
 ): ScanResult {
-  return simulateSettings(model, scanSettings(axisIndex, baseAngles, range), UB, refl, panels, lambdaMin, lambdaMax);
+  return simulateSettings(model, scanSettings(axisIndex, baseAngles, range), UB, refl, panels, lambdaMin, lambdaMax, shadows);
 }
 
 /** The goniometer settings of a rotation scan; `interleave` adds the half-way steps (a second pass offset by step/2). */
@@ -232,12 +234,13 @@ export function simulateSettings(
   panels: readonly DetectorPanel[],
   lambdaMin: number,
   lambdaMax: number,
+  shadows?: Shadows,
 ): ScanResult {
   const families = new Set(refl.map((r) => r.family)).size;
   const seen = new Set<number>();
   const measured = new Set<number>();
   const steps: ScanStep[] = settings.map((angles) => {
-    const obs = observeAt(goniometerMatrix(model, angles), UB, refl, panels, lambdaMin, lambdaMax);
+    const obs = observeAt(goniometerMatrix(model, angles), UB, refl, panels, lambdaMin, lambdaMax, blockedAt(shadows, angles));
     for (const o of obs) {
       seen.add(refl[o.index]!.family);
       measured.add(o.index);
@@ -280,8 +283,10 @@ export function braggCrossings(
   refl: readonly ScanReflection[],
   panels: readonly DetectorPanel[],
   lambda: number,
+  shadows?: Shadows,
 ): BraggCrossing[] {
-  const at = (deg: number) => mulMat(goniometerMatrix(model, baseAngles.map((v, i) => (i === axisIndex ? deg : v))), UB);
+  const anglesAt = (deg: number) => baseAngles.map((v, i) => (i === axisIndex ? deg : v));
+  const at = (deg: number) => mulMat(goniometerMatrix(model, anglesAt(deg)), UB);
   const [R0, R90, R180] = [at(0), at(90), at(180)];
   const out: BraggCrossing[] = [];
   refl.forEach((r, index) => {
@@ -304,7 +309,7 @@ export function braggCrossings(
       let a = base + 360 * Math.ceil((range.start - base) / 360 - 1e-12);
       for (; a <= range.end + 1e-9; a += 360) {
         const s = laueCondition(mulVec(at(a), r.h));
-        out.push({ index, angle: a, hit: Number.isFinite(s.lambda) ? rayHit(panels, s.kf) : undefined });
+        out.push({ index, angle: a, hit: Number.isFinite(s.lambda) ? rayHit(panels, s.kf, blockedAt(shadows, anglesAt(a))) : undefined });
       }
     }
   });
@@ -344,17 +349,19 @@ export function crossingsToScan(
 /**
  * Coverage of reciprocal-space points (sample frame, 1/Å, no 2π) by a set of
  * goniometer settings: for each point, the number of settings at which it
- * diffracts in the band onto a panel. Monochromatic beams pass the exact
- * crossings instead (braggCrossings with UB = I and the points as "h").
+ * diffracts in the band onto a panel; `blocked[k]` is the environment's shadows
+ * at setting k. Monochromatic beams pass the exact crossings instead
+ * (braggCrossings with UB = I and the points as "h").
  */
-export function pointCoverage(settings: readonly Mat3[], points: readonly Vec3[], panels: readonly DetectorPanel[], lambdaMin: number, lambdaMax: number): Uint16Array {
+export function pointCoverage(settings: readonly Mat3[], points: readonly Vec3[], panels: readonly DetectorPanel[], lambdaMin: number, lambdaMax: number, blocked?: readonly (Blocked | undefined)[]): Uint16Array {
   const counts = new Uint16Array(points.length);
-  for (const R of settings)
+  settings.forEach((R, k) =>
     points.forEach((q, i) => {
       const l = laueCondition(mulVec(R, q));
       if (!(l.lambda >= lambdaMin && l.lambda <= lambdaMax)) return;
-      if (rayHit(panels, l.kf)) counts[i]!++;
-    });
+      if (rayHit(panels, l.kf, blocked?.[k])) counts[i]!++;
+    }),
+  );
   return counts;
 }
 
@@ -385,6 +392,7 @@ export function reflectionCoverage(
   lambdaMax: number,
   step = 1,
   maxSettings = 200_000,
+  shadows?: Shadows,
 ): { points: CoveragePoint[]; settings: number; step: number } {
   const free = model.axes.map((ax, i) => ({ ax, i })).filter(({ ax }) => ax.fixed === undefined);
   const st = step * 2 ** Math.max(0, free.length - 1);
@@ -401,10 +409,11 @@ export function reflectionCoverage(
     const angles = baseAngles.slice();
     free.forEach(({ i }, k) => (angles[i] = values[k]![idx[k]!]!));
     const RUB = mulMat(goniometerMatrix(model, angles), UB);
+    const blocked = blockedAt(shadows, angles);
     refl.forEach((r, index) => {
       const l = laueCondition(mulVec(RUB, r.h));
       if (!(l.lambda >= lambdaMin && l.lambda <= lambdaMax)) return;
-      const hit = rayHit(panels, l.kf);
+      const hit = rayHit(panels, l.kf, blocked);
       if (hit) points.push({ index, angles, lambda: l.lambda, hit });
     });
     for (let k = free.length - 1; k >= 0; k--) {

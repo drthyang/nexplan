@@ -5,6 +5,7 @@
 import { neutronWavelengthA } from "../core/physics/energy.ts";
 import type { GoniometerModel } from "../core/ub/goniometer.ts";
 import { GENERIC_INSTRUMENT, SNS_CATALOG, type CatalogEntry } from "../core/ub/instrumentCatalog.ts";
+import { NO_MASKS, type MaskFile, type MaskSettings, type ShadowShape } from "../core/instrument/acceptance.ts";
 
 /** The Orientation page's goniometer and Laue-view settings. */
 export interface GonioState {
@@ -48,6 +49,10 @@ export interface ExperimentState {
   /** Chopper spectrometers: incident energy (meV) and elastic resolution ΔE/E (FWHM). */
   readonly eiMeV: number;
   readonly eRes: number;
+  /** Detector masks per detector geometry (TOPAZ cryogenic and ambient share one). */
+  readonly masks: Readonly<Record<string, MaskSettings>>;
+  /** Sample-environment shadows per instrument id. */
+  readonly shadows: Readonly<Record<string, readonly ShadowShape[]>>;
 }
 
 export const DEFAULT_EXPERIMENT: ExperimentState = {
@@ -68,6 +73,8 @@ export const DEFAULT_EXPERIMENT: ExperimentState = {
   sample: "single-crystal",
   eiMeV: 60,
   eRes: 0.04,
+  masks: {},
+  shadows: {},
 };
 
 export const catalogEntry = (id: string): CatalogEntry | undefined => SNS_CATALOG.find((i) => i.id === id);
@@ -120,3 +127,49 @@ export function withLimits(exp: ExperimentState, axis: number, range: readonly [
   const angles = r ? exp.angles.map((v, i) => (i === axis ? Math.min(r[1]!, Math.max(r[0]!, v)) : v)) : exp.angles;
   return { ...exp, angles, limits: { ...exp.limits, [id]: current } };
 }
+
+const finite = (v: unknown, lo: number, hi: number): v is number => typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
+
+/** The detector geometry an instrument's masks are kept under. */
+const maskKey = (id: string) => catalogEntry(id)?.geometry ?? id;
+
+/** The current instrument's masks (checked, since they come from browser storage). */
+export function masksOf(exp: ExperimentState): MaskSettings {
+  const m = (exp.masks ?? {})[maskKey(exp.instrumentId)] as Partial<MaskSettings> | undefined;
+  if (!m || typeof m !== "object") return NO_MASKS;
+  const f = m.file as Partial<MaskFile> | undefined;
+  const file = f && typeof f.name === "string" && typeof f.detids === "string" && /^[\d,\s-]*$/.test(f.detids) && Array.isArray(f.components) ? { name: f.name, detids: f.detids, components: f.components.filter((n): n is string => typeof n === "string") } : undefined;
+  return {
+    edgeRows: finite(m.edgeRows, 0, 4096) ? Math.floor(m.edgeRows) : 0,
+    edgeCols: finite(m.edgeCols, 0, 4096) ? Math.floor(m.edgeCols) : 0,
+    panelsOff: Array.isArray(m.panelsOff) ? m.panelsOff.filter((n): n is string => typeof n === "string") : [],
+    ...(file ? { file } : {}),
+  };
+}
+
+export const withMasks = (exp: ExperimentState, m: MaskSettings): ExperimentState => ({ ...exp, masks: { ...(exp.masks ?? {}), [maskKey(exp.instrumentId)]: m } });
+
+function validShape(s: unknown): s is ShadowShape {
+  if (!s || typeof s !== "object") return false;
+  const v = s as Record<string, unknown>;
+  if (v.turnsWith !== undefined && !finite(v.turnsWith, 0, 16)) return false;
+  switch (v.kind) {
+    case "opening":
+      return finite(v.halfAngle, 0, 90);
+    case "sector":
+      return finite(v.gamma, -360, 360) && finite(v.halfWidth, 0, 180);
+    case "box":
+      return finite(v.gammaMin, -360, 360) && finite(v.gammaMax, -360, 720) && finite(v.nuMin, -90, 90) && finite(v.nuMax, -90, 90);
+    default:
+      return false;
+  }
+}
+
+/** The current instrument's sample-environment shadows (checked, since they come from browser storage). */
+export function shadowsOf(exp: ExperimentState): readonly ShadowShape[] {
+  const list = (exp.shadows ?? {})[exp.instrumentId];
+  return Array.isArray(list) ? list.filter(validShape) : [];
+}
+
+export const withShadows = (exp: ExperimentState, list: readonly ShadowShape[]): ExperimentState => ({ ...exp, shadows: { ...(exp.shadows ?? {}), [exp.instrumentId]: list } });
+

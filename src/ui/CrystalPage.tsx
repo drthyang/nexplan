@@ -16,6 +16,8 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { Mat3, Vec3 } from "@materia/core/math/types";
 import { mulVec } from "@materia/core/math/mat3";
+import { blockedAt, type Shadows } from "../core/instrument/acceptance.ts";
+import type { Blocked } from "../core/instrument/detectors.ts";
 import { familyCounts, targetCoverage, wantedStatus, type PlanGoal } from "../core/instrument/plan.ts";
 import { braggCrossings, crossingsToScan, observeAt, pointCoverage, reflectionCoverage, scanSettings, simulateSettings, type ScanResult } from "../core/instrument/simulate.ts";
 import { suggestPlan } from "../workers/client.ts";
@@ -25,7 +27,8 @@ import { Card, cx, Segmented, UnitField } from "./components.tsx";
 import { downloadText, fmt, hklText } from "./format.ts";
 import { ScanChart } from "./ScanChart.tsx";
 import { SliceChart, type SlicePoint } from "./SliceChart.tsx";
-import { DMinNote, findHkl, GoniometerLimits, HklField, HklNotice, InstrumentRequired, lam, useHklPick, useObservations, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
+import { masksOf, shadowsOf } from "./experimentState.ts";
+import { AcceptanceNote, DMinNote, findHkl, GoniometerLimits, HklField, HklNotice, InstrumentRequired, lam, useHklPick, useObservations, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
 import { hklMiss, PRESENT_CAP } from "./ubShared.ts";
 import { GoniometerControls } from "./UbPage.tsx";
 
@@ -58,11 +61,32 @@ export function CrystalPage(props: SimPageProps) {
         The Single-crystal page plans the measurement (an orientation list or a rotation scan), reports the completeness, and shows reciprocal-space slices of what the plan records. It needs an instrument that turns the crystal.
       </InstrumentRequired>
     );
-  return <CrystalPlan key={ins.id} {...props} instrument={ins} catalogGoniometer={sns.catalogGoniometer!} panels={sns.panels} info={sns.info} />;
+  return <CrystalPlan key={ins.id} {...props} instrument={ins} catalogGoniometer={sns.catalogGoniometer!} panels={sns.panels} info={sns.info} shadows={sns.shadows} blocked={sns.blocked} />;
 }
 
-function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instrument, catalogGoniometer, panels, info }: SimPageProps & { instrument: InstrumentPreset; catalogGoniometer: GoniometerModel; panels: NonNullable<InstrumentPreset["detectors"]>; info: readonly { twoThetaMax: number }[] }) {
-  const { viewUB, fileUB, points, sim, tofOf } = useObservations(result, ub, exp, instrument);
+function CrystalPlan({
+  result,
+  ub,
+  exp,
+  onExp,
+  onDMin,
+  onOpenOrientation,
+  instrument,
+  catalogGoniometer,
+  panels,
+  info,
+  shadows,
+  blocked,
+}: SimPageProps & {
+  instrument: InstrumentPreset;
+  catalogGoniometer: GoniometerModel;
+  panels: NonNullable<InstrumentPreset["detectors"]>;
+  info: readonly { twoThetaMax: number }[];
+  /** The sample environment's shadows, and the directions they block at the current setting (masks ride on the panels). */
+  shadows: Shadows | undefined;
+  blocked: Blocked | undefined;
+}) {
+  const { viewUB, fileUB, points, sim, tofOf } = useObservations(result, ub, exp, instrument, blocked);
   const model = instrument.goniometer;
   const axes = model.axes;
   const free = axes.map((ax, i) => ({ ax, i })).filter(({ ax }) => ax.fixed === undefined);
@@ -78,29 +102,29 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
   const deferredBase = useDeferredValue(baseKey);
   const plan = useMemo((): (ScanResult & { settings: (readonly number[])[] }) | { error: string } => {
     try {
-      if (planKind === "list") return { ...simulateSettings(model, exp.orientations, viewUB, points, panels, exp.lambdaMin, exp.lambdaMax), settings: [...exp.orientations] };
+      if (planKind === "list") return { ...simulateSettings(model, exp.orientations, viewUB, points, panels, exp.lambdaMin, exp.lambdaMax, shadows), settings: [...exp.orientations] };
       const base = deferredBase.split(",").map(Number);
       if (mono) {
         // Monochromatic: exact Bragg crossings, binned into the scan steps (nothing is missed between steps).
         const half = exp.scan.step / 2;
-        const crossings = braggCrossings(model, scanAxis, base, { start: exp.scan.start - half, end: exp.scan.end + half }, viewUB, points, panels, lambdaMid);
+        const crossings = braggCrossings(model, scanAxis, base, { start: exp.scan.start - half, end: exp.scan.end + half }, viewUB, points, panels, lambdaMid, shadows);
         return { ...crossingsToScan(crossings, points, scanAxis, base, exp.scan), settings: scanSettings(scanAxis, base, exp.scan) };
       }
       const settings = scanSettings(scanAxis, base, exp.scan, exp.scan.interleave);
-      return { ...simulateSettings(model, settings, viewUB, points, panels, exp.lambdaMin, exp.lambdaMax), settings };
+      return { ...simulateSettings(model, settings, viewUB, points, panels, exp.lambdaMin, exp.lambdaMax, shadows), settings };
     } catch (e) {
       return { error: (e as Error).message };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planKind, exp.orientations, deferredBase, scanAxis, exp.scan, model, viewUB, points, panels, exp.lambdaMin, exp.lambdaMax, mono, lambdaMid]);
+  }, [planKind, exp.orientations, deferredBase, scanAxis, exp.scan, model, viewUB, points, panels, exp.lambdaMin, exp.lambdaMax, mono, lambdaMid, shadows]);
   const planOk = "steps" in plan ? plan : undefined;
   const reach90 = planOk?.steps.find((s) => s.completeness >= 0.9);
   // Lists: families recorded in two or more settings (redundancy for scaling and absorption corrections).
   const twice = useMemo(() => {
     if (planKind !== "list" || !planOk || !planOk.settings.length) return undefined;
-    const counts = familyCounts(model, planOk.settings, viewUB, points.map((p) => ({ h: p.h as Vec3, family: p.family })), panels, exp.lambdaMin, exp.lambdaMax);
+    const counts = familyCounts(model, planOk.settings, viewUB, points.map((p) => ({ h: p.h as Vec3, family: p.family })), panels, exp.lambdaMin, exp.lambdaMax, shadows);
     return [...counts.values()].filter((c) => c >= 2).length;
-  }, [planKind, planOk, model, viewUB, points, panels, exp.lambdaMin, exp.lambdaMax]);
+  }, [planKind, planOk, model, viewUB, points, panels, exp.lambdaMin, exp.lambdaMax, shadows]);
 
   // ---------------------------------------------------------------- reciprocal slice
   const [planeId, setPlaneId] = useState<PlaneId>("hk0");
@@ -155,7 +179,7 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
   // Coverage of the plane by the plan, as a shaded image (number of settings recording each point).
   const [covImage, setCovImage] = useState<{ key: string; href: string; max: number } | null>(null);
   const [covBusy, setCovBusy] = useState(false);
-  const covKey = `${planeId}|${layer}|${extent.toFixed(4)}|${planOk ? planOk.settings.length : -1}|${exp.lambdaMin}|${exp.lambdaMax}|${deferredBase}|${JSON.stringify(exp.orientations)}|${JSON.stringify(exp.scan)}`;
+  const covKey = `${planeId}|${layer}|${extent.toFixed(4)}|${planOk ? planOk.settings.length : -1}|${exp.lambdaMin}|${exp.lambdaMax}|${deferredBase}|${JSON.stringify(exp.orientations)}|${JSON.stringify(exp.scan)}|${JSON.stringify([masksOf(exp), shadowsOf(exp)])}`;
   useEffect(() => {
     if (!showCoverage || !planOk || !planOk.settings.length) {
       setCovImage(null);
@@ -179,8 +203,16 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
         counts = new Uint16Array(qs.length);
         const half = exp.scan.step / 2;
         const base = deferredBase.split(",").map(Number);
-        for (const c of braggCrossings(model, scanAxis, base, { start: exp.scan.start - half, end: exp.scan.end + half }, I3, qs.map((h) => ({ h, family: 0 })), panels, lambdaMid)) if (c.hit) counts[c.index]!++;
-      } else counts = pointCoverage(planOk.settings.map((a) => goniometerMatrix(model, a)), qs, panels, exp.lambdaMin, exp.lambdaMax);
+        for (const c of braggCrossings(model, scanAxis, base, { start: exp.scan.start - half, end: exp.scan.end + half }, I3, qs.map((h) => ({ h, family: 0 })), panels, lambdaMid, shadows)) if (c.hit) counts[c.index]!++;
+      } else
+        counts = pointCoverage(
+          planOk.settings.map((a) => goniometerMatrix(model, a)),
+          qs,
+          panels,
+          exp.lambdaMin,
+          exp.lambdaMax,
+          planOk.settings.map((a) => blockedAt(shadows, a)),
+        );
       let max = 0;
       for (const c of counts) max = Math.max(max, c);
       const canvas = document.createElement("canvas");
@@ -213,13 +245,13 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
   const probe = hkl.probe;
   const sel = useMemo(() => (probe ? { h: probe.hkl as unknown as Vec3, d: probe.d!, f2: probe.f2 } : selected !== null ? points[selected] : undefined), [probe, selected, points]);
   const selObs = useMemo(
-    () => (probe ? observeAt(goniometerMatrix(model, exp.angles), viewUB, [{ h: probe.hkl as unknown as Vec3, family: 0 }], panels, exp.lambdaMin, exp.lambdaMax)[0] : sim.obs.find((o) => o.index === selected)),
-    [probe, sim, selected, model, exp.angles, viewUB, panels, exp.lambdaMin, exp.lambdaMax],
+    () => (probe ? observeAt(goniometerMatrix(model, exp.angles), viewUB, [{ h: probe.hkl as unknown as Vec3, family: 0 }], panels, exp.lambdaMin, exp.lambdaMax, blocked)[0] : sim.obs.find((o) => o.index === selected)),
+    [probe, sim, selected, model, exp.angles, viewUB, panels, exp.lambdaMin, exp.lambdaMax, blocked],
   );
   // Whether the plan records it (the Laue test of the list or scan; not for monochromatic scans).
   const selInPlan = useMemo(
-    () => (!probe ? (planOk && selected !== null ? planOk.measured.has(selected) : undefined) : !planOk || mono ? undefined : targetCoverage(model, planOk.settings, viewUB, [{ h: probe.hkl as unknown as Vec3, family: 0 }], panels, exp.lambdaMin, exp.lambdaMax)[0]! > 0),
-    [probe, planOk, selected, mono, model, viewUB, panels, exp.lambdaMin, exp.lambdaMax],
+    () => (!probe ? (planOk && selected !== null ? planOk.measured.has(selected) : undefined) : !planOk || mono ? undefined : targetCoverage(model, planOk.settings, viewUB, [{ h: probe.hkl as unknown as Vec3, family: 0 }], panels, exp.lambdaMin, exp.lambdaMax, shadows)[0]! > 0),
+    [probe, planOk, selected, mono, model, viewUB, panels, exp.lambdaMin, exp.lambdaMax, shadows],
   );
   const selF2 = !sel ? "" : !probe ? sel.f2!.toPrecision(4) : probe.kind === "systematic" ? "0 (forbidden)" : probe.f2 === undefined ? "not calculated" : probe.kind === "accidental" ? "≈ 0" : probe.f2.toPrecision(4);
   const [findNote, setFindNote] = useState<string | null>(null);
@@ -238,9 +270,9 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
       if (mono) {
         const k = free[0]!.i;
         const ax = axes[k]!;
-        for (const c of braggCrossings(model, k, exp.angles, { start: ax.min, end: Math.min(ax.max, ax.min + 360) - 1e-9 }, viewUB, [{ h, family: 0 }], panels, lambdaMid))
+        for (const c of braggCrossings(model, k, exp.angles, { start: ax.min, end: Math.min(ax.max, ax.min + 360) - 1e-9 }, viewUB, [{ h, family: 0 }], panels, lambdaMid, shadows))
           if (c.hit) consider(exp.angles.map((v, i) => (i === k ? c.angle : v)), lambdaMid, c.hit);
-      } else for (const p of reflectionCoverage(model, exp.angles, viewUB, [{ h }], panels, exp.lambdaMin, exp.lambdaMax, free.length > 1 ? 2 : 1).points) consider(p.angles, p.lambda, p.hit);
+      } else for (const p of reflectionCoverage(model, exp.angles, viewUB, [{ h }], panels, exp.lambdaMin, exp.lambdaMax, free.length > 1 ? 2 : 1, undefined, shadows).points) consider(p.angles, p.lambda, p.hit);
     } catch (e) {
       setFindNote((e as Error).message);
       return;
@@ -301,8 +333,8 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
   // Settings of the list that record each wanted reflection (any symmetry equivalent in the list).
   // Settings of the list that record each wanted reflection (any equivalent in the list), and that place it well.
   const wantedSeen = useMemo(
-    () => (planKind !== "list" || !planOk ? wantedTargets.map(() => ({ recorded: 0, well: 0 })) : wantedStatus(model, planOk.settings, viewUB, wantedTargets.map((t) => t.members), panels, exp.lambdaMin, exp.lambdaMax, exp.placement)),
-    [wantedTargets, planKind, planOk, model, viewUB, panels, exp.lambdaMin, exp.lambdaMax, exp.placement],
+    () => (planKind !== "list" || !planOk ? wantedTargets.map(() => ({ recorded: 0, well: 0 })) : wantedStatus(model, planOk.settings, viewUB, wantedTargets.map((t) => t.members), panels, exp.lambdaMin, exp.lambdaMax, exp.placement, shadows)),
+    [wantedTargets, planKind, planOk, model, viewUB, panels, exp.lambdaMin, exp.lambdaMax, exp.placement, shadows],
   );
   const addWanted = (h: readonly number[]) => {
     if (exp.wanted.some((w) => w[0] === h[0] && w[1] === h[1] && w[2] === h[2])) return;
@@ -328,6 +360,7 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
         placement: exp.placement,
         existing: exp.orientations,
         panels,
+        ...(shadows ? { shadows: shadows.shapes } : {}),
         lambdaMin: exp.lambdaMin,
         lambdaMax: exp.lambdaMax,
         n,
@@ -671,6 +704,7 @@ function CrystalPlan({ result, ub, exp, onExp, onDMin, onOpenOrientation, instru
               .
             </p>
             <DMinNote result={result} info={info} lambdaMin={exp.lambdaMin} onDMin={onDMin} />
+            <AcceptanceNote panels={panels} shadows={shadows} />
           </Card>
         </div>
       </div>

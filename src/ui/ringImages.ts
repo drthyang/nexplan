@@ -3,9 +3,13 @@
  * single-crystal reflection coverage, as per-panel RGBA textures for the 3D
  * view and a raster of the unrolled map. For rings:
  * Each slice is scaled to its brightest detector element (auto contrast) and
- * shown on a square-root scale so weak rings stay visible.
+ * shown on a square-root scale so weak rings stay visible. Masked elements
+ * (and, for rings, directions the sample environment blocks) record nothing:
+ * they are painted in the masked colour, and drawn on the map by
+ * paintAcceptanceMap.
  */
-import type { DetectorPanel } from "../core/instrument/detectors.ts";
+import type { Vec3 } from "@materia/core/math/types";
+import { panelHit, recordsAt, type Blocked, type DetectorPanel } from "../core/instrument/detectors.ts";
 import { panelCells, ringIntensity, type ElementCells, type RingProfile, type RingSlice } from "../core/instrument/powderRings.ts";
 import { intensityRgb, lambdaRgb } from "../views/colormaps.ts";
 
@@ -34,26 +38,30 @@ export interface PanelGrid {
   readonly cells: ElementCells;
 }
 
-/** Element grids at the panels' pixel resolution (capped at 64 × 128 per panel). */
-export function panelGrids(panels: readonly DetectorPanel[]): PanelGrid[] {
+/** Element grids at the panels' pixel resolution (capped at 64 × 128 per panel); cells that record nothing are NaN. */
+export function panelGrids(panels: readonly DetectorPanel[], blocked?: Blocked): PanelGrid[] {
   return panels.map((p) => {
     const nx = Math.max(1, Math.min(64, p.nCols));
     const ny = Math.max(1, Math.min(128, p.nRows));
-    return { nx, ny, cells: panelCells(p, nx, ny) };
+    return { nx, ny, cells: panelCells(p, nx, ny, blocked) };
   });
 }
 
-/** Flight-path range (m) over every element: L1 + L2. */
+/** Flight-path range (m) over every element that records: L1 + L2. */
 export function flightPathRange(grids: readonly PanelGrid[], l1: number): [number, number] {
   let lo = Infinity;
   let hi = -Infinity;
   for (const g of grids)
     for (const v of g.cells.l2) {
+      if (Number.isNaN(v)) continue;
       lo = Math.min(lo, v);
       hi = Math.max(hi, v);
     }
-  return [l1 + lo, l1 + hi];
+  return Number.isFinite(lo) ? [l1 + lo, l1 + hi] : [l1, l1];
 }
+
+/** Elements that record nothing (masked, or blocked by the sample environment), in the panel images. */
+const MASKED: readonly [number, number, number] = [104, 112, 128];
 
 /** Panel images for one slice and the gain (1 / brightest element) used, to share with the map. */
 export function paintPanels(grids: readonly PanelGrid[], profile: RingProfile, slice: RingSlice, l1: number): { images: PanelImage[]; gain: number } {
@@ -63,12 +71,16 @@ export function paintPanels(grids: readonly PanelGrid[], profile: RingProfile, s
     return v;
   });
   let max = 0;
-  for (const v of values) for (const x of v) max = Math.max(max, x);
+  for (const v of values) for (const x of v) if (!Number.isNaN(x)) max = Math.max(max, x);
   const gain = max > 0 ? 1 / max : 1;
   const images = grids.map(({ nx, ny }, i) => {
     const data = new Uint8Array(nx * ny * 4);
     const v = values[i]!;
     for (let c = 0; c < nx * ny; c++) {
+      if (Number.isNaN(v[c]!)) {
+        data.set([...MASKED, 255], 4 * c);
+        continue;
+      }
       const k = 3 * level(v[c]!, gain);
       data[4 * c] = LUT[k]!;
       data[4 * c + 1] = LUT[k + 1]!;
@@ -157,12 +169,16 @@ function lambdaPixel(lambda: number, lambdaMin: number, lambdaMax: number): [num
   return [Math.round(rr * 255), Math.round(g * 255), Math.round(b * 255)];
 }
 
-/** Coverage on the panel images: grey detectors, each reachable cell coloured by its λ (NaN = not reachable), widened to about 1.5 % of the panel each way. */
-export function paintLambdaPanels(grids: readonly { readonly nx: number; readonly ny: number }[], lambdas: readonly Float32Array[], lambdaMin: number, lambdaMax: number): PanelImage[] {
-  return grids.map(({ nx, ny }, k) => {
+/**
+ * Coverage on the panel images: grey detectors, each reachable cell coloured by its λ (NaN = not reachable), widened
+ * to about 1.5 % of the panel each way; masked cells (NaN in the grid's cells) in the masked colour, never widened onto.
+ */
+export function paintLambdaPanels(grids: readonly PanelGrid[], lambdas: readonly Float32Array[], lambdaMin: number, lambdaMax: number): PanelImage[] {
+  return grids.map(({ nx, ny, cells }, k) => {
     const data = new Uint8Array(nx * ny * 4);
-    const { lam, edge } = widenCoverage(lambdas[k]!, nx, ny, Math.max(1, Math.round(0.015 * nx)), Math.max(1, Math.round(0.015 * ny)));
-    for (let c = 0; c < nx * ny; c++) data.set([...(edge[c] ? EDGE : Number.isNaN(lam[c]!) ? GREY : lambdaPixel(lam[c]!, lambdaMin, lambdaMax)), 255], 4 * c);
+    const records = (c: number) => !Number.isNaN(cells.twoTheta[c]!);
+    const { lam, edge } = widenCoverage(lambdas[k]!, nx, ny, Math.max(1, Math.round(0.015 * nx)), Math.max(1, Math.round(0.015 * ny)), records);
+    for (let c = 0; c < nx * ny; c++) data.set([...(!records(c) ? MASKED : edge[c] ? EDGE : Number.isNaN(lam[c]!) ? GREY : lambdaPixel(lam[c]!, lambdaMin, lambdaMax)), 255], 4 * c);
     return { width: nx, height: ny, data };
   });
 }
@@ -178,6 +194,48 @@ export function paintLambdaMap(panelOf: Int16Array, lambdas: Float32Array, width
   for (let c = 0; c < width * height; c++) {
     if (panelOf[c]! < 0) continue;
     img.data.set([...(edge[c] ? EDGE : Number.isNaN(lam[c]!) ? GREY : lambdaPixel(lam[c]!, lambdaMin, lambdaMax)), 255], 4 * c);
+  }
+  ctx.putImageData(img, 0, 0);
+  return canvas.toDataURL("image/png");
+}
+
+/* ---------------------------------------------------------------- masks and shadows */
+
+/**
+ * Masked pixels and the sample environment's shadows on the unrolled-map raster (top row first) as a PNG data URL,
+ * or undefined when there are none. `geometry` is mapCells of the panels without masks; `panels` carry the masks.
+ * Masked pixels and switched-off panels are hatched; directions the environment blocks get a veil, on and off the
+ * detectors, so the shadow's shape shows.
+ */
+export function paintAcceptanceMap(geometry: { readonly panel: Int16Array }, panels: readonly DetectorPanel[], width: number, height: number, nuMax: number, blocked: Blocked | undefined, theme: "light" | "dark"): string | undefined {
+  const masks = panels.some((p) => p.off || p.mask);
+  if (!masks && !blocked) return undefined;
+  const hatch = theme === "dark" ? [203, 213, 225, 190] : [71, 85, 105, 225];
+  const veil = theme === "dark" ? [226, 232, 240, 40] : [15, 23, 42, 52];
+  canvas ??= document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d")!;
+  const img = ctx.createImageData(width, height);
+  const DEG = Math.PI / 180;
+  for (let j = 0; j < height; j++) {
+    const nu = (nuMax - ((j + 0.5) / height) * 2 * nuMax) * DEG;
+    for (let i = 0; i < width; i++) {
+      const c = j * width + i;
+      const g = (-180 + ((i + 0.5) / width) * 360) * DEG;
+      const u: Vec3 = [Math.cos(nu) * Math.sin(g), Math.sin(nu), Math.cos(nu) * Math.cos(g)];
+      const k = geometry.panel[c]!;
+      if (masks && k >= 0) {
+        const p = panels[k]!;
+        const h = p.off || p.mask ? panelHit(p, u) : undefined;
+        if (p.off || (h && !recordsAt(p, h.x, h.y))) {
+          // Diagonal hatching, 3 px on and 3 off.
+          if ((i + j) % 6 < 3) img.data.set(hatch, 4 * c);
+          continue;
+        }
+      }
+      if (blocked?.(u[0], u[1], u[2])) img.data.set(veil, 4 * c);
+    }
   }
   ctx.putImageData(img, 0, 0);
   return canvas.toDataURL("image/png");

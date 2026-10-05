@@ -8,6 +8,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import type { Mat3, Vec3 } from "@materia/core/math/types";
 import { determinant, mulMat, mulVec, transpose } from "@materia/core/math/mat3";
 import type { CalcSuccess } from "../app/compute.ts";
+import { applyMasks, shadowTest, type MaskSettings, type ShadowShape } from "../core/instrument/acceptance.ts";
 import { rayHit, type DetectorPanel } from "../core/instrument/detectors.ts";
 import { goniometerMatrix, laueCondition } from "../core/ub/goniometer.ts";
 import { UNIVERSAL } from "../core/ub/instruments.ts";
@@ -98,6 +99,9 @@ export interface OrientationInstrument {
   readonly onAngles: (a: number[]) => void;
   readonly lambdaMin: number;
   readonly lambdaMax: number;
+  /** The detector masks and sample-environment shadows the simulation pages use (acceptance.ts). */
+  readonly masks: MaskSettings;
+  readonly shadows: readonly ShadowShape[];
 }
 
 export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: { result: CalcSuccess; theme: "light" | "dark"; ub: UbState; onUb: (u: UbState) => void; gonio: GonioState; onGonio: (g: GonioState) => void; instrument?: OrientationInstrument | undefined }) {
@@ -155,7 +159,10 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
       alive = false;
     };
   }, [explore, instrumentId, panels]);
-  const detectors = panels && panels.id === instrumentId ? panels.list : undefined;
+  const masks = instrument?.masks;
+  const detectors = useMemo(() => (panels && panels.id === instrumentId ? (masks ? applyMasks(panels.list, masks) : panels.list) : undefined), [panels, instrumentId, masks]);
+  const shadows = instrument?.shadows;
+  const blocked = useMemo(() => (detectors && shadows ? shadowTest(shadows, model, angles) : undefined), [detectors, shadows, model, angles]);
 
   // Status per reflection: 2 diffracts onto a detector (or, without detectors, in the band), 1 in the band but misses every panel.
   const laue = useMemo(() => {
@@ -167,12 +174,12 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
       const s = laueCondition(mulVec(RUB, p.h));
       lambdas[i] = s.lambda;
       if (!(s.lambda >= lambdaMin && s.lambda <= lambdaMax)) return;
-      const hit = detectors ? rayHit(detectors, s.kf) : undefined;
+      const hit = detectors ? rayHit(detectors, s.kf, blocked) : undefined;
       status[i] = detectors && !hit ? 1 : 2;
       rows.push({ i, lambda: s.lambda, twoTheta: s.twoTheta, azimuth: s.azimuth, ...(hit ? { panel: hit.name } : {}) });
     });
     return { status, lambdas, rows, onDetectors: detectors ? rows.filter((r) => r.panel).length : undefined };
-  }, [points, R, viewUB, lambdaMin, lambdaMax, detectors]);
+  }, [points, R, viewUB, lambdaMin, lambdaMax, detectors, blocked]);
   const [bandSort, onBandSort] = useSort<BandKey>({ key: "f2", dir: "desc" }, { d: "desc", f2: "desc" }, (k) => k !== "panel" || !!detectors);
   const bandRows = useMemo(() => {
     const { key, dir } = bandSort;

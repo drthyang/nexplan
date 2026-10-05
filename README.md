@@ -55,6 +55,13 @@ header, then work through the pages from left to right: **Sample**, **Setup**, *
 - **Generic X-ray or neutron beam.** Reflection lists and powder patterns at constant wavelength (X-ray
   polarization models included) or at one neutron TOF bank, on 2θ, TOF, d or Q.
 
+**Masks and shadows** (Detectors page) apply on every simulation page, the planner included:
+
+- Masks: pixels at the tube ends or panel edges, whole panels, and the detector IDs and components of a Mantid mask
+  file (SaveMask XML), mapped to pixels with the numbering of the instrument definition.
+- Shadows: directions the sample environment blocks, as a vertical opening, a leg at a horizontal angle, or a box,
+  each fixed in the lab or turning with the goniometer stage it is mounted on. The detector map shows both.
+
 Forbidden peaks are sometimes measured on purpose, since they can reveal an unreported phase, lower symmetry or
 multiple scattering. A reflection that is systematically absent, has |F| ≈ 0, or lies below d_min can still be
 simulated, wanted and planned. Its position needs no |F|, and a notice says what it is.
@@ -103,14 +110,16 @@ Treat its numbers as geometry plus relative intensities, within these limits:
 
 - **No counting times or absolute intensities.** Intensities are |F|² with Lorentz (and, for X-rays, polarization)
   factors, relative, per unit volume or normalised. TOF patterns assume data normalised by the incident spectrum.
-- **Not modelled:** detector efficiency, masked or dead pixels, sample-environment shadows, background, absorption,
-  extinction, multiple scattering, preferred orientation, magnetic scattering, X-ray anomalous dispersion, and
-  inelastic scattering (the chopper spectrometers are simulated at the elastic line).
+- **Not modelled:** detector efficiency, background, absorption, extinction, multiple scattering, preferred
+  orientation, magnetic scattering, X-ray anomalous dispersion, gaps between the tubes of a pack, and inelastic
+  scattering (the chopper spectrometers are simulated at the elastic line). Masked pixels and sample-environment
+  shadows are modelled only as you set them (*Masks and shadows*, below); there are no defaults.
 - **Complex b** for absorbing nuclei are the tabulated values at 2200 m/s.
 - **Geometry is nominal.** Detector positions come from the Mantid definition at a pinned commit, not from a
   cycle's calibration. NOMAD banks 1–5 use calibrated DIFC values from ORNL's 2023A GSAS-II instrument file; other
   banks use the geometric DIFC.
-- **"Recorded"** means the Laue wavelength is in the band and the scattered ray hits a panel.
+- **"Recorded"** means the Laue wavelength is in the band, the sample environment does not block the scattered
+  ray, and the ray's first panel records at that pixel (not masked, not switched off).
 
 ## Data you can check
 

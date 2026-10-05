@@ -7,6 +7,9 @@
  * convention, verified on TOPAZ_3007: col = (x/width + ½)·nCols + ½ and
  * row = (y/height + ½)·nRows + ½, where x and y are the hit's offsets from the
  * panel centre along `base` and `up` (so pixel centres sit at 1 … n).
+ *
+ * Masks (acceptance.ts) ride on the panels: a ray stops at the first panel it
+ * meets, and is not recorded when that panel is off or the pixel masked.
  */
 import type { Vec3 } from "@materia/core/math/types";
 
@@ -20,7 +23,25 @@ export interface DetectorPanel {
   readonly height: number;
   readonly nCols: number;
   readonly nRows: number;
+  /** Masked pixels (1 = masked), nCols × nRows, row-major from pixel (1, 1). */
+  readonly mask?: Uint8Array;
+  /** The whole panel is masked. */
+  readonly off?: boolean;
+  /** Mantid detector IDs: id = ids[0] + column·ids[1] + row·ids[2] (columns and rows from 0), from the IDF. */
+  readonly ids?: readonly [number, number, number];
 }
+
+/** Whether the panel records at offsets x, y (m) from its centre along `base` and `up`: not off, and the pixel not masked. */
+export function recordsAt(p: DetectorPanel, x: number, y: number): boolean {
+  if (p.off) return false;
+  if (!p.mask) return true;
+  const col = Math.min(p.nCols - 1, Math.max(0, Math.floor((x / p.width + 0.5) * p.nCols)));
+  const row = Math.min(p.nRows - 1, Math.max(0, Math.floor((y / p.height + 0.5) * p.nRows)));
+  return p.mask[row * p.nCols + col] !== 1;
+}
+
+/** Lab directions a sample environment blocks, as the components of a unit vector (acceptance.ts shadowTest). */
+export type Blocked = (x: number, y: number, z: number) => boolean;
 
 export interface DetectorHit {
   readonly panel: number;
@@ -54,15 +75,21 @@ export function panelHit(p: DetectorPanel, u: Vec3): { t: number; x: number; y: 
   return { t, x, y };
 }
 
-/** First panel hit by a ray from the origin along unit vector `u`, or undefined. */
-export function rayHit(panels: readonly DetectorPanel[], u: Vec3): DetectorHit | undefined {
+/**
+ * First panel hit by a ray from the origin along unit vector `u`, or undefined: also when the sample environment
+ * blocks u, or that panel is off or the pixel masked.
+ */
+export function rayHit(panels: readonly DetectorPanel[], u: Vec3, blocked?: Blocked): DetectorHit | undefined {
+  if (blocked?.(u[0], u[1], u[2])) return undefined;
   let best: DetectorHit | undefined;
+  let bestRecords = false;
   panels.forEach((p, i) => {
     const h = panelHit(p, u);
     if (!h || (best && h.t >= best.l2)) return;
     best = { panel: i, name: p.name, col: (h.x / p.width + 0.5) * p.nCols + 0.5, row: (h.y / p.height + 0.5) * p.nRows + 0.5, l2: h.t, position: [u[0] * h.t, u[1] * h.t, u[2] * h.t] };
+    bestRecords = recordsAt(p, h.x, h.y);
   });
-  return best;
+  return bestRecords ? best : undefined;
 }
 
 /** The four corners of a panel (for drawing), counter-clockwise from (−w/2, −h/2). */

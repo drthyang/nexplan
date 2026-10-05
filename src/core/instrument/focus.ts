@@ -21,11 +21,15 @@
  * a calibrated DIFC is given.
  * Every line has the same relative width Δd/d; real focused banks are calibrated
  * and their resolution depends on the group.
+ *
+ * Masked pixels and directions the sample environment blocks (acceptance.ts)
+ * are left out: a cell's solid angle counts only the pixels that record, and
+ * the cell sits at their centroid.
  */
 import type { Vec3 } from "@materia/core/math/types";
 import type { PeakGroup, PowderPeak } from "../diffraction/powder.ts";
 import { difcFromGeometry, type TofBank } from "../diffraction/tof.ts";
-import type { DetectorPanel } from "./detectors.ts";
+import type { Blocked, DetectorPanel } from "./detectors.ts";
 
 const DEG = Math.PI / 180;
 
@@ -36,17 +40,47 @@ export interface FocusCell {
   readonly omega: number;
 }
 
-/** Cells of the panels (nx along the width, ny along the height of each panel). */
-export function focusCells(panels: readonly DetectorPanel[], nx = 4, ny = 8): FocusCell[] {
+/**
+ * Cells of the panels (nx along the width, ny along the height of each panel), counting only the pixels that
+ * record: a cell with none is left out.
+ */
+export function focusCells(panels: readonly DetectorPanel[], nx = 4, ny = 8, blocked?: Blocked): FocusCell[] {
   const out: FocusCell[] = [];
   for (const p of panels) {
+    if (p.off) continue;
     const n: Vec3 = [p.base[1] * p.up[2] - p.base[2] * p.up[1], p.base[2] * p.up[0] - p.base[0] * p.up[2], p.base[0] * p.up[1] - p.base[1] * p.up[0]];
-    const area = (p.width / nx) * (p.height / ny);
+    const at = (x: number, y: number): Vec3 => [p.center[0] + x * p.base[0] + y * p.up[0], p.center[1] + x * p.base[1] + y * p.up[1], p.center[2] + x * p.base[2] + y * p.up[2]];
+    const pixelArea = (p.width / p.nCols) * (p.height / p.nRows);
     for (let j = 0; j < ny; j++)
       for (let i = 0; i < nx; i++) {
-        const x = ((i + 0.5) / nx - 0.5) * p.width;
-        const y = ((j + 0.5) / ny - 0.5) * p.height;
-        const c: Vec3 = [p.center[0] + x * p.base[0] + y * p.up[0], p.center[1] + x * p.base[1] + y * p.up[1], p.center[2] + x * p.base[2] + y * p.up[2]];
+        let x = ((i + 0.5) / nx - 0.5) * p.width;
+        let y = ((j + 0.5) / ny - 0.5) * p.height;
+        let area = (p.width / nx) * (p.height / ny);
+        if (p.mask || blocked) {
+          // The pixels of this cell that record, and their centroid.
+          let k = 0;
+          let sx = 0;
+          let sy = 0;
+          for (let r = Math.round((j * p.nRows) / ny); r < Math.round(((j + 1) * p.nRows) / ny); r++)
+            for (let c = Math.round((i * p.nCols) / nx); c < Math.round(((i + 1) * p.nCols) / nx); c++) {
+              if (p.mask?.[r * p.nCols + c] === 1) continue;
+              const px = ((c + 0.5) / p.nCols - 0.5) * p.width;
+              const py = ((r + 0.5) / p.nRows - 0.5) * p.height;
+              if (blocked) {
+                const v = at(px, py);
+                const l = Math.hypot(v[0], v[1], v[2]);
+                if (blocked(v[0] / l, v[1] / l, v[2] / l)) continue;
+              }
+              k++;
+              sx += px;
+              sy += py;
+            }
+          if (!k) continue;
+          x = sx / k;
+          y = sy / k;
+          area = k * pixelArea;
+        }
+        const c = at(x, y);
         const l2 = Math.hypot(c[0], c[1], c[2]);
         const cosA = Math.abs((c[0] * n[0] + c[1] * n[1] + c[2] * n[2]) / l2);
         out.push({ twoTheta: Math.acos(Math.max(-1, Math.min(1, c[2] / l2))) / DEG, l2, omega: (area * cosA) / (l2 * l2) });
@@ -77,9 +111,9 @@ export function focusedBank(
   l1: number,
   lambdaMin: number,
   lambdaMax: number,
-  opts: { readonly twoThetaDeg?: number; readonly l2?: number; readonly difc?: number; readonly nx?: number; readonly ny?: number } = {},
+  opts: { readonly twoThetaDeg?: number; readonly l2?: number; readonly difc?: number; readonly nx?: number; readonly ny?: number; readonly blocked?: Blocked } = {},
 ): FocusedBank {
-  const cells = focusCells(panels, opts.nx, opts.ny);
+  const cells = focusCells(panels, opts.nx, opts.ny, opts.blocked);
   let omega = 0;
   let tt = 0;
   let l2 = 0;

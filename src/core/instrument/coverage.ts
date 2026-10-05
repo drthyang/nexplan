@@ -17,13 +17,19 @@
  * finite size, so the conditions are met within the element's angular
  * half-size (k_f turns twice as fast as q, so q̂ gets half of it).
  *
+ * Masked elements are not reachable, nor are directions the sample
+ * environment blocks (acceptance.ts): a shadow fixed in the lab blocks the
+ * direction outright, one that turns with a stage is tested at each solution's
+ * angles, and the search goes on past a blocked one.
+ *
  * This is the continuous version of NeuXtalViz's stepped "individual peak"
  * coverage (simulate.ts reflectionCoverage), without sampling gaps.
  */
 import type { Mat3, Vec3 } from "@materia/core/math/types";
 import { mulMat, mulVec, transpose } from "@materia/core/math/mat3";
 import { axisRotation, type GoniometerModel } from "../ub/goniometer.ts";
-import type { DetectorPanel } from "./detectors.ts";
+import { labFixed, shadowBlocks, shadowTest, type Shadows } from "./acceptance.ts";
+import { recordsAt, type DetectorPanel } from "./detectors.ts";
 
 const DEG = Math.PI / 180;
 const I3: Mat3 = [
@@ -76,7 +82,7 @@ export interface CoverageSolver {
  * equivalents), with the free (not `fixed`) goniometer axes swept over their
  * [min, max] ranges. Supports one or two free axes.
  */
-export function coverageSolver(model: GoniometerModel, UB: Mat3, hs: readonly Vec3[], lambdaMin: number, lambdaMax: number): CoverageSolver {
+export function coverageSolver(model: GoniometerModel, UB: Mat3, hs: readonly Vec3[], lambdaMin: number, lambdaMax: number, shadows?: Shadows): CoverageSolver {
   const axes = model.axes;
   const free: Axis[] = axes
     .map((ax, index) => ({ ax, index }))
@@ -102,6 +108,11 @@ export function coverageSolver(model: GoniometerModel, UB: Mat3, hs: readonly Ve
 
   const anglesOf = (a: number, b?: number) => axes.map((ax, i) => (ax.fixed !== undefined ? ax.fixed : i === f1.index ? a : f2 && i === f2.index ? b! : 0));
 
+  const labOnly = shadows !== undefined && labFixed(shadows.shapes, shadows.model);
+  const labBlocked = labOnly ? shadowTest(shadows.shapes, shadows.model, []) : undefined;
+  /** A solution the environment leaves open (shadows that turn with a stage, at its angles). */
+  const open = (sol: CoverageSolution, u: Vec3) => labOnly || !shadowBlocks(shadows, sol.angles, u);
+
   /** Outer (or only) axis: the angle that turns w onto t about n₁, if allowed. */
   const outer = (w: Vec3, t: Vec3, tolAng: number): number | undefined => {
     const wn = dot(w, f1.n);
@@ -119,6 +130,7 @@ export function coverageSolver(model: GoniometerModel, UB: Mat3, hs: readonly Ve
   return {
     d,
     solve(u: Vec3, tolKf: number) {
+      if (labBlocked?.(u[0], u[1], u[2])) return undefined;
       const cos2t = clamp1(u[2]);
       const theta = Math.acos(cos2t) / 2;
       const lambda = 2 * d * Math.sin(theta);
@@ -132,7 +144,8 @@ export function coverageSolver(model: GoniometerModel, UB: Mat3, hs: readonly Ve
         const w = ws[r]!;
         if (!f2) {
           const a = outer(w, t, tolAng);
-          if (a !== undefined) return { lambda: lam, angles: anglesOf(a), reflection: r };
+          const sol = a === undefined ? undefined : { lambda: lam, angles: anglesOf(a), reflection: r };
+          if (sol && open(sol, u)) return sol;
           continue;
         }
         // Inner axis: n₁·M₁·Rot(n₂, β)·w = C + P cos β + Q sin β must equal t·n₁ (β = s₂·b).
@@ -166,7 +179,8 @@ export function coverageSolver(model: GoniometerModel, UB: Mat3, hs: readonly Ve
           if (b === undefined) continue;
           const w1 = mulVec(M1, mulVec(axisRotation(f2.n, f2.s * b), w));
           const a = outer(w1, t, tolAng);
-          if (a !== undefined) return { lambda: lam, angles: anglesOf(a, b), reflection: r };
+          const sol = a === undefined ? undefined : { lambda: lam, angles: anglesOf(a, b), reflection: r };
+          if (sol && open(sol, u)) return sol;
         }
       }
       return undefined;
@@ -174,7 +188,7 @@ export function coverageSolver(model: GoniometerModel, UB: Mat3, hs: readonly Ve
   };
 }
 
-/** λ (Å, NaN where not reachable) for each cell of each panel, on the panels' element grids. */
+/** λ (Å, NaN where not reachable or masked) for each cell of each panel, on the panels' element grids. */
 export function coveragePanelLambdas(panels: readonly DetectorPanel[], grids: readonly { readonly nx: number; readonly ny: number }[], solver: CoverageSolver): Float32Array[] {
   return panels.map((p, k) => {
     const { nx, ny } = grids[k]!;
@@ -183,6 +197,7 @@ export function coveragePanelLambdas(panels: readonly DetectorPanel[], grids: re
       for (let i = 0; i < nx; i++) {
         const x = ((i + 0.5) / nx - 0.5) * p.width;
         const y = ((j + 0.5) / ny - 0.5) * p.height;
+        if (!recordsAt(p, x, y)) continue;
         const v: Vec3 = [p.center[0] + x * p.base[0] + y * p.up[0], p.center[1] + x * p.base[1] + y * p.up[1], p.center[2] + x * p.base[2] + y * p.up[2]];
         const l2 = Math.hypot(...v);
         const tol = Math.hypot(p.width / nx, p.height / ny) / 2 / l2;

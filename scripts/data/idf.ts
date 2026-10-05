@@ -13,8 +13,16 @@
  *  - type is="rectangular_detector": pixel (i, j) at (xstart + i·xstep,
  *    ystart + j·ystep, 0) in the panel frame.
  *  - type is="detector": a pixel leaf at the component origin.
+ *  - Detector IDs: a component's idlist hands its IDs (<id start end step>
+ *    or <id val>) to the detectors and monitors below it in document order,
+ *    and must be used up exactly. A rectangular detector numbers pixel (i, j)
+ *    from its component's idstart: filled along y first (idfillbyfirst="y",
+ *    the default), id = idstart + i·idstepbyrow + j·idstep, else
+ *    id = idstart + j·idstepbyrow + i·idstep (idstep defaults to 1).
  *
- * Output panels are in the Mantid lab frame (beam +z, up +y), metres.
+ * Output panels are in the Mantid lab frame (beam +z, up +y), metres, each
+ * with its detector IDs as a linear map of (column, row), checked pixel by
+ * pixel, and IDs unique across the instrument.
  */
 
 export interface XmlNode {
@@ -123,6 +131,8 @@ export interface Panel {
   readonly nRows: number;
   /** Largest pixel distance from the fitted plane (m); 0 for rectangular detectors. */
   readonly planarity: number;
+  /** Detector IDs: id = ids[0] + column·ids[1] + row·ids[2] (columns and rows from 0). */
+  readonly ids: readonly [number, number, number];
 }
 
 export interface InstrumentGeometry {
@@ -146,11 +156,23 @@ export function flattenIdf(xml: string): InstrumentGeometry {
   const kind = (t: XmlNode | undefined) => (t?.attrs.is ?? "").toLowerCase().replace(/_/g, "");
 
   const panels: Panel[] = [];
-  const pixels: { pos: V3; path: string[] }[] = [];
+  const pixels: { pos: V3; path: string[]; id: number | undefined }[] = [];
   let l1 = NaN;
   const empty: XmlNode = { name: "location", attrs: {}, children: [] };
 
-  const visit = (typeName: string, frame: Frame, path: string[]) => {
+  const idlists = new Map<string, number[]>();
+  for (const c of root.children) {
+    if (c.name !== "idlist" || !c.attrs.idname) continue;
+    const list: number[] = [];
+    for (const id of c.children.filter((x) => x.name === "id")) {
+      if (id.attrs.val !== undefined) list.push(num(id.attrs.val));
+      else for (let v = num(id.attrs.start), step = num(id.attrs.step ?? "1"); v <= num(id.attrs.end); v += step) list.push(v);
+    }
+    idlists.set(c.attrs.idname, list);
+  }
+  let cursor: { name: string; list: number[]; next: number } | undefined;
+
+  const visit = (typeName: string, frame: Frame, path: string[], comp: Record<string, string> = {}) => {
     const t = types.get(typeName);
     if (!t) return;
     const k = kind(t);
@@ -161,6 +183,11 @@ export function flattenIdf(xml: string): InstrumentGeometry {
       const ny = num(a.ypixels);
       const xs = num(a.xstep);
       const ys = num(a.ystep);
+      // Pixel (i, j) is column i, row j: `base` follows the sign of xstep, `up` that of ystep.
+      const byY = (comp.idfillbyfirst ?? "y") === "y";
+      const step = num(comp.idstep ?? "1");
+      const byRow = num(comp.idstepbyrow ?? String(byY ? ny * step : nx * step));
+      const ids: [number, number, number] = [num(comp.idstart ?? "0"), byY ? byRow : step, byY ? step : byRow];
       const cLocal: V3 = [num(a.xstart) + ((nx - 1) * xs) / 2, num(a.ystart) + ((ny - 1) * ys) / 2, 0];
       panels.push({
         name: path[path.length - 1] ?? typeName,
@@ -173,19 +200,32 @@ export function flattenIdf(xml: string): InstrumentGeometry {
         nCols: nx,
         nRows: ny,
         planarity: 0,
+        ids,
       });
       return;
     }
-    if (k === "detector") {
-      pixels.push({ pos: frame.t, path });
+    if (k === "detector" || k === "monitor") {
+      const id = cursor ? cursor.list[cursor.next++] : undefined;
+      if (cursor && id === undefined) throw new Error(`IDF: idlist "${cursor.name}" has fewer IDs than detectors`);
+      if (k === "detector") pixels.push({ pos: frame.t, path, id });
       return;
     }
-    for (const comp of t.children) {
-      if (comp.name !== "component" || !comp.attrs.type) continue;
-      const locs = comp.children.filter((c) => c.name === "location");
+    for (const c of t.children) {
+      if (c.name !== "component" || !c.attrs.type) continue;
+      const outer = cursor;
+      if (c.attrs.idlist) {
+        const list = idlists.get(c.attrs.idlist);
+        if (!list) throw new Error(`IDF: no idlist "${c.attrs.idlist}"`);
+        cursor = { name: c.attrs.idlist, list, next: 0 };
+      }
+      const locs = c.children.filter((x) => x.name === "location");
       (locs.length ? locs : [empty]).forEach((loc, i) => {
-        visit(comp.attrs.type!, compose(frame, locationFrame(loc)), [...path, loc.attrs.name ?? (locs.length > 1 ? `${comp.attrs.type}#${i}` : comp.attrs.type!)]);
+        visit(c.attrs.type!, compose(frame, locationFrame(loc)), [...path, loc.attrs.name ?? (locs.length > 1 ? `${c.attrs.type}#${i}` : c.attrs.type!)], c.attrs);
       });
+      if (c.attrs.idlist) {
+        if (cursor!.next !== cursor!.list.length) throw new Error(`IDF: idlist "${cursor!.name}" has ${cursor!.list.length} IDs for ${cursor!.next} detectors`);
+        cursor = outer;
+      }
     }
   };
 
@@ -194,7 +234,7 @@ export function flattenIdf(xml: string): InstrumentGeometry {
   visit("#top", { R: I3, t: [0, 0, 0] }, []);
 
   // Group pixels: pack = path minus the last two levels, tube = path minus the last level.
-  const packs = new Map<string, Map<string, V3[]>>();
+  const packs = new Map<string, Map<string, { pos: V3; id: number | undefined }[]>>();
   for (const px of pixels) {
     if (px.path.length < 3) continue;
     const packKey = px.path.slice(0, -2).join("/");
@@ -203,19 +243,47 @@ export function flattenIdf(xml: string): InstrumentGeometry {
     if (!tubes) packs.set(packKey, (tubes = new Map()));
     let tube = tubes.get(tubeKey);
     if (!tube) tubes.set(tubeKey, (tube = []));
-    tube.push(px.pos);
+    tube.push({ pos: px.pos, id: px.id });
   }
   for (const [key, tubes] of packs) {
     const parts = key.split("/");
     // Name: the nearest "bank…" ancestor, else the pack's parent (ARCS/SEQUOIA "B1", "C25T"), else the path.
     const bank = [...parts].reverse().find((p) => /bank/i.test(p)) ?? (parts.length > 1 ? parts[parts.length - 2] : undefined);
-    panels.push(fitPack(bank ?? key, [...tubes.values()]));
+    const list = [...tubes.values()];
+    panels.push(fitPack(bank ?? key, list.map((t) => t.map((p) => p.pos)), packIds(bank ?? key, list.map((t) => t.map((p) => p.id)))));
   }
+  // Every ID once: overlapping ranges would make a mask file ambiguous.
+  const seen = new Set<number>();
+  for (const p of panels)
+    for (let c = 0; c < p.nCols; c++)
+      for (let r = 0; r < p.nRows; r++) {
+        const id = p.ids[0] + c * p.ids[1] + r * p.ids[2];
+        if (seen.has(id)) throw new Error(`IDF: detector ID ${id} is used twice (${p.name})`);
+        seen.add(id);
+      }
   return { name: root.attrs.name ?? "", l1, panels };
 }
 
+/** A pack's IDs as id = start + tube·stepCol + pixel·stepRow, checked for every pixel. */
+function packIds(name: string, ids: (number | undefined)[][]): [number, number, number] {
+  const at = (c: number, r: number) => {
+    const v = ids[c]?.[r];
+    if (v === undefined) throw new Error(`IDF: ${name} tube ${c} pixel ${r} has no detector ID`);
+    return v;
+  };
+  const start = at(0, 0);
+  const stepCol = ids.length > 1 ? at(1, 0) - start : ids[0]!.length;
+  const stepRow = ids[0]!.length > 1 ? at(0, 1) - start : 1;
+  ids.forEach((tube, c) =>
+    tube.forEach((_, r) => {
+      if (at(c, r) !== start + c * stepCol + r * stepRow) throw new Error(`IDF: ${name}: detector IDs are not linear in tube and pixel`);
+    }),
+  );
+  return [start, stepCol, stepRow];
+}
+
 /** Fit a rectangle to a pack of tubes (each tube an ordered list of pixel centres). */
-function fitPack(name: string, tubes: V3[][]): Panel {
+function fitPack(name: string, tubes: V3[][], ids: [number, number, number]): Panel {
   const nCols = tubes.length;
   const nRows = Math.max(...tubes.map((t) => t.length));
   const all = tubes.flat();
@@ -240,5 +308,6 @@ function fitPack(name: string, tubes: V3[][]): Panel {
     nCols,
     nRows,
     planarity,
+    ids,
   };
 }

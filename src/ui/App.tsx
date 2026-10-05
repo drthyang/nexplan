@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type DragEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import type { CalcInput, CalcResult, CalcSuccess, TofInput } from "../app/compute.ts";
 import type { Polarization, PowderAxis } from "../core/diffraction/powder.ts";
 import { difcFromGeometry, type TofShape } from "../core/diffraction/tof.ts";
@@ -7,7 +7,7 @@ import { calculate, prewarmWorker } from "../workers/client.ts";
 import { Chip, cx, InfoBadge, Segmented, UnitField } from "./components.tsx";
 import { DEMOS } from "./demos.ts";
 import { CATALOG_GROUPS, GENERIC_INSTRUMENT } from "../core/ub/instrumentCatalog.ts";
-import { catalogEntry, chooseInstrument, DEFAULT_EXPERIMENT, DEFAULT_GONIO, limitedGoniometer, sampleKind, withEi, type ExperimentState, type GonioState } from "./experimentState.ts";
+import { catalogEntry, chooseInstrument, DEFAULT_EXPERIMENT, DEFAULT_GONIO, limitedGoniometer, masksOf, sampleKind, shadowsOf, withEi, type ExperimentState, type GonioState } from "./experimentState.ts";
 import { clearSession, loadSession, MAX_SAVED_CIF, saveSession, savedChoice, savedNumber, savedObject } from "./session.ts";
 import type { CwProfileSettings } from "./pages.tsx";
 import type { UbState } from "./ubShared.ts";
@@ -218,6 +218,11 @@ export function App() {
 
   // An SNS instrument in the header means neutron scattering with that instrument's beam.
   const entry = catalogEntry(experiment.instrumentId);
+  // Memoised by value, so the Orientation page's masked detectors are rebuilt only when the masks change.
+  const masksJson = JSON.stringify(masksOf(experiment));
+  const shadowsJson = JSON.stringify(shadowsOf(experiment));
+  const experimentMasks = useMemo(() => JSON.parse(masksJson) as ReturnType<typeof masksOf>, [masksJson]);
+  const experimentShadows = useMemo(() => JSON.parse(shadowsJson) as ReturnType<typeof shadowsOf>, [shadowsJson]);
   const sns = entry !== undefined;
   useEffect(() => {
     if (sns && radiation !== "neutron") changeRadiation("neutron");
@@ -573,7 +578,21 @@ export function App() {
                   onUb={setUb}
                   gonio={gonio}
                   onGonio={setGonio}
-                  instrument={entry ? { id: entry.id, name: entry.label, goniometer: limitedGoniometer(entry.goniometer, experiment.limits[entry.id]), angles: experiment.angles, onAngles: (angles) => setExperiment({ ...experiment, angles }), lambdaMin: experiment.lambdaMin, lambdaMax: experiment.lambdaMax } : undefined}
+                  instrument={
+                    entry
+                      ? {
+                          id: entry.id,
+                          name: entry.label,
+                          goniometer: limitedGoniometer(entry.goniometer, experiment.limits[entry.id]),
+                          angles: experiment.angles,
+                          onAngles: (angles) => setExperiment({ ...experiment, angles }),
+                          lambdaMin: experiment.lambdaMin,
+                          lambdaMax: experiment.lambdaMax,
+                          masks: experimentMasks,
+                          shadows: experimentShadows,
+                        }
+                      : undefined
+                  }
                 />
               )}
               {ok && tab === "powder" && !sns && (

@@ -7,7 +7,8 @@ import { useEffect, useMemo, useState } from "react";
 import { mulMat, mulVec } from "@materia/core/math/mat3";
 import type { CalcSuccess } from "../app/compute.ts";
 import { tofFromWavelength } from "../core/diffraction/tof.ts";
-import { rayHit, type DetectorHit } from "../core/instrument/detectors.ts";
+import { applyMasks, blockedAt, maskedPixelCount, type Shadows } from "../core/instrument/acceptance.ts";
+import { rayHit, type Blocked, type DetectorHit, type DetectorPanel } from "../core/instrument/detectors.ts";
 import { panelAngles } from "../core/instrument/simulate.ts";
 import { goniometerMatrix, laueCondition } from "../core/ub/goniometer.ts";
 import { CATALOG_GROUPS } from "../core/ub/instrumentCatalog.ts";
@@ -15,7 +16,7 @@ import type { InstrumentPreset } from "../core/ub/instruments.ts";
 import { SNS_INSTRUMENTS } from "../core/ub/instrumentsSns.ts";
 import type { GoniometerModel } from "../core/ub/goniometer.ts";
 import { UnitField } from "./components.tsx";
-import { chooseInstrument, limitedGoniometer, sampleKind, withLimits, type ExperimentState } from "./experimentState.ts";
+import { chooseInstrument, limitedGoniometer, masksOf, sampleKind, shadowsOf, withLimits, type ExperimentState } from "./experimentState.ts";
 import { fmt } from "./format.ts";
 import { hklMiss, presentReflections, simulatable, useViewUB, type HklMiss, type UbState } from "./ubShared.ts";
 
@@ -33,15 +34,28 @@ export interface SimPageProps {
 /** Wavelengths for display: four significant figures. */
 export const lam = (x: number) => Number(x.toPrecision(4));
 
-/** The selected SNS instrument with detectors, or undefined for the generic beam. */
+/**
+ * The selected SNS instrument with detectors, or undefined for the generic beam. Its detectors carry the user's
+ * masks (acceptance.ts), so every page records through them; `geometry` is the panels without masks. `shadows`
+ * are the sample environment's, and `blocked` the directions they block at the current goniometer setting.
+ */
 export function useSnsInstrument(exp: ExperimentState) {
   const catalog: InstrumentPreset | undefined = SNS_INSTRUMENTS.find((i) => i.id === exp.instrumentId);
   // The user's goniometer limits replace the catalog ranges everywhere the goniometer is used.
   const limits = exp.limits[exp.instrumentId];
-  const instrument = useMemo(() => catalog && { ...catalog, goniometer: limitedGoniometer(catalog.goniometer, limits) }, [catalog, limits]);
+  const masks = masksOf(exp);
+  const maskKey = JSON.stringify(masks);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- masks is rebuilt each render; maskKey is its value
+  const masked = useMemo(() => (catalog?.detectors ? applyMasks(catalog.detectors, masks) : undefined), [catalog, maskKey]);
+  const instrument = useMemo(() => catalog && { ...catalog, goniometer: limitedGoniometer(catalog.goniometer, limits), ...(masked ? { detectors: masked } : {}) }, [catalog, limits, masked]);
   const panels = useMemo(() => instrument?.detectors ?? [], [instrument]);
   const info = useMemo(() => panels.map(panelAngles), [panels]);
-  return { instrument, catalogGoniometer: catalog?.goniometer, panels, info, l1: instrument?.l1 ?? 0, sample: sampleKind(exp) };
+  const shapes = shadowsOf(exp);
+  const shadowKey = JSON.stringify(shapes);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- shapes is rebuilt each render; shadowKey is its value
+  const shadows = useMemo<Shadows | undefined>(() => (instrument && shapes.length ? { shapes, model: instrument.goniometer } : undefined), [instrument, shadowKey]);
+  const blocked = useMemo(() => blockedAt(shadows, exp.angles), [shadows, exp.angles]);
+  return { instrument, catalogGoniometer: catalog?.goniometer, geometry: catalog?.detectors ?? [], panels, info, l1: instrument?.l1 ?? 0, sample: sampleKind(exp), shadows, blocked };
 }
 
 export interface Observed {
@@ -52,8 +66,8 @@ export interface Observed {
   readonly hit: DetectorHit;
 }
 
-/** Reflections (strongest present) and what the detectors record at the current goniometer setting. */
-export function useObservations(result: CalcSuccess, ub: UbState, exp: ExperimentState, instrument: InstrumentPreset) {
+/** Reflections (strongest present) and what the detectors record at the current goniometer setting (`blocked`: the shadows there). */
+export function useObservations(result: CalcSuccess, ub: UbState, exp: ExperimentState, instrument: InstrumentPreset, blocked?: Blocked) {
   const { viewUB, fileUB } = useViewUB(result, ub);
   const points = useMemo(() => presentReflections(result), [result]);
   const panels = instrument.detectors ?? [];
@@ -68,13 +82,13 @@ export function useObservations(result: CalcSuccess, ub: UbState, exp: Experimen
       lambdas[i] = s.lambda;
       if (!(s.lambda >= exp.lambdaMin && s.lambda <= exp.lambdaMax)) return;
       status[i] = 1;
-      const hit = rayHit(panels, s.kf);
+      const hit = rayHit(panels, s.kf, blocked);
       if (!hit) return;
       status[i] = 2;
       obs.push({ index: i, lambda: s.lambda, twoTheta: s.twoTheta, azimuth: s.azimuth, hit });
     });
     return { status, lambdas, obs, inBand: status.reduce((n, v) => n + (v > 0 ? 1 : 0), 0) };
-  }, [R, viewUB, points, panels, exp.lambdaMin, exp.lambdaMax]);
+  }, [R, viewUB, points, panels, exp.lambdaMin, exp.lambdaMax, blocked]);
   const tofOf = (o: Observed) => tofFromWavelength((instrument.l1 ?? 0) + o.hit.l2, o.lambda);
   return { viewUB, fileUB, points, R, sim, tofOf };
 }
@@ -102,6 +116,14 @@ export function DMinNote({ result, info, lambdaMin, onDMin }: { result: CalcSucc
       )}
     </p>
   );
+}
+
+/** On the simulation pages other than Detectors: the masks and shadows in effect, which are set on the Detectors page. */
+export function AcceptanceNote({ panels, shadows }: { panels: readonly DetectorPanel[]; shadows: Shadows | undefined }) {
+  const c = maskedPixelCount(panels);
+  if (!c.pixels && !shadows) return null;
+  const parts = [c.pixels ? `${fmt((100 * c.pixels) / c.total, 1)} % of the pixels masked${c.panelsOff ? ` (${c.panelsOff} panel${c.panelsOff > 1 ? "s" : ""} off)` : ""}` : "", shadows ? `${shadows.shapes.length} sample-environment shadow${shadows.shapes.length > 1 ? "s" : ""}` : ""].filter(Boolean);
+  return <p className="dim-note">Recorded through {parts.join(" and ")}, set under Masks and shadows on the Detectors page.</p>;
 }
 
 /** Shown on a simulation page that needs an instrument (or a kind of instrument) the header does not have. */

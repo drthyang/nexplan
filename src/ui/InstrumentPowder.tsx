@@ -17,7 +17,7 @@ import { Card, Segmented } from "./components.tsx";
 import { CoverageChart, type CoverageLine } from "./CoverageChart.tsx";
 import { downloadText, exact, fmt, hklText } from "./format.ts";
 import { PowderPlot } from "./PowderPlot.tsx";
-import { DMinNote, defaultPanel, InstrumentRequired, lam, LOWEST_SUGGESTED_DMIN, suggestDMin, usePowderGroups, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
+import { AcceptanceNote, DMinNote, defaultPanel, InstrumentRequired, lam, LOWEST_SUGGESTED_DMIN, suggestDMin, usePowderGroups, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
 
 /** GSAS-II TOF profile of a POWGEN frame, held at the shortest d where the fitted parameters are physical. */
 function frameShape(pr: NonNullable<ChopperFrame["profile"]>): Extract<TofShape, { kind: "backToBack" }> {
@@ -31,14 +31,16 @@ const fwhmInD = (shape: TofShape, difc: number, d: number) => (shape.kind === "g
 
 export function InstrumentPowder(props: SimPageProps) {
   const { result, exp, onExp, onDMin } = props;
-  const { instrument, panels, info, l1 } = useSnsInstrument(exp);
+  // Panels carry the user's masks; the sample stays put, so the environment's shadows are those at the current setting.
+  const { instrument, panels, info, l1, blocked, shadows } = useSnsInstrument(exp);
   const { groups, groupOfD } = usePowderGroups(result);
   const [sel, setSel] = useState<number | null>(null);
   const [axis, setAxis] = useState<"tof" | "d" | "q">("tof");
   useEffect(() => setSel(null), [groups]);
-  const colorsCss = useMemo(() => info.map((a) => angleCss(a.twoThetaCenter)), [info]);
-  const covered = useMemo(() => coveredTwoTheta(info), [info]);
-  const panel = exp.panel !== null && exp.panel < panels.length ? exp.panel : panels.length ? defaultPanel(info) : 0;
+  const colorsCss = useMemo(() => info.map((a, i) => (panels[i]?.off ? "var(--border-strong)" : angleCss(a.twoThetaCenter))), [info, panels]);
+  const covered = useMemo(() => coveredTwoTheta(info.filter((_, i) => !panels[i]?.off)), [info, panels]);
+  const panel = exp.panel !== null && exp.panel < panels.length ? exp.panel : panels.length ? defaultPanel(info.map((a, i) => (panels[i]!.off ? { twoThetaCenter: Infinity } : a))) : 0;
+  const panelOff = panels[panel]?.off === true;
   const pa = info[panel];
   const mono = instrument?.incident;
   const lambda0 = (exp.lambdaMin + exp.lambdaMax) / 2;
@@ -53,9 +55,19 @@ export function InstrumentPowder(props: SimPageProps) {
       specs.map((spec) => {
         const idx = spec.panels.map((n) => panels.findIndex((q) => q.name === n)).filter((i) => i >= 0);
         const missing = spec.panels.filter((n) => !panels.some((q) => q.name === n));
-        return { spec, idx, missing, bank: focusedBank(spec.name, idx.map((i) => panels[i]!), l1, exp.lambdaMin, exp.lambdaMax, { ...(spec.twoThetaDeg !== undefined ? { twoThetaDeg: spec.twoThetaDeg } : {}), ...(spec.l2 !== undefined ? { l2: spec.l2 } : {}), ...(spec.difc !== undefined ? { difc: spec.difc } : {}) }) };
-      }).filter((f) => f.idx.length > 0),
-    [specs, panels, l1, exp.lambdaMin, exp.lambdaMax],
+        return {
+          spec,
+          idx,
+          missing,
+          bank: focusedBank(spec.name, idx.map((i) => panels[i]!), l1, exp.lambdaMin, exp.lambdaMax, {
+            ...(spec.twoThetaDeg !== undefined ? { twoThetaDeg: spec.twoThetaDeg } : {}),
+            ...(spec.l2 !== undefined ? { l2: spec.l2 } : {}),
+            ...(spec.difc !== undefined ? { difc: spec.difc } : {}),
+            ...(blocked ? { blocked } : {}),
+          }),
+        };
+      }).filter((f) => f.idx.length > 0 && f.bank.omega > 0), // a bank masked or shadowed throughout records nothing
+    [specs, panels, l1, exp.lambdaMin, exp.lambdaMax, blocked],
   );
   const byBank = focused.length > 0 && exp.powderView === "bank";
   const bankIndex = exp.bank !== null && exp.bank < focused.length ? exp.bank : focused.reduce((best, f, i) => (Math.abs(f.bank.twoThetaDeg - 90) < Math.abs(focused[best]!.bank.twoThetaDeg - 90) ? i : best), 0);
@@ -65,14 +77,14 @@ export function InstrumentPowder(props: SimPageProps) {
   const drawBank = useMemo(() => (fb ? focusedTofBank(fb.bank, longestD > 0 ? { dMax: longestD * 1.15 } : {}) : bank), [fb, bank, longestD]);
   const peaks = useMemo(
     () =>
-      !bank
+      !bank || (panelOff && !mono && !fb)
         ? []
         : mono
           ? cwPeaks(groups, { wavelength: lambda0, lorentz: true, polarization: { kind: "none" } }).filter((p) => covered.some(([a, b]) => p.twoTheta! >= a && p.twoTheta! <= b))
           : fb
             ? focusedPeaks(groups, fb.bank, exp.lambdaMin, exp.lambdaMax)
             : tofPeaks(groups, bank),
-    [mono, groups, bank, lambda0, covered, fb, exp.lambdaMin, exp.lambdaMax],
+    [mono, groups, bank, lambda0, covered, fb, exp.lambdaMin, exp.lambdaMax, panelOff],
   );
   // Peak widths from the instrument where published: NOMAD's measured Δd/d per bank, or the GSAS-II
   // profile of POWGEN's chosen frame (d-dependent, back-to-back exponentials ⊗ Gaussian).
@@ -251,7 +263,7 @@ export function InstrumentPowder(props: SimPageProps) {
             shade={cutoff ? { ...cutoff, label: !mono && axis === "q" ? `Q > ${fmt((2 * Math.PI) / calcDMin, 3)} Å⁻¹: not calculated` : `d < ${calcDMin} Å: not calculated` } : undefined}
           />
         ) : (
-          <p className="empty-note">{mono ? "No reflection lands on the detectors at this Ei (or above d_min)." : fb ? `No reflections fall in this bank's d range (${fmt(fb.bank.dMin, 3)}–${fmt(fb.bank.dMax, 2)} Å) above d_min.` : `No reflections fall in this panel's d range (${fmt(seen.dMin, 3)}–${fmt(seen.dMax, 2)} Å) above d_min.`}</p>
+          <p className="empty-note">{mono ? "No reflection lands on the detectors at this Ei (or above d_min)." : fb ? `No reflections fall in this bank's d range (${fmt(fb.bank.dMin, 3)}–${fmt(fb.bank.dMax, 2)} Å) above d_min.` : panelOff ? `${panels[panel]!.name} is switched off (Masks and shadows, on the Detectors page).` : `No reflections fall in this panel's d range (${fmt(seen.dMin, 3)}–${fmt(seen.dMax, 2)} Å) above d_min.`}</p>
         )}
         {selNote && <p className="selection-note">{selNote}</p>}
         <div className="plot-footer">
@@ -335,6 +347,7 @@ export function InstrumentPowder(props: SimPageProps) {
                 TOF window {fmt(fb.bank.difc * fb.bank.dMin, 0)}–{fmt(fb.bank.difc * fb.bank.dMax, 0)} µs on the focused DIFC · {peaks.length.toLocaleString()} peaks.
               </p>
               <DMinNote result={result} info={info} lambdaMin={exp.lambdaMin} onDMin={onDMin} />
+              <AcceptanceNote panels={panels} shadows={shadows} />
             </Card>
           ) : (
           <Card title="Panel" meta={panels[panel]!.name} info={`The pattern above is for this panel. ${instrument.source}`}>
@@ -385,6 +398,7 @@ export function InstrumentPowder(props: SimPageProps) {
               </p>
             )}
             <DMinNote result={result} info={info} lambdaMin={exp.lambdaMin} onDMin={onDMin} />
+            <AcceptanceNote panels={panels} shadows={shadows} />
           </Card>
           )}
         </div>

@@ -801,6 +801,7 @@ function buildInstruments() {
         nCols: p.nCols,
         nRows: p.nRows,
         planarity: Math.round(p.planarity * 1e9) / 1e9,
+        ids: p.ids,
       })),
     };
   });

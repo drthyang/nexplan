@@ -16,10 +16,14 @@
  *    per unit solid angle (Lorentz 1/(sinθ·sin2θ) per unit ring length, with
  *    the line profile converted from 2θ to ln d).
  * Values are scaled so that the strongest line peaks at 1.
+ *
+ * Masked pixels, switched-off panels and directions the sample environment
+ * blocks (acceptance.ts) record nothing: their cells are NaN, and ring traces
+ * break there.
  */
 import type { Vec3 } from "@materia/core/math/types";
 import { NEUTRON_MASS_OVER_H } from "../diffraction/tof.ts";
-import { panelHit, type DetectorPanel } from "./detectors.ts";
+import { panelHit, recordsAt, type Blocked, type DetectorPanel } from "./detectors.ts";
 import { panelCylinderPolygons } from "./simulate.ts";
 
 const DEG = Math.PI / 180;
@@ -98,8 +102,8 @@ export interface ElementCells {
 
 const twoThetaOf = (v: Vec3) => Math.acos(Math.max(-1, Math.min(1, v[2] / Math.hypot(...v)))) / DEG;
 
-/** Cell centres of a panel on an nx × ny grid, row-major from the (−w/2, −h/2) corner with rows along `up`. */
-export function panelCells(p: DetectorPanel, nx: number, ny: number): ElementCells {
+/** Cell centres of a panel on an nx × ny grid, row-major from the (−w/2, −h/2) corner with rows along `up`; NaN where nothing records. */
+export function panelCells(p: DetectorPanel, nx: number, ny: number, blocked?: Blocked): ElementCells {
   const twoTheta = new Float32Array(nx * ny);
   const l2 = new Float32Array(nx * ny);
   for (let j = 0; j < ny; j++)
@@ -107,8 +111,10 @@ export function panelCells(p: DetectorPanel, nx: number, ny: number): ElementCel
       const x = ((i + 0.5) / nx - 0.5) * p.width;
       const y = ((j + 0.5) / ny - 0.5) * p.height;
       const v: Vec3 = [p.center[0] + x * p.base[0] + y * p.up[0], p.center[1] + x * p.base[1] + y * p.up[1], p.center[2] + x * p.base[2] + y * p.up[2]];
-      twoTheta[j * nx + i] = twoThetaOf(v);
-      l2[j * nx + i] = Math.hypot(...v);
+      const r = Math.hypot(...v);
+      const records = recordsAt(p, x, y) && !blocked?.(v[0] / r, v[1] / r, v[2] / r);
+      twoTheta[j * nx + i] = records ? twoThetaOf(v) : NaN;
+      l2[j * nx + i] = records ? r : NaN;
     }
   return { twoTheta, l2 };
 }
@@ -118,7 +124,7 @@ export function panelCells(p: DetectorPanel, nx: number, ny: number): ElementCel
  * γ ∈ [−180°, 180°], ν ∈ [ν_max, −ν_max] (top row first): each cell holds the
  * nearest panel its direction hits, or NaN.
  */
-export function mapCells(panels: readonly DetectorPanel[], width: number, height: number, nuMax: number): ElementCells & { readonly panel: Int16Array } {
+export function mapCells(panels: readonly DetectorPanel[], width: number, height: number, nuMax: number, blocked?: Blocked): ElementCells & { readonly panel: Int16Array } {
   const n = width * height;
   const twoTheta = new Float32Array(n).fill(NaN);
   const l2 = new Float32Array(n).fill(Infinity);
@@ -148,7 +154,23 @@ export function mapCells(panels: readonly DetectorPanel[], width: number, height
       }
     }
   });
-  for (let c = 0; c < n; c++) if (panel[c]! < 0) l2[c] = NaN;
+  for (let c = 0; c < n; c++) {
+    if (panel[c]! < 0) {
+      l2[c] = NaN;
+      continue;
+    }
+    // The nearest panel stops the ray: nothing is recorded when it is masked there or the direction is blocked.
+    const p = panels[panel[c]!]!;
+    if (!p.off && !p.mask && !blocked) continue;
+    const nu = (nuMax - ((Math.floor(c / width) + 0.5) / height) * 2 * nuMax) * DEG;
+    const g = (-180 + (((c % width) + 0.5) / width) * 360) * DEG;
+    const u: Vec3 = [Math.cos(nu) * Math.sin(g), Math.sin(nu), Math.cos(nu) * Math.cos(g)];
+    const h = panelHit(p, u);
+    if (h && recordsAt(p, h.x, h.y) && !blocked?.(u[0], u[1], u[2])) continue;
+    panel[c] = -1;
+    twoTheta[c] = NaN;
+    l2[c] = NaN;
+  }
   return { twoTheta, l2, panel };
 }
 
@@ -159,7 +181,7 @@ export function mapCells(panels: readonly DetectorPanel[], width: number, height
  * polylines of hit positions (lab frame, m), split where the ring leaves a
  * panel. Independent of the element grids, so it checks the ring images.
  */
-export function ringTrace(panels: readonly DetectorPanel[], l1: number, slice: RingSlice, d: number, nPhi = 720): { panel: number; points: Vec3[] }[] {
+export function ringTrace(panels: readonly DetectorPanel[], l1: number, slice: RingSlice, d: number, nPhi = 720, blocked?: Blocked): { panel: number; points: Vec3[] }[] {
   const out: { panel: number; points: Vec3[] }[] = [];
   let cur: { panel: number; points: Vec3[] } | undefined;
   for (let k = 0; k <= nPhi; k++) {
@@ -174,16 +196,16 @@ export function ringTrace(panels: readonly DetectorPanel[], l1: number, slice: R
       }
       const tt = 2 * Math.asin(s);
       const u: Vec3 = [Math.sin(tt) * Math.cos(phi), Math.sin(tt) * Math.sin(phi), Math.cos(tt)];
-      let best: { panel: number; t: number } | undefined;
+      let best: { panel: number; t: number; records: boolean } | undefined;
       panels.forEach((p, i) => {
         const h = panelHit(p, u);
-        if (h && (!best || h.t < best.t)) best = { panel: i, t: h.t };
+        if (h && (!best || h.t < best.t)) best = { panel: i, t: h.t, records: recordsAt(p, h.x, h.y) };
       });
-      if (!best) {
+      const b = best as { panel: number; t: number; records: boolean } | undefined;
+      if (!b || !b.records || blocked?.(u[0], u[1], u[2])) {
         hit = undefined;
         break;
       }
-      const b = best as { panel: number; t: number };
       hit = { panel: b.panel, position: [u[0] * b.t, u[1] * b.t, u[2] * b.t] };
       const next = sliceLambda(slice, l1 + b.t);
       if (Math.abs(next - lambda) <= 1e-12 * lambda) break;

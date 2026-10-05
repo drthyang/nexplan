@@ -9,6 +9,8 @@
  *     the band and k_f on a panel (the same test as observeAt, with each panel's
  *     angular extent checked first), and how it records each wanted reflection:
  *     well placed (λ near mid band, away from the panel edges), recorded, or not.
+ *     Masked pixels, switched-off panels and the sample environment's shadows
+ *     (acceptance.ts) are not recorded.
  *  3. Greedy maximum coverage: add the candidate that places the most wanted
  *     reflections well that were not yet, then records the most wanted ones not
  *     yet recorded, then the most new families; once every reachable family is
@@ -24,7 +26,8 @@
 import type { Mat3, Vec3 } from "@materia/core/math/types";
 import { mulVec } from "@materia/core/math/mat3";
 import { goniometerMatrix, type GoniometerModel } from "../ub/goniometer.ts";
-import type { DetectorPanel } from "./detectors.ts";
+import { blockedAt, type ShadowShape, type Shadows } from "./acceptance.ts";
+import { recordsAt, type Blocked, type DetectorPanel } from "./detectors.ts";
 
 const NICE_STEPS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 30, 45, 60, 90];
 
@@ -65,6 +68,7 @@ export function candidateGrid(model: GoniometerModel, base: readonly number[], m
 }
 
 interface PreparedPanel {
+  readonly src: DetectorPanel;
   readonly n: Vec3;
   readonly cn: number;
   readonly c: Vec3;
@@ -95,14 +99,16 @@ function preparePanel(p: DetectorPanel): PreparedPanel {
     const corner = [0, 1, 2].map((k) => p.center[k]! + (sx * p.width * p.base[k]!) / 2 + (sy * p.height * p.up[k]!) / 2) as unknown as Vec3;
     cosR = Math.min(cosR, dot(dir, unit(corner)));
   }
-  return { n, cn: dot(p.center, n), c: p.center, base: p.base, up: p.up, hw: p.width / 2, hh: p.height / 2, dir, cosR: cosR - 1e-9 };
+  return { src: p, n, cn: dot(p.center, n), c: p.center, base: p.base, up: p.up, hw: p.width / 2, hh: p.height / 2, dir, cosR: cosR - 1e-9 };
 }
 
 /**
  * The panel hit along unit u, as the larger of |x|/(w/2) and |y|/(h/2) of the hit
- * from the panel centre (0 at the centre, 1 at an edge); −1 when nothing is hit.
+ * from the panel centre (0 at the centre, 1 at an edge); −1 when nothing records
+ * it (no panel, a masked pixel or switched-off panel, or a shadow).
  */
-function hitOffset(panels: readonly PreparedPanel[], ux: number, uy: number, uz: number): number {
+function hitOffset(panels: readonly PreparedPanel[], ux: number, uy: number, uz: number, blocked: Blocked | undefined): number {
+  if (blocked?.(ux, uy, uz)) return -1;
   for (const p of panels) {
     if (ux * p.dir[0] + uy * p.dir[1] + uz * p.dir[2] < p.cosR) continue;
     const denom = ux * p.n[0] + uy * p.n[1] + uz * p.n[2];
@@ -112,9 +118,12 @@ function hitOffset(panels: readonly PreparedPanel[], ux: number, uy: number, uz:
     const dx = ux * t - p.c[0];
     const dy = uy * t - p.c[1];
     const dz = uz * t - p.c[2];
-    const fx = Math.abs(dx * p.base[0] + dy * p.base[1] + dz * p.base[2]) / p.hw;
-    const fy = Math.abs(dx * p.up[0] + dy * p.up[1] + dz * p.up[2]) / p.hh;
-    if (fx <= 1 && fy <= 1) return Math.max(fx, fy);
+    const x = dx * p.base[0] + dy * p.base[1] + dz * p.base[2];
+    const y = dx * p.up[0] + dy * p.up[1] + dz * p.up[2];
+    const fx = Math.abs(x) / p.hw;
+    const fy = Math.abs(y) / p.hh;
+    // The ray stops at the first panel it meets, recorded there or not.
+    if (fx <= 1 && fy <= 1) return recordsAt(p.src, x, y) ? Math.max(fx, fy) : -1;
   }
   return -1;
 }
@@ -151,7 +160,7 @@ function compile(UB: Mat3, targets: readonly PlanTarget[]): Compiled {
  * Where reflection i of `c` lands at setting R: its λ and the hit offset from
  * the panel centre (hitOffset), or undefined when it is not recorded.
  */
-function landing(R: Mat3, c: Compiled, i: number, panels: readonly PreparedPanel[], lambdaMin: number, lambdaMax: number): { lambda: number; offset: number } | undefined {
+function landing(R: Mat3, c: Compiled, i: number, panels: readonly PreparedPanel[], lambdaMin: number, lambdaMax: number, blocked?: Blocked): { lambda: number; offset: number } | undefined {
   const a = c.q[3 * i]!;
   const b = c.q[3 * i + 1]!;
   const d = c.q[3 * i + 2]!;
@@ -164,12 +173,12 @@ function landing(R: Mat3, c: Compiled, i: number, panels: readonly PreparedPanel
   const y = R[1][0] * a + R[1][1] * b + R[1][2] * d;
   const kz = 1 / lambda + z;
   const n = Math.hypot(x, y, kz);
-  const offset = hitOffset(panels, x / n, y / n, kz / n);
+  const offset = hitOffset(panels, x / n, y / n, kz / n, blocked);
   return offset < 0 ? undefined : { lambda, offset };
 }
 
 /** Dense families recorded at goniometer setting R (the landing test, inlined without allocation). */
-function familiesAt(R: Mat3, c: Compiled, panels: readonly PreparedPanel[], lambdaMin: number, lambdaMax: number, stamp: Int32Array, gen: number): Int32Array {
+function familiesAt(R: Mat3, c: Compiled, panels: readonly PreparedPanel[], lambdaMin: number, lambdaMax: number, stamp: Int32Array, gen: number, blocked?: Blocked): Int32Array {
   const out: number[] = [];
   const [r0, r1, r2] = R;
   for (let i = 0; i < c.fam.length; i++) {
@@ -187,7 +196,7 @@ function familiesAt(R: Mat3, c: Compiled, panels: readonly PreparedPanel[], lamb
     const y = r1[0] * a + r1[1] * b + r1[2] * d;
     const kz = 1 / lambda + z;
     const n = Math.hypot(x, y, kz);
-    if (hitOffset(panels, x / n, y / n, kz / n) >= 0) {
+    if (hitOffset(panels, x / n, y / n, kz / n, blocked) >= 0) {
       stamp[f] = gen;
       out.push(f);
     }
@@ -213,7 +222,7 @@ export const DEFAULT_PLACEMENT: Placement = { bandFraction: 0.5, edgeFraction: 0
  * offset from the panel centre, so 0 is mid band on a panel centre and 1 a band end or a panel edge
  * (Infinity when not recorded). The "fewest" goal prefers settings that centre the wanted reflections.
  */
-function placementOf(R: Mat3, members: Compiled, panels: readonly PreparedPanel[], lambdaMin: number, lambdaMax: number, placement: Placement): { level: 0 | 1 | 2; cost: number } {
+function placementOf(R: Mat3, members: Compiled, panels: readonly PreparedPanel[], lambdaMin: number, lambdaMax: number, placement: Placement, blocked?: Blocked): { level: 0 | 1 | 2; cost: number } {
   const mid = (lambdaMin + lambdaMax) / 2;
   const half = (lambdaMax - lambdaMin) / 2 || 1;
   const halfWidth = placement.bandFraction * half;
@@ -221,7 +230,7 @@ function placementOf(R: Mat3, members: Compiled, panels: readonly PreparedPanel[
   let level: 0 | 1 | 2 = 0;
   let cost = Infinity;
   for (let i = 0; i < members.fam.length; i++) {
-    const hit = landing(R, members, i, panels, lambdaMin, lambdaMax);
+    const hit = landing(R, members, i, panels, lambdaMin, lambdaMax, blocked);
     if (!hit) continue;
     const c = Math.max(Math.abs(hit.lambda - mid) / half, hit.offset);
     if (Math.abs(hit.lambda - mid) <= halfWidth + 1e-12 && hit.offset <= maxOffset + 1e-12) {
@@ -236,7 +245,8 @@ function placementOf(R: Mat3, members: Compiled, panels: readonly PreparedPanel[
   return { level, cost };
 }
 
-const placementLevel = (R: Mat3, members: Compiled, panels: readonly PreparedPanel[], lambdaMin: number, lambdaMax: number, placement: Placement) => placementOf(R, members, panels, lambdaMin, lambdaMax, placement).level;
+const placementLevel = (R: Mat3, members: Compiled, panels: readonly PreparedPanel[], lambdaMin: number, lambdaMax: number, placement: Placement, blocked?: Blocked) =>
+  placementOf(R, members, panels, lambdaMin, lambdaMax, placement, blocked).level;
 
 const compileMembers = (UB: Mat3, members: readonly Vec3[]) => compile(UB, members.map((h) => ({ h, family: 0 })));
 
@@ -337,13 +347,22 @@ function greedyDense(sets: readonly Int32Array[], n: number, nIds: number, cover
 }
 
 /** For each family, the number of the settings that record it. */
-export function familyCounts(model: GoniometerModel, settings: readonly (readonly number[])[], UB: Mat3, targets: readonly PlanTarget[], panels: readonly DetectorPanel[], lambdaMin: number, lambdaMax: number): Map<number, number> {
+export function familyCounts(
+  model: GoniometerModel,
+  settings: readonly (readonly number[])[],
+  UB: Mat3,
+  targets: readonly PlanTarget[],
+  panels: readonly DetectorPanel[],
+  lambdaMin: number,
+  lambdaMax: number,
+  shadows?: Shadows,
+): Map<number, number> {
   const prepared = panels.map(preparePanel);
   const c = compile(UB, targets);
   const stamp = new Int32Array(c.ids.length).fill(-1);
   const counts = new Map<number, number>();
   settings.forEach((s, k) => {
-    for (const f of familiesAt(goniometerMatrix(model, s), c, prepared, lambdaMin, lambdaMax, stamp, k)) counts.set(c.ids[f]!, (counts.get(c.ids[f]!) ?? 0) + 1);
+    for (const f of familiesAt(goniometerMatrix(model, s), c, prepared, lambdaMin, lambdaMax, stamp, k, blockedAt(shadows, s))) counts.set(c.ids[f]!, (counts.get(c.ids[f]!) ?? 0) + 1);
   });
   return counts;
 }
@@ -358,14 +377,16 @@ export function wantedStatus(
   lambdaMin: number,
   lambdaMax: number,
   placement: Placement = DEFAULT_PLACEMENT,
+  shadows?: Shadows,
 ): { recorded: number; well: number }[] {
   const prepared = panels.map(preparePanel);
   const W = wanted.map((m) => compileMembers(UB, m));
   const out = W.map(() => ({ recorded: 0, well: 0 }));
   for (const s of settings) {
     const R = goniometerMatrix(model, s);
+    const blocked = blockedAt(shadows, s);
     W.forEach((m, w) => {
-      const level = placementLevel(R, m, prepared, lambdaMin, lambdaMax, placement);
+      const level = placementLevel(R, m, prepared, lambdaMin, lambdaMax, placement, blocked);
       if (level >= 1) out[w]!.recorded++;
       if (level === 2) out[w]!.well++;
     });
@@ -386,6 +407,8 @@ export interface SuggestInput {
   /** Settings already in the list (count as measured). */
   readonly existing: readonly (readonly number[])[];
   readonly panels: readonly DetectorPanel[];
+  /** The sample environment's shadows (turning with `model`'s axes where mounted on one). */
+  readonly shadows?: readonly ShadowShape[];
   readonly lambdaMin: number;
   readonly lambdaMax: number;
   /** "coverage": n settings; "fewest": at most n (PlanGoal). */
@@ -423,10 +446,12 @@ export function suggestSettings(input: SuggestInput, onProgress?: (done: number,
   const W = input.wanted.map((m) => compileMembers(input.UB, m));
   const stamp = new Int32Array(c.ids.length).fill(-1);
   let gen = 0;
+  const shadows: Shadows | undefined = input.shadows?.length ? { shapes: input.shadows, model: input.model } : undefined;
   const evaluate = (angles: readonly number[]) => {
     const R = goniometerMatrix(input.model, angles);
-    const placed = W.map((m) => placementOf(R, m, panels, input.lambdaMin, input.lambdaMax, placement));
-    return { families: familiesAt(R, c, panels, input.lambdaMin, input.lambdaMax, stamp, gen++), levels: Uint8Array.from(placed, (p) => p.level), costs: Float64Array.from(placed, (p) => p.cost) };
+    const blocked = blockedAt(shadows, angles);
+    const placed = W.map((m) => placementOf(R, m, panels, input.lambdaMin, input.lambdaMax, placement, blocked));
+    return { families: familiesAt(R, c, panels, input.lambdaMin, input.lambdaMax, stamp, gen++, blocked), levels: Uint8Array.from(placed, (p) => p.level), costs: Float64Array.from(placed, (p) => p.cost) };
   };
   const covered: number[] = [];
   const before = new Uint8Array(W.length);
@@ -532,20 +557,39 @@ function refine(model: GoniometerModel, start: readonly number[], step: number, 
 }
 
 /** For each target, the number of settings that record it (same test as the search). */
-export function targetCoverage(model: GoniometerModel, settings: readonly (readonly number[])[], UB: Mat3, targets: readonly PlanTarget[], panels: readonly DetectorPanel[], lambdaMin: number, lambdaMax: number): Uint16Array {
+export function targetCoverage(
+  model: GoniometerModel,
+  settings: readonly (readonly number[])[],
+  UB: Mat3,
+  targets: readonly PlanTarget[],
+  panels: readonly DetectorPanel[],
+  lambdaMin: number,
+  lambdaMax: number,
+  shadows?: Shadows,
+): Uint16Array {
   const prepared = panels.map(preparePanel);
   const c = compile(UB, targets);
   const counts = new Uint16Array(targets.length);
   for (const s of settings) {
     const R = goniometerMatrix(model, s);
+    const blocked = blockedAt(shadows, s);
     targets.forEach((_, i) => {
-      if (landing(R, c, i, prepared, lambdaMin, lambdaMax)) counts[i]!++;
+      if (landing(R, c, i, prepared, lambdaMin, lambdaMax, blocked)) counts[i]!++;
     });
   }
   return counts;
 }
 
 /** For tests: the hit offset and λ of one hkl at one setting, through the same path as the search. */
-export function landingOf(model: GoniometerModel, angles: readonly number[], UB: Mat3, h: Vec3, panels: readonly DetectorPanel[], lambdaMin: number, lambdaMax: number): { lambda: number; offset: number } | undefined {
-  return landing(goniometerMatrix(model, angles), compileMembers(UB, [h]), 0, panels.map(preparePanel), lambdaMin, lambdaMax);
+export function landingOf(
+  model: GoniometerModel,
+  angles: readonly number[],
+  UB: Mat3,
+  h: Vec3,
+  panels: readonly DetectorPanel[],
+  lambdaMin: number,
+  lambdaMax: number,
+  shadows?: Shadows,
+): { lambda: number; offset: number } | undefined {
+  return landing(goniometerMatrix(model, angles), compileMembers(UB, [h]), 0, panels.map(preparePanel), lambdaMin, lambdaMax, blockedAt(shadows, angles));
 }

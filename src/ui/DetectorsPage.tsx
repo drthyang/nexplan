@@ -26,7 +26,10 @@ import { Card, Segmented } from "./components.tsx";
 import { DetectorMap, type MapRing, type MapSpot } from "./DetectorMap.tsx";
 import { fmt, hklText } from "./format.ts";
 import { byHkl, byNumber, byText, SortTh, useSort } from "./sortable.tsx";
-import { flightPathRange, paintLambdaMap, paintLambdaPanels, paintMap, paintPanels, panelGrids } from "./ringImages.ts";
+import { flightPathRange, paintAcceptanceMap, paintLambdaMap, paintLambdaPanels, paintMap, paintPanels, panelGrids } from "./ringImages.ts";
+import { AcceptanceCard } from "./AcceptanceCard.tsx";
+import type { Shadows } from "../core/instrument/acceptance.ts";
+import type { Blocked, DetectorPanel } from "../core/instrument/detectors.ts";
 import { DMinNote, defaultPanel, findHkl, GoniometerLimits, HklField, HklNotice, InstrumentRequired, lam, useHklPick, useObservations, usePowderGroups, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
 import { familyMembers, PRESENT_CAP } from "./ubShared.ts";
 import type { GoniometerModel } from "../core/ub/goniometer.ts";
@@ -44,11 +47,33 @@ type ObsKey = "hkl" | "d" | "lam" | "tof" | "tth" | "az" | "panel" | "col" | "ro
 
 interface ModeProps extends SimPageProps {
   readonly instrument: InstrumentPreset;
+  /** Panels with the user's masks; `geometry` without them. */
   readonly panels: NonNullable<InstrumentPreset["detectors"]>;
+  readonly geometry: readonly DetectorPanel[];
   readonly info: readonly PanelAngles[];
   readonly l1: number;
   readonly catalogGoniometer: GoniometerModel;
+  /** The sample environment's shadows, and the directions they block at the current setting. */
+  readonly shadows: Shadows | undefined;
+  readonly blocked: Blocked | undefined;
 }
+
+/** The detector map's overlay of masked pixels and shadows (ringImages.ts paintAcceptanceMap), with the geometry raster cached. */
+function useAcceptanceOverlay(geometry: readonly DetectorPanel[], panels: readonly DetectorPanel[], blocked: Blocked | undefined, theme: "light" | "dark") {
+  const cache = useRef<{ key: string; of: readonly DetectorPanel[]; cells: ReturnType<typeof mapCells> } | null>(null);
+  return useCallback(
+    (w: number, h: number, nuMax: number) => {
+      if (!blocked && !panels.some((p) => p.off || p.mask)) return undefined;
+      const key = `${w}x${h}x${nuMax}`;
+      if (cache.current?.key !== key || cache.current.of !== geometry) cache.current = { key, of: geometry, cells: mapCells(geometry, w, h, nuMax) };
+      return paintAcceptanceMap(cache.current.cells, panels, w, h, nuMax, blocked, theme);
+    },
+    [geometry, panels, blocked, theme],
+  );
+}
+
+/** Panels that record anything: all of them, or undefined when none is switched off (for the views' highlight). */
+const panelsOn = (panels: readonly DetectorPanel[]) => (panels.some((p) => p.off) ? new Set(panels.flatMap((p, i) => (p.off ? [] : [i]))) : undefined);
 
 export function DetectorsPage(props: SimPageProps) {
   const sns = useSnsInstrument(props.exp);
@@ -58,15 +83,15 @@ export function DetectorsPage(props: SimPageProps) {
         The Detectors page shows a real SNS detector array (from the Mantid instrument definition) with the spots, coverage or powder rings of this structure. Pick an instrument here or in the header.
       </InstrumentRequired>
     );
-  const mode: ModeProps = { ...props, instrument: sns.instrument, catalogGoniometer: sns.catalogGoniometer!, panels: sns.panels, info: sns.info, l1: sns.l1 };
+  const mode: ModeProps = { ...props, instrument: sns.instrument, catalogGoniometer: sns.catalogGoniometer!, panels: sns.panels, geometry: sns.geometry, info: sns.info, l1: sns.l1, shadows: sns.shadows, blocked: sns.blocked };
   const key = `${sns.instrument.id}-${sns.sample}`;
   return sns.sample === "powder" ? <PowderDetectors key={key} {...mode} /> : <CrystalDetectors key={key} {...mode} />;
 }
 
 /* ------------------------------------------------------------------ single crystal */
 
-function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrientation, instrument, catalogGoniometer, panels, info }: ModeProps) {
-  const { viewUB, fileUB, points, sim, tofOf } = useObservations(result, ub, exp, instrument);
+function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrientation, instrument, catalogGoniometer, panels, geometry, info, shadows, blocked }: ModeProps) {
+  const { viewUB, fileUB, points, sim, tofOf } = useObservations(result, ub, exp, instrument, blocked);
   const [selected, setSelected] = useState<number | null>(null);
   const [panelFilter, setPanelFilter] = useState<number | null>(null);
   useEffect(() => {
@@ -121,7 +146,7 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
             ? (familyMembers(result, target.family) as Vec3[])
             : [target.h];
       try {
-        const solver = coverageSolver(instrument.goniometer, viewUB, hs, exp.lambdaMin, exp.lambdaMax);
+        const solver = coverageSolver(instrument.goniometer, viewUB, hs, exp.lambdaMin, exp.lambdaMax, shadows);
         const lambdas = coveragePanelLambdas(panels, grids, solver);
         if (alive) setCoverage({ solver, lambdas, targets: hs.length, of: points, key: targetKey });
       } catch (e) {
@@ -134,15 +159,16 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
       clearTimeout(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [show, target, equivalents, points, instrument, viewUB, panels, grids, exp.lambdaMin, exp.lambdaMax]);
+  }, [show, target, equivalents, points, instrument, viewUB, panels, grids, exp.lambdaMin, exp.lambdaMax, shadows]);
   const covOn = coverage !== null && "lambdas" in coverage && target !== undefined;
   const covImages = useMemo(() => (covOn ? paintLambdaPanels(grids, (coverage as { lambdas: Float32Array[] }).lambdas, exp.lambdaMin, exp.lambdaMax) : undefined), [covOn, coverage, grids, exp.lambdaMin, exp.lambdaMax]);
-  const mapCache = useRef<{ key: string; cells: ReturnType<typeof mapCells> } | null>(null);
+  const mapCache = useRef<{ key: string; of: readonly DetectorPanel[]; cells: ReturnType<typeof mapCells> } | null>(null);
   const covRaster = useCallback(
     (w: number, h: number, nuMax: number) => {
       if (!coverage || !("solver" in coverage)) return undefined;
       const key = `${w}x${h}x${nuMax}`;
-      if (mapCache.current?.key !== key) mapCache.current = { key, cells: mapCells(panels, w, h, nuMax) };
+      // Masked cells drop out here; the solver handles the shadows (those on a stage depend on its angles).
+      if (mapCache.current?.key !== key || mapCache.current.of !== panels) mapCache.current = { key, of: panels, cells: mapCells(panels, w, h, nuMax) };
       const panelOf = mapCache.current.cells.panel;
       return paintLambdaMap(panelOf, coverageMapLambdas(panelOf, w, h, nuMax, coverage.solver), w, h, exp.lambdaMin, exp.lambdaMax);
     },
@@ -157,15 +183,16 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
     const reached = lamArr.filter((l) => l.some((v) => !Number.isNaN(v))).length;
     let cells = 0;
     let inWindow = 0;
+    // The window counts every pixel inside it, masked or shadowed too, so the fraction shows what they cost.
     grids.forEach((g, k) => {
-      const tt = panelCells(panels[k]!, g.nx, g.ny).twoTheta;
+      const tt = panelCells(geometry[k]!, g.nx, g.ny).twoTheta;
       tt.forEach((t, c) => {
         if (covWindow && t >= covWindow.min && t <= covWindow.max) inWindow++;
         if (!Number.isNaN(lamArr[k]![c]!)) cells++;
       });
     });
     return { reached, fraction: inWindow ? cells / inWindow : 0 };
-  }, [covOn, coverage, grids, panels, covWindow]);
+  }, [covOn, coverage, grids, geometry, covWindow]);
   const sweep = free.map(({ ax }) => `${ax.name} ${ax.min}–${Math.min(ax.max, ax.min + 360)}°`).join(", ");
   // Reaching no panel leaves the map blank: said as a warning, not in the dim status line.
   const covNone = !covBusy && coverage !== null && covStats !== undefined && covStats.reached === 0;
@@ -182,6 +209,8 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
               : `(${hklText(target.h)}) d ${fmt(target.d, 4)} Å${coverage.targets > 1 ? ` + ${coverage.targets - 1} equivalents` : ""}: reachable on ${covStats.reached} of ${panels.length} panels, ${fmt(100 * covStats.fraction, 1)} % of the detector pixels inside its Bragg window 2θ ${fmt(covWindow?.min ?? NaN, 1)}–${fmt(covWindow?.max ?? NaN, 1)}° · solved exactly for ${sweep}`
             : "";
   const togglePanel = (i: number) => setPanelFilter((p) => (p === i ? null : i));
+  const overlay = useAcceptanceOverlay(geometry, panels, blocked, theme);
+  const on = useMemo(() => panelsOn(panels), [panels]);
   const [sort, onSort] = useSort<ObsKey>({ key: "f2", dir: "desc" }, { d: "desc", f2: "desc" });
   const sortProps = { sort, onSort };
   const shownObs = useMemo(() => sim.obs.filter((o) => panelFilter === null || o.hit.panel === panelFilter), [sim, panelFilter]);
@@ -248,6 +277,7 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
               instrumentName={instrument.goniometer.label}
               selectedPanel={covOn ? null : (selObs?.hit.panel ?? panelFilter)}
               onPanelClick={togglePanel}
+              {...(on ? { highlight: on } : {})}
               legend={lambdaLegend}
               {...(covImages ? { panelImages: covImages, summary: `coverage of (${hklText(target!.h)})${equivalents ? " and equivalents" : ""} over the goniometer range` } : {})}
             />
@@ -323,6 +353,7 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
             </p>
             <DMinNote result={result} info={info} lambdaMin={exp.lambdaMin} onDMin={onDMin} />
           </Card>
+          <AcceptanceCard exp={exp} onExp={onExp} geometry={geometry} panels={panels} goniometer={instrument.goniometer} />
         </div>
       </div>
 
@@ -335,7 +366,7 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
             : "Every panel projected onto a cylinder around the sample with its axis vertical: γ is the horizontal angle from the beam (positive towards +x), ν the elevation. Dashed curves are cones of constant 2θ (Debye–Scherrer rings). Hover a spot or panel for details; click a spot to select it, a panel to filter the table."
         }
       >
-        <DetectorMap {...(covOn ? { raster: covRaster, rings: covRings } : {})} panels={panels} spots={covOn ? [] : mapSpots} lambdaMin={exp.lambdaMin} lambdaMax={exp.lambdaMax} selected={selected} onSelect={setSelected} selectedPanel={covOn ? null : (selObs?.hit.panel ?? panelFilter)} onPanelClick={togglePanel} />
+        <DetectorMap {...(covOn ? { raster: covRaster, rings: covRings } : {})} overlay={overlay} panels={panels} spots={covOn ? [] : mapSpots} lambdaMin={exp.lambdaMin} lambdaMax={exp.lambdaMax} selected={selected} onSelect={setSelected} selectedPanel={covOn ? null : (selObs?.hit.panel ?? panelFilter)} onPanelClick={togglePanel} />
         <p className="plot-hint">{lambdaLegend}</p>
       </Card>
 
@@ -416,7 +447,7 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
 
 /* ------------------------------------------------------------------ powder */
 
-function PowderDetectors({ result, theme, exp, onExp, onDMin, instrument, panels, info, l1 }: ModeProps) {
+function PowderDetectors({ result, theme, exp, onExp, onDMin, instrument, panels, geometry, info, l1, blocked }: ModeProps) {
   const colorsHex = useMemo(() => info.map((a) => angleHex(a.twoThetaCenter)), [info]);
   const colorsCss = useMemo(() => info.map((a) => angleCss(a.twoThetaCenter)), [info]);
   const { groups } = usePowderGroups(result);
@@ -434,7 +465,8 @@ function PowderDetectors({ result, theme, exp, onExp, onDMin, instrument, panels
   const ringsOn = display === "rings";
   const [sliceWidth, setSliceWidth] = useState(0.01);
   const [playing, setPlaying] = useState(false);
-  const grids = useMemo(() => panelGrids(panels), [panels]);
+  // The sample stays put, so the environment's shadows are those at the current setting.
+  const grids = useMemo(() => panelGrids(panels, blocked), [panels, blocked]);
   const [lMin, lMax] = useMemo(() => flightPathRange(grids, l1), [grids, l1]);
   const lNom = useMemo(() => l1 + [...info.map((a) => a.l2)].sort((a, b) => a - b)[Math.floor(info.length / 2)]!, [info, l1]);
   const tMin = NEUTRON_MASS_OVER_H * lMin * exp.lambdaMin;
@@ -464,15 +496,16 @@ function PowderDetectors({ result, theme, exp, onExp, onDMin, instrument, panels
   const frame = useMemo(() => (ringsOn ? paintPanels(grids, ringProf, slice, l1) : undefined), [ringsOn, grids, ringProf, slice, l1]);
   const panelImages = frame?.images;
   const gain = frame?.gain ?? 1;
-  const mapCache = useRef<{ key: string; cells: ReturnType<typeof mapCells> } | null>(null);
+  const mapCache = useRef<{ key: string; of: readonly DetectorPanel[]; blocked: Blocked | undefined; cells: ReturnType<typeof mapCells> } | null>(null);
   const raster = useCallback(
     (w: number, h: number, nuMax: number) => {
       const key = `${w}x${h}x${nuMax}`;
-      if (mapCache.current?.key !== key) mapCache.current = { key, cells: mapCells(panels, w, h, nuMax) };
+      if (mapCache.current?.key !== key || mapCache.current.of !== panels || mapCache.current.blocked !== blocked) mapCache.current = { key, of: panels, blocked, cells: mapCells(panels, w, h, nuMax, blocked) };
       return paintMap(mapCache.current.cells, w, h, ringProf, slice, l1, gain);
     },
-    [panels, ringProf, slice, l1, gain],
+    [panels, blocked, ringProf, slice, l1, gain],
   );
+  const overlay = useAcceptanceOverlay(geometry, panels, blocked, theme);
 
   const findRing = (text: string) => {
     const v = text.trim().split(/[\s,]+/).map(Number);
@@ -488,11 +521,12 @@ function PowderDetectors({ result, theme, exp, onExp, onDMin, instrument, panels
   const probeRing = useMemo<(typeof groups)[number] | undefined>(() => (hkl.probe ? { d: hkl.probe.d!, q: (2 * Math.PI) / hkl.probe.d!, sumF2: 0, families: [{ hkl: hkl.probe.hkl!, multiplicity: 1, f2: 0 }] } : undefined), [hkl.probe]);
   const g = probeRing ?? (sel !== null ? groups[sel] : undefined);
   const range = g ? twoThetaRangeForD(g.d, exp.lambdaMin, exp.lambdaMax) : undefined;
-  const seeing = useMemo(() => (g ? new Set(panelsSeeing(g.d, info, exp.lambdaMin, exp.lambdaMax)) : undefined), [g, info, exp.lambdaMin, exp.lambdaMax]);
+  const on = useMemo(() => panelsOn(panels), [panels]);
+  const seeing = useMemo(() => (g ? new Set(panelsSeeing(g.d, info, exp.lambdaMin, exp.lambdaMax).filter((i) => !panels[i]!.off)) : on), [g, info, exp.lambdaMin, exp.lambdaMax, panels, on]);
   const ringNow = g && ringsOn && lambdaNom / (2 * g.d) <= 1 ? (2 * Math.asin(lambdaNom / (2 * g.d)) * 180) / Math.PI : undefined;
   const rings = useMemo<MapRing[]>(() => (!ringsOn && range ? [range.min, range.max].filter((t) => t > 0.5 && t < 179.5).map((t) => ({ twoTheta: t, emphasis: true })) : []), [ringsOn, range?.min, range?.max]);
   // The selected reflection's ring in this slice, ray-traced onto the panels (independent of the images).
-  const traces = useMemo(() => (ringsOn && g ? ringTrace(panels, l1, slice, g.d, 720).map((t) => t.points) : undefined), [ringsOn, g, panels, l1, slice]);
+  const traces = useMemo(() => (ringsOn && g ? ringTrace(panels, l1, slice, g.d, 720, blocked).map((t) => t.points) : undefined), [ringsOn, g, panels, l1, slice, blocked]);
   const pickPanel = (i: number) => onExp({ ...exp, panel: i });
   const label = (x: (typeof groups)[number]) => x.families.map((f) => `(${hklText(f.hkl)})`).join(" + ");
   const seen = dRangeAt(pa.twoThetaCenter, exp.lambdaMin, exp.lambdaMax);
@@ -672,6 +706,7 @@ function PowderDetectors({ result, theme, exp, onExp, onDMin, instrument, panels
             )}
             <DMinNote result={result} info={info} lambdaMin={exp.lambdaMin} onDMin={onDMin} />
           </Card>
+          <AcceptanceCard exp={exp} onExp={onExp} geometry={geometry} panels={panels} goniometer={instrument.goniometer} />
         </div>
       </div>
 
@@ -684,7 +719,7 @@ function PowderDetectors({ result, theme, exp, onExp, onDMin, instrument, panels
             : "Panels projected onto a cylinder around the sample (γ horizontal angle from the beam, ν elevation), coloured by 2θ. Dashed curves are cones of constant 2θ. With a reflection selected, the bold cones bound the 2θ range where it diffracts for the band, and only the panels that record it stay bright. Click a panel to pick it."
         }
       >
-        <DetectorMap panels={panels} panelColors={colorsCss} {...(seeing ? { highlight: seeing } : {})} selectedPanel={panel} onPanelClick={pickPanel} lambdaMin={exp.lambdaMin} lambdaMax={exp.lambdaMax} rings={rings} {...(ringsOn ? { raster } : {})} {...(traces ? { traces } : {})} />
+        <DetectorMap panels={panels} panelColors={colorsCss} {...(seeing ? { highlight: seeing } : {})} selectedPanel={panel} onPanelClick={pickPanel} lambdaMin={exp.lambdaMin} lambdaMax={exp.lambdaMax} rings={rings} {...(ringsOn ? { raster } : {})} overlay={overlay} {...(traces ? { traces } : {})} />
         <p className="plot-hint">{legend}</p>
       </Card>
     </div>

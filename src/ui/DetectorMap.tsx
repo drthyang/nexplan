@@ -61,6 +61,7 @@ export function DetectorMap({
   onSelect,
   rings = [],
   raster,
+  overlay,
   traces = [],
 }: {
   panels: readonly DetectorPanel[];
@@ -78,6 +79,8 @@ export function DetectorMap({
   rings?: readonly MapRing[];
   /** Image for the plot area (width × height pixels over γ −180…180°, ν ν_max…−ν_max), as a data URL. */
   raster?: (width: number, height: number, nuMax: number) => string | undefined;
+  /** Image drawn over the panels, same grid as `raster` (masked pixels and the sample environment's shadows). */
+  overlay?: (width: number, height: number, nuMax: number) => string | undefined;
   /** Polylines on the detectors (lab frame), drawn in the selection colour. */
   traces?: readonly (readonly Vec3[])[];
 }) {
@@ -105,6 +108,7 @@ export function DetectorMap({
   const rw = Math.max(1, Math.round(W));
   const rh = Math.max(1, Math.round(H));
   const href = useMemo(() => raster?.(rw, rh, nuMax), [raster, rw, rh, nuMax]);
+  const overlayHref = useMemo(() => overlay?.(rw, rh, nuMax), [overlay, rw, rh, nuMax]);
 
   const xticks = [-180, -120, -60, 0, 60, 120, 180];
   const yticks: number[] = [];
@@ -155,6 +159,7 @@ export function DetectorMap({
               </path>
             ));
           })}
+          {overlayHref && <image href={overlayHref} x={m.l} y={m.t} width={W} height={H} preserveAspectRatio="none" pointerEvents="none" />}
           {extra.map((r, j) =>
             r.lines.map((l, k) => <path key={`r${j}-${k}`} className={`map-ring${r.emphasis ? " is-emphasis" : ""}`} d={pathOf(l, false)} />),
           )}

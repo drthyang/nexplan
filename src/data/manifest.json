@@ -18,7 +18,7 @@
       "dataset": "instrument-geometry",
       "version": "0.1.0",
       "tier": "derived-from-mantid-idf",
-      "sha256": "c5bdc9bc3404e2cc4cec30fe5414679839389eac1fa4e09334a26e0f0a244321",
+      "sha256": "df3460b683387d35cee2ce19c91ef887d6b1fe407cd76f2057bc8e9c8336c717",
       "source": {
         "id": "mantid-instrument-definitions",
         "sha256": ""
