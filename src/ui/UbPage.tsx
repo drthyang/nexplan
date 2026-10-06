@@ -38,6 +38,15 @@ const IDENTITY: Mat3 = [
   [0, 0, 1],
 ];
 
+const isIdentity = (P: Mat3) => P.every((r, i) => r.every((v, j) => Math.abs(v - (i === j ? 1 : 0)) < 1e-12));
+
+/** The UB's axes in the CIF's, the columns of P: "(2 a, 2 b, 2 c)". */
+const axesText = (P: Mat3) => `(${[0, 1, 2].map((j) => linearText([P[0]![j]!, P[1]![j]!, P[2]![j]!], OLD_AXES)).join(", ")})`;
+
+/** "2 × 2 × 2" when P is a plain diagonal of positive multiples. */
+const multiplesText = (P: Mat3) =>
+  P.every((r, i) => r.every((v, j) => (i === j ? v > 0 : Math.abs(v) < 1e-12))) ? [0, 1, 2].map((i) => ratioText(P[i]![i]!)).join(" × ") : undefined;
+
 export function MatrixBlock({ M, digits = 6 }: { M: Mat3; digits?: number }) {
   return (
     <table className="ui-table matrix">
@@ -131,15 +140,19 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
   const [loadError, setLoadError] = useState<string | null>(null);
   const [P, setP] = useState<Mat3>(IDENTITY);
   const [cell, setCell] = useState<[number, number, number]>([1, 1, 1]);
-  // The supercell fields follow P when P is a diagonal of whole numbers.
-  const diagonal = P.every((r, i) => r.every((v, j) => (i === j ? Number.isInteger(v) && v >= 1 : v === 0)));
+  // The cell-multiple fields follow P when P is a diagonal of positive multiples (2 for a supercell, 1/2 for a smaller cell).
+  const diagonal = P.every((r, i) => r.every((v, j) => (i === j ? v > 0 : v === 0)));
   const shownCell: [number, number, number] = diagonal ? [P[0]![0]!, P[1]![1]!, P[2]![2]!] : cell;
   const applyCell = (c: [number, number, number]) => {
     setCell(c);
     setP(supercell(...c));
   };
 
-  const { viewUB, match, fileUB } = useViewUB(result, ub);
+  const { viewUB, match, matches, fileUB } = useViewUB(result, ub);
+  // Re-indexing starts from the CIF cell, or from the file's own cell when the two differ.
+  const [reindexFrom, setReindexFrom] = useState<"cif" | "file">("cif");
+  const fileCellDiffers = !!fileUB && !!match && !isIdentity(match.P);
+  const baseUB = fileCellDiffers && reindexFrom === "file" ? fileUB : viewUB;
   const orient = useMemo(() => orientationFromUB(viewUB), [viewUB]);
   const R = useMemo(() => goniometerMatrix(model, angles), [model, angles]);
   const points = useMemo(() => presentReflections(result), [result]);
@@ -211,11 +224,11 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
   const aa = axisAngle(orient.U);
   const transformed = useMemo(() => {
     try {
-      return { UB: transformUB(viewUB, P), det: determinant(P) };
+      return { UB: transformUB(baseUB, P), det: determinant(P) };
     } catch (e) {
       return { error: (e as Error).message, det: 0 };
     }
-  }, [viewUB, P]);
+  }, [baseUB, P]);
   const sel = selected !== null ? points[selected] : undefined;
   // Indices to convert: typed, or the reflection picked in the 3D view or its table.
   const [tryText, setTryText] = useState("1 0 0");
@@ -289,15 +302,35 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
                   </tbody>
                 </table>
                 {match ? (
-                  match.P.every((r, i) => r.every((v, j) => v === (i === j ? 1 : 0))) ? (
+                  isIdentity(match.P) ? (
                     <p className="ok-note">The UB cell matches the CIF cell (metric misfit {(100 * match.misfit).toFixed(2)} %).</p>
                   ) : (
                     <p className="warn-note">
-                      The UB is in a different setting. Mapped with P = [{match.P.map((r) => r.join(" ")).join("; ")}] (h_UB = Pᵀ·h_CIF, misfit {(100 * match.misfit).toFixed(2)} %); the views use UB·Pᵀ so CIF indices land where the UB puts them.
+                      {match.volumeRatio > 1 + 1e-9
+                        ? `The UB is for a ${multiplesText(match.P) ? `${multiplesText(match.P)} supercell` : `supercell, ${ratioText(match.volumeRatio)} times the volume,`} of the CIF cell`
+                        : match.volumeRatio < 1 - 1e-9
+                          ? `The UB is for a ${multiplesText(match.P) ? `${multiplesText(match.P)} cell` : `smaller cell, ${ratioText(match.volumeRatio)} of the volume,`} of the CIF cell`
+                          : "The UB is for the CIF cell in another setting"}
+                      : its axes are {axesText(match.P)} in the CIF&apos;s (h_UB = Pᵀ·h_CIF, misfit {(100 * match.misfit).toFixed(2)} %). The matrix above, the views and Export ISAW use the UB in the CIF cell, UB·Pᵀ.
                     </p>
                   )
                 ) : (
-                  <p className="error-note">The UB cell does not match the CIF cell by any simple change of axes (within 2 %). The views use the UB as loaded, so CIF indices may not correspond to the UB's.</p>
+                  <p className="error-note">The UB cell does not match the CIF cell, a supercell of it or a smaller cell of it (within 2 %). The views use the UB as loaded, so CIF indices may not correspond to the UB&apos;s. Re-index below to change its cell.</p>
+                )}
+                {matches.length > 1 && match && (
+                  <label className="form-row" style={{ marginTop: "0.5rem" }}>
+                    <span className="ui-control-label">Cell choice</span>
+                    <select className="ui-select" aria-label="Cell choice" value={matches.indexOf(match)} onChange={(e) => onUb({ ...ub, choice: matches[Number(e.target.value)]!.P })}>
+                      {matches.map((m, i) => (
+                        <option key={i} value={i}>
+                          UB axes {axesText(m.P)} · misfit {(100 * m.misfit).toFixed(2)} %
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {matches.length > 1 && (
+                  <p className="dim-note">{matches.length} choices fit and are not related by the CIF&apos;s symmetry, so each labels the reflections differently. The best fit is first.</p>
                 )}
               </>
             )}
@@ -382,16 +415,30 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
           <div className="reindex-grid">
             <div>
           <p className="card-lead">
-            Writes the UB for a different unit cell of the same crystal: a supercell to index superlattice or magnetic peaks, the primitive cell, or another program's setting. Reflections stay where they are in reciprocal space; only their indices change.
+            Writes the UB for a different unit cell of the same crystal: a supercell to index superlattice or magnetic peaks, a smaller cell (1/2 × 1/2 × 1/2 of a doubled cell), the primitive cell, or another program&apos;s setting. Reflections stay where they are in reciprocal space; only their indices change.
           </p>
           <div className="form-rows">
+            {fileCellDiffers && (
+              <div className="form-row">
+                <span className="ui-control-label">Start from</span>
+                <Segmented
+                  label="Cell to re-index from"
+                  value={reindexFrom}
+                  onChange={setReindexFrom}
+                  options={[
+                    { value: "cif", label: "CIF cell" },
+                    { value: "file", label: `UB file's cell ${axesText(match!.P)}` },
+                  ]}
+                />
+              </div>
+            )}
             <div className="form-row">
-              <span className="ui-control-label">Supercell</span>
-              <span className={diagonal ? "supercell" : "supercell is-dim"} title={diagonal ? undefined : "P is not a plain supercell; typing here replaces it with one"}>
+              <span className="ui-control-label">Cell multiples</span>
+              <span className={diagonal ? "supercell" : "supercell is-dim"} title={diagonal ? "Whole numbers for a supercell, fractions such as 1/2 for a smaller cell" : "P is not a plain multiple of the axes; typing here replaces it with one"}>
                 {(["a", "b", "c"] as const).map((axis, k) => (
                   <span key={axis} className="supercell">
                     {k > 0 && <span className="dim-note">×</span>}
-                    <UnitField label={`Supercell along ${axis}`} value={shownCell[k]!} unit="" min={1} max={50} width="2.5ch" onCommit={(v) => applyCell(shownCell.map((n, j) => (j === k ? Math.max(1, Math.round(v)) : n)) as [number, number, number])} />
+                    <RatioCell label={`Multiple of ${axis}`} positive value={shownCell[k]!} onCommit={(v) => applyCell(shownCell.map((n, j) => (j === k ? v : n)) as [number, number, number])} />
                   </span>
                 ))}
               </span>
@@ -610,12 +657,13 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
   );
 }
 
-/** One entry of P: keeps what is typed and commits on Enter or blur (integers, decimals or fractions). */
-function RatioCell({ label, value, onCommit }: { label: string; value: number; onCommit: (v: number) => void }) {
+/** One entry of P: keeps what is typed and commits on Enter or blur (integers, decimals or fractions; > 0 if `positive`). */
+function RatioCell({ label, value, onCommit, positive = false }: { label: string; value: number; onCommit: (v: number) => void; positive?: boolean }) {
   const shown = ratioText(value);
   const [text, setText] = useState(shown);
   useEffect(() => setText(shown), [shown]);
-  const parsed = parseRatio(text);
+  const raw = parseRatio(text);
+  const parsed = raw !== undefined && (!positive || raw > 0) ? raw : undefined;
   const commit = () => {
     if (parsed === undefined) return setText(shown);
     if (Math.abs(parsed - value) > 1e-15) onCommit(parsed);

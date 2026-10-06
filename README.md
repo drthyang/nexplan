@@ -35,7 +35,8 @@ Also:
 
 - Reflections with d, Q and complex F, folded into symmetry families, with absences flagged. Absent or weak
   reflections can still be simulated and planned.
-- UB matrices in the ISAW format, read and written; re-indexing to another cell.
+- UB matrices in the ISAW format, read and written. A UB for a supercell or a smaller cell of the CIF cell (e.g.
+  2 × 2 × 2) is recognised and written in the CIF cell; any UB can be re-indexed to another cell.
 - Every detector pixel a reflection can reach over the goniometer range.
 - The recorded HKL range and bin widths from the resolution, as Mantid MDNorm parameters (Mantid's default Q
   convention or the crystallographic one).

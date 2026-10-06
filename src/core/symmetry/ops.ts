@@ -211,3 +211,17 @@ export function centringVectors(ops: readonly SymOp[]): IntVec3[] {
 export function hasInversion(ops: readonly SymOp[]): boolean {
   return ops.some((op) => op.R.every((row, i) => row.every((v, j) => v === (i === j ? -1 : 0))));
 }
+
+/**
+ * The proper rotations of the Laue group: each rotation part R, or −R when R is improper, once each.
+ * Two cell choices P and W·P (W among these) index the reflections alike, up to symmetry and Friedel's law.
+ */
+export function laueRotations(ops: readonly SymOp[]): IntMat3[] {
+  const out = new Map<string, IntMat3>();
+  for (const op of ops) {
+    const s = determinant(op.R) > 0 ? 1 : -1;
+    const W = op.R.map((row) => row.map((v) => s * v + 0)) as unknown as IntMat3;
+    out.set(W.flat().join(","), W);
+  }
+  return [...out.values()];
+}

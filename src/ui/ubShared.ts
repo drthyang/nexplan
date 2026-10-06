@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { dSpacing } from "@materia/core/crystal/unitCell";
 import type { Mat3 } from "@materia/core/math/types";
 import type { CalcSuccess } from "../app/compute.ts";
-import { findBasisMatch, ubFromU, type BasisMatch } from "../core/ub/ub.ts";
+import { findCellMatches, ubFromU, type BasisMatch } from "../core/ub/ub.ts";
 import { fmt, hklText } from "./format.ts";
 
 export interface UbState {
@@ -11,6 +11,8 @@ export interface UbState {
   readonly UB?: Mat3;
   readonly fileName?: string;
   readonly warnings: readonly string[];
+  /** The chosen cell match's P when several fit; the best match is used when it is unset or no longer fits (another CIF). */
+  readonly choice?: Mat3;
 }
 
 const IDENTITY: Mat3 = [
@@ -19,13 +21,22 @@ const IDENTITY: Mat3 = [
   [0, 0, 1],
 ];
 
-/** UB for CIF indices: the file UB in the CIF setting when it matches, else U = I with the CIF cell. */
-export function useViewUB(result: CalcSuccess, ub: UbState): { viewUB: Mat3; match?: BasisMatch; fileUB?: Mat3 } {
+/**
+ * UB for CIF indices: the file UB in the CIF cell when the cells match (the same cell in another setting, a
+ * supercell or a smaller cell; the chosen match when several fit), else the file UB as loaded; U = I with the CIF
+ * cell without a file.
+ */
+export function useViewUB(result: CalcSuccess, ub: UbState): { viewUB: Mat3; match?: BasisMatch; matches: readonly BasisMatch[]; fileUB?: Mat3 } {
   const cifCell = result.structure.cell;
+  const rotations = result.structure.rotations;
   const fileUB = ub.UB;
-  const match = useMemo(() => (fileUB ? findBasisMatch(cifCell, fileUB) : undefined), [fileUB, cifCell]);
+  const matches = useMemo(() => (fileUB ? findCellMatches(cifCell, fileUB, { rotations }) : []), [fileUB, cifCell, rotations]);
+  // A saved session's value is checked: anything but a 3 × 3 array of numbers means the best match.
+  const chosen = ub.choice;
+  const valid = Array.isArray(chosen) && chosen.length === 3 && chosen.every((r) => Array.isArray(r) && r.length === 3 && r.every((v) => typeof v === "number"));
+  const match = (valid && matches.find((m) => m.P.every((r, i) => r.every((v, j) => Math.abs(v - chosen[i]![j]!) < 1e-9)))) || matches[0];
   const viewUB = useMemo(() => (fileUB ? (match ? match.ubForCif : fileUB) : ubFromU(IDENTITY, cifCell)), [fileUB, match, cifCell]);
-  return { viewUB, ...(match ? { match } : {}), ...(fileUB ? { fileUB } : {}) };
+  return { viewUB, matches, ...(match ? { match } : {}), ...(fileUB ? { fileUB } : {}) };
 }
 
 /** How many present reflections the single-crystal pages simulate (strongest first). */

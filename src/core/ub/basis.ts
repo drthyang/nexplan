@@ -26,7 +26,7 @@ export const BASIS_PRESETS: readonly BasisPreset[] = [
   { id: "sqrt2", label: "√2 × √2 × 1: (a+b, −a+b, c)", P: [[1, -1, 0], [1, 1, 0], [0, 0, 1]] },
 ];
 
-/** P = diag(na, nb, nc): an na × nb × nc supercell. */
+/** P = diag(na, nb, nc): an na × nb × nc supercell (fractions such as 1/2 give a smaller cell). */
 export function supercell(na: number, nb: number, nc: number): Mat3 {
   return [
     [na, 0, 0],

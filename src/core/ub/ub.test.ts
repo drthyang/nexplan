@@ -4,7 +4,10 @@ import type { Mat3, Vec3 } from "@materia/core/math/types";
 import { determinant, inverse, mulMat, mulVec, transpose } from "@materia/core/math/mat3";
 import { metricTensor } from "@materia/core/crystal/unitCell";
 import { formatIsawUB, parseIsawUB } from "../../io/isaw.ts";
-import { axisAngle, bMatrix, directBasisInSample, findBasisMatch, latticeFromUB, nearestIndices, orientationFromUB, transformUB, ubFromU } from "./ub.ts";
+import { laueRotations } from "../symmetry/ops.ts";
+import { findByHM, settingOps } from "../symmetry/spaceGroups.ts";
+import { supercell } from "./basis.ts";
+import { axisAngle, bMatrix, directBasisInSample, findBasisMatch, findCellMatches, latticeFromUB, nearestIndices, orientationFromUB, transformUB, ubFromU, type BasisMatch } from "./ub.ts";
 
 /** Rotation about a unit axis by an angle (Rodrigues). */
 function rot(axis: Vec3, deg: number): Mat3 {
@@ -162,5 +165,111 @@ describe("matching a UB's cell to the CIF setting", () => {
   it("returns undefined for an unrelated cell", () => {
     const UB = ubFromU(rot([0, 0, 1], 10), { a: 9, b: 11, c: 13, alpha: 90, beta: 90, gamma: 90 });
     expect(findBasisMatch(ortho, UB)).toBeUndefined();
+  });
+});
+
+describe("a UB for a supercell or a smaller cell of the CIF cell", () => {
+  const laue = (hm: string) => laueRotations(settingOps(findByHM(hm)[0]!));
+  const U = rot([1, -0.4, 0.6], 75);
+  const cubic = (a: number) => ({ a, b: a, c: a, alpha: 90, beta: 90, gamma: 90 });
+  const scaled = (M: Mat3, s: number) => M.map((r) => r.map((v) => v * s)) as unknown as Mat3;
+  /** The match maps each CIF index to the q the file's UB gives its index in the file's cell, h_UB = Pᵀ·h_CIF. */
+  const keepsQ = (m: BasisMatch, UBfile: Mat3) => {
+    for (const h of [[1, 0, 0], [0, 2, 1], [3, -1, 2], [1, 1, 1]] as Vec3[]) {
+      const q1 = mulVec(m.ubForCif, h);
+      const q2 = mulVec(UBfile, mulVec(transpose(m.P), h));
+      expect(Math.hypot(q1[0] - q2[0], q1[1] - q2[1], q1[2] - q2[2])).toBeLessThan(1e-12);
+    }
+  };
+  /** A chosen match may differ from the generating one by a symmetry rotation: UB_CIF·Wᵀ for W in the Laue group. */
+  const equalUpToSymmetry = (A: Mat3, B: Mat3, rotations: readonly Mat3[]) => rotations.some((W) => maxAbs(A, mulMat(B, transpose(W))) < 1e-12);
+
+  it("finds the 1 × 1 × 1 UB from a 2 × 2 × 2 supercell's (one choice under m-3m)", () => {
+    const si = cubic(5.431);
+    const UBcif = ubFromU(U, si);
+    const UBsuper = transformUB(UBcif, supercell(2, 2, 2));
+    // Doubling every axis halves every reciprocal vector.
+    expect(maxAbs(UBsuper, scaled(UBcif, 0.5))).toBeLessThan(1e-15);
+    const ms = findCellMatches(si, UBsuper, { rotations: laue("F d -3 m") });
+    expect(ms).toHaveLength(1);
+    expect(ms[0]!.P).toEqual(supercell(2, 2, 2));
+    expect(ms[0]!.volumeRatio).toBeCloseTo(8, 12);
+    expect(ms[0]!.misfit).toBeLessThan(1e-12);
+    expect(maxAbs(ms[0]!.ubForCif, UBcif)).toBeLessThan(1e-15);
+    keepsQ(ms[0]!, UBsuper);
+    // Without the symmetry, the 24 rotations of the cube are separate choices with the same misfit; the plain one is first.
+    const all = findCellMatches(si, UBsuper);
+    expect(all).toHaveLength(24);
+    expect(all[0]!.P).toEqual(supercell(2, 2, 2));
+    expect(findBasisMatch(si, UBsuper)!.P).toEqual(supercell(2, 2, 2));
+  });
+
+  it("goes through an ISAW file: the 2 × 2 × 2 file, written back in the CIF cell, holds the 1 × 1 × 1 UB", () => {
+    const si = cubic(5.431);
+    const UBcif = ubFromU(U, si);
+    const file = parseIsawUB(formatIsawUB(transformUB(UBcif, supercell(2, 2, 2))));
+    expect(file.latticeLine![0]).toBeCloseTo(10.862, 4);
+    const m = findCellMatches(si, file.UB, { rotations: laue("F d -3 m") })[0]!;
+    // The file carries 8 decimals of UB/2 ≈ 0.09: a relative 1e-7.
+    expect(maxAbs(m.ubForCif, UBcif)).toBeLessThan(2e-8);
+    const out = parseIsawUB(formatIsawUB(m.ubForCif));
+    expect(out.latticeLine![0]).toBeCloseTo(5.431, 4);
+    expect(out.latticeLine![6]).toBeCloseTo(5.431 ** 3, 2);
+  });
+
+  it("finds a √2 × √2 × 1 supercell (det 2) and a 2 × 1 × 1 one", () => {
+    const tet = { a: 3.9, b: 3.9, c: 6.1, alpha: 90, beta: 90, gamma: 90 };
+    const rotations = laue("P 4/m m m");
+    const UBcif = ubFromU(U, tet);
+    const UBfile = transformUB(UBcif, [[1, -1, 0], [1, 1, 0], [0, 0, 1]]);
+    const ms = findCellMatches(tet, UBfile, { rotations });
+    expect(ms).toHaveLength(1);
+    expect(ms[0]!.volumeRatio).toBeCloseTo(2, 12);
+    expect(equalUpToSymmetry(ms[0]!.ubForCif, UBcif, rotations)).toBe(true);
+    keepsQ(ms[0]!, UBfile);
+    const ortho2 = { a: 4.1, b: 5.3, c: 6.2, alpha: 90, beta: 90, gamma: 90 };
+    const m2 = findCellMatches(ortho2, transformUB(ubFromU(U, ortho2), supercell(2, 1, 1)), { rotations: laue("P m m m") });
+    expect(m2).toHaveLength(1);
+    expect(m2[0]!.P).toEqual(supercell(2, 1, 1));
+  });
+
+  it("finds a smaller cell: the primitive cell of an F lattice (P = M⁻¹, volume 1/4)", () => {
+    const al = cubic(4.05);
+    const rotations = laue("F m -3 m");
+    const UBcif = ubFromU(U, al);
+    const fToP: Mat3 = [[0, 0.5, 0.5], [0.5, 0, 0.5], [0.5, 0.5, 0]];
+    const UBprim = transformUB(UBcif, fToP);
+    const ms = findCellMatches(al, UBprim, { rotations });
+    expect(ms).toHaveLength(1);
+    expect(ms[0]!.volumeRatio).toBeCloseTo(0.25, 12);
+    expect(ms[0]!.P.flat().every((v) => Number.isInteger(v * 4))).toBe(true);
+    expect(equalUpToSymmetry(ms[0]!.ubForCif, UBcif, rotations)).toBe(true);
+    keepsQ(ms[0]!, UBprim);
+  });
+
+  it("lists the real alternatives of a pseudo-cubic supercell, best first", () => {
+    // Tetragonal, c/a = 1.0092: a 2 × 2 × 2 UB could put the CIF's c along any of its axes; only along its c is exact.
+    const tet = { a: 5.43, b: 5.43, c: 5.48, alpha: 90, beta: 90, gamma: 90 };
+    const UBsuper = transformUB(ubFromU(U, tet), supercell(2, 2, 2));
+    const ms = findCellMatches(tet, UBsuper, { rotations: laue("P 4/m m m") });
+    // The CIF's c along the UB's c, a or b: the 24 axis choices fall into 24/8 = 3 sets under 4/mmm.
+    expect(ms).toHaveLength(3);
+    expect(ms[0]!.P).toEqual(supercell(2, 2, 2));
+    expect(ms[0]!.misfit).toBeLessThan(1e-12);
+    // The others put c along the UB's a or b: metric misfit (c² − a²)/c² of the doubled cell.
+    for (const m of ms.slice(1)) expect(m.misfit).toBeCloseTo((5.48 ** 2 - 5.43 ** 2) / 5.48 ** 2, 12);
+    expect(ms.slice(1).map((m) => [0, 1].find((j) => Math.abs(m.P[2][j]!) === 2)).sort()).toEqual([0, 1]);
+  });
+
+  it("keeps the plain choice for a strained (measured) supercell UB, and rejects an unrelated cell of similar volume", () => {
+    const si = cubic(5.431);
+    const strain: Mat3 = [[1.003, 0, 0], [0, 0.999, 0], [0, 0, 1.001]];
+    const UBsuper = mulMat(strain, transformUB(ubFromU(U, si), supercell(2, 2, 2)));
+    const m = findBasisMatch(si, UBsuper)!;
+    expect(m.P).toEqual(supercell(2, 2, 2));
+    expect(m.misfit).toBeGreaterThan(1e-4);
+    expect(m.misfit).toBeLessThan(0.02);
+    // 9 × 11 × 13 Å has 8.03 times the volume of Si's cell, but no lattice vectors of those lengths.
+    expect(findCellMatches(si, ubFromU(U, { a: 9, b: 11, c: 13, alpha: 90, beta: 90, gamma: 90 }))).toEqual([]);
   });
 });

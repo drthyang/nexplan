@@ -10,7 +10,7 @@ import { bankDRange, difcFromGeometry, synthesizeTof, tofPeaks, type TofBank, ty
 import { parseTypeSymbol, speciesKey } from "../core/scattering/species.ts";
 import { NEUTRON_DATASET, neutronCrossSections, ScatteringLookupError, XRAY_DATASET, xrayIonsFor, type Tier } from "../core/scattering/tables.ts";
 import { buildModel, cellContent, expandModel, ModelBuildError } from "../core/structure/model.ts";
-import { formatSymOp } from "../core/symmetry/ops.ts";
+import { formatSymOp, laueRotations, type IntMat3 } from "../core/symmetry/ops.ts";
 import { CifStructureError, readCifStructure, summarizeBlocks, type CifBlockSummary, type Diagnostic } from "../io/cif/structure.ts";
 import { CifSyntaxError } from "../io/cif/tokenizer.ts";
 
@@ -91,6 +91,8 @@ export interface CalcSuccess {
     readonly symmetrySource: string;
     readonly opCount: number;
     readonly ops: readonly string[];
+    /** The Laue group's proper rotations (laueRotations): cell choices W·P and P index reflections alike. */
+    readonly rotations: readonly IntMat3[];
     readonly sites: readonly SiteRow[];
     readonly content: readonly [string, number][];
     readonly codId?: string;
@@ -334,6 +336,7 @@ export async function runCalculation(input: CalcInput): Promise<CalcResult> {
       symmetrySource: model.symmetry.source,
       opCount: model.symmetry.ops.length,
       ops: model.symmetry.ops.map(formatSymOp),
+      rotations: laueRotations(model.symmetry.ops),
       sites: model.sites.map((s, j) => ({
         label: s.label,
         element: s.species.element,

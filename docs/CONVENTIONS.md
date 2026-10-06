@@ -199,8 +199,18 @@ F(h) = Σⱼ oⱼ · aⱼ(s) · exp(−Bⱼ s²) · exp(+2πi h·xⱼ)
   - λ = −2 q_z/|q|², which requires q_z < 0;
   - 2θ is the angle between k_f and ẑ;
   - the azimuth is measured from +x toward +y.
-- **Basis change** (ITA): UB′ = UB·P⁻ᵀ and h′ = Pᵀh. A loaded UB in another setting is mapped onto the CIF setting
-  by an integer P with entries in {−1, 0, 1} and det P = +1, such that Pᵀ·G_CIF·P ≈ G_UB within 2 %.
+- **Basis change** (ITA): UB′ = UB·P⁻ᵀ and h′ = Pᵀh. A loaded UB is mapped onto the CIF cell, UB_CIF = UB·Pᵀ, by a
+  right-handed P with Pᵀ·G_CIF·P ≈ G_UB within 2 % of G_UB's largest entry (`findCellMatches`).
+  - The volume ratio fixes det P: n = 1 for the CIF cell in another setting, a whole n for a supercell (8 for
+    2 × 2 × 2), 1/n for a smaller cell. P (or, for a smaller cell, P⁻¹ in the UB's cell) is a whole matrix whose
+    columns are lattice vectors with the target's lengths; a vector's index along a_i is a*_i·v, so |index| ≤
+    |v|·|a*_i| bounds the search (at most 12).
+  - P and W·P, for W a proper rotation of the CIF's Laue group (R, or −R for improper R), index the reflections
+    alike, so each such set counts once. What remains are real alternatives, e.g. the axis of a pseudo-cubic
+    supercell that is the CIF's c, offered as a choice. Best misfit first; misfits within 0.2 % of each other count
+    as equal, and then the plainest P (fewest off-diagonal and negative entries) comes first.
+  - Tested on 2 × 2 × 2, √2 × √2 × 1 and 2 × 1 × 1 supercells, the primitive cell of an F lattice, a pseudo-cubic
+    tetragonal supercell (three choices) and a strained UB, and through an ISAW file.
   - Because (a′, b′, c′) = (a, b, c)·P and h′ = Pᵀh, a new axis and its new index have the same coefficients
     (column j of P): a′ = a + b goes with h′ = h + k. The Re-index card edits P in that form, one row per new axis.
   - Mantid's TransformHKL takes M = Pᵀ, nine numbers row by row, applying h′ = M·h and UB′ = UB·M⁻¹ (= UB·P⁻ᵀ);

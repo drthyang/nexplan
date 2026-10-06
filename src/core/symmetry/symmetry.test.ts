@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import fixture from "../../../fixtures/absences-gemmi.json";
 import { isReflectionAbsent } from "@materia/core/crystal/symmetry";
 import type { SymmetryOperation } from "@materia/core/crystal/types";
-import { closeGroup, formatSymOp, isSystematicallyAbsent, parseSymOp, SymOpParseError, TDEN, type IntVec3, type SymOp } from "./ops.ts";
+import { closeGroup, determinant, formatSymOp, isSystematicallyAbsent, laueRotations, parseSymOp, SymOpParseError, TDEN, type IntVec3, type SymOp } from "./ops.ts";
 import { findByHM, resolveSymmetry, SETTINGS, settingOps, splitHMSuffix, SymmetryResolutionError } from "./spaceGroups.ts";
 
 describe("parseSymOp", () => {
@@ -149,5 +149,16 @@ describe("resolveSymmetry", () => {
     expect(splitHMSuffix("R -3 m:H")).toEqual({ base: "R -3 m", ext: "H" });
     expect(splitHMSuffix("P n m a")).toEqual({ base: "P n m a" });
     expect(findByHM("P 21/c").map((s) => s.xhm)).toEqual(["P 1 21/c 1"]);
+  });
+});
+
+describe("laueRotations", () => {
+  it("has the order of the Laue group's rotation subgroup, all proper", () => {
+    // Proper rotations of the Laue classes: m-3m 24, 6/mmm 12, 4/mmm 8, -3m 6, mmm 4, 2/m 2, -1 1 (ITA Vol. A).
+    for (const [hm, n] of [["F m -3 m", 24], ["P 63/m m c", 12], ["I 41/a m d:1", 8], ["R -3 m:H", 6], ["P n m a", 4], ["P 21/c", 2], ["P -1", 1], ["P 1", 1], ["P 43 21 2", 8], ["F -4 3 m", 24]] as const) {
+      const W = laueRotations(settingOps(findByHM(hm)[0]!));
+      expect(W, hm).toHaveLength(n);
+      for (const R of W) expect(determinant(R), hm).toBe(1);
+    }
   });
 });
