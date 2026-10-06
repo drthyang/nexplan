@@ -1,9 +1,9 @@
 /**
- * Powder page for an SNS instrument (Simulation): the pattern of a focused bank
- * as the data are reduced (NOMAD, POWGEN; src/core/instrument/focus.ts), or of
- * one panel (time of flight at its centre angle, DIFC from L1 + L2), or the
- * elastic 2θ pattern over all panels for a chopper spectrometer, with the
- * 2θ–d coverage of the whole detector array.
+ * Powder page for an SNS instrument (Simulation): the pattern of a focused bank,
+ * modelled as focused and vanadium-normalised (NOMAD, POWGEN;
+ * src/core/instrument/focus.ts), or of one panel (time of flight at its centre
+ * angle, DIFC from L1 + L2), or the elastic 2θ pattern over all panels for a
+ * chopper spectrometer, with the 2θ–d coverage of the whole detector array.
  */
 import { useEffect, useMemo, useState } from "react";
 import { cwPeaks } from "../core/diffraction/powder.ts";
@@ -48,7 +48,7 @@ export function InstrumentPowder(props: SimPageProps) {
     () => (pa && panels[panel] ? { twoThetaDeg: pa.twoThetaCenter, difc: panelDifc(panels[panel]!, l1), difa: 0, zero: 0, lambdaMin: exp.lambdaMin, lambdaMax: exp.lambdaMax } : undefined),
     [pa, panels, panel, l1, exp.lambdaMin, exp.lambdaMax],
   );
-  // Focused banks (as the data are reduced), when the instrument defines them.
+  // Focused banks (modelled as focused and vanadium-normalised), when the instrument defines them.
   const specs = useMemo(() => (mono ? [] : (instrument?.banks?.list ?? [])), [mono, instrument]);
   const focused = useMemo(
     () =>
@@ -225,7 +225,7 @@ export function InstrumentPowder(props: SimPageProps) {
           mono
             ? "Elastic intensity per unit solid angle against 2θ over all panels, as a chopper spectrometer records it at the elastic line: I = Σ|F|²/(sin²θ cosθ) (CW powder Lorentz factor, no polarization for neutrons), each peak a Gaussian of FWHM 2·tanθ·√((Δd/d)² + (ΔE/2E)²); zero where no panel covers 2θ. Click a peak to select it in the coverage chart."
             : fb
-              ? "Neutron TOF pattern of a focused bank, as the data are reduced: the bank's panels are split into cells, each recording d from λmin/(2 sinθ) to λmax/(2 sinθ) at its own angle; after focusing and vanadium normalisation the angle, solid angle and incident spectrum cancel cell by cell, so a line at d has I = Σ|F|²·d⁴·sinθ_f on the focused TOF axis (the GSAS-II TOF Lorentz factor at the effective angle θ_f), wherever some cell records it. Drawn on the bank's calibrated DIFC where ORNL publishes one, else DIFC = 252.778·(L1 + L2)·2 sinθ µs/Å with the effective 2θ and L2 (no DIFA, ZERO). Peak widths: the instrument's published resolution (NOMAD's measured Δd/d per bank; POWGEN's GSAS-II profile for the chosen frame, which widens with d), or a constant Δd/d set beside them."
+              ? "Neutron TOF pattern of a focused bank, modelled on the nominal geometry: the bank's panels are split into cells, each recording d from λmin/(2 sinθ) to λmax/(2 sinθ) at its own angle; after focusing and vanadium normalisation the angle, solid angle and incident spectrum cancel cell by cell, so a line at d has I = Σ|F|²·d⁴·sinθ_f on the focused TOF axis (the GSAS-II TOF Lorentz factor at the effective angle θ_f), wherever some cell records it. Drawn on the bank's calibrated DIFC where ORNL publishes one, else DIFC = 252.778·(L1 + L2)·2 sinθ µs/Å with the effective 2θ and L2 (no DIFA, ZERO). Peak widths: the instrument's published resolution (NOMAD's measured Δd/d per bank; POWGEN's GSAS-II profile for the chosen frame, which widens with d), or a constant Δd/d set beside them."
               : "Neutron TOF pattern of the selected panel treated as one bank at its centre angle: DIFC = 252.778·(L1 + L2)·2 sinθ µs/Å (no DIFA, ZERO; real banks are calibrated). I = Σ|F|²·sinθ·d⁴ (GSAS-II TOF Lorentz factor, incident spectrum normalised out), Gaussian peaks of constant Δd/d on a logarithmic TOF grid. Pick another panel below, in the coverage strip, or on the Detectors page."
         }
         actions={

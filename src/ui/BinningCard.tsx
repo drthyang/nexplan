@@ -163,7 +163,7 @@ export function BinningCard({
             </>
           ) : (
             <>
-              <b>Energy</b>: Mantid PyChop's resolution for the chopper setting (its ARCS and SEQUOIA parameters tuned to ORNL vanadium data, Mantid PR #38591), at the elastic line; it narrows with energy transfer. The range defaults to −0.2 to 0.95 Ei (SNS autoreduction). <b>Q</b>: no published resolution exists for these instruments; the estimate takes the pixel and sample sizes over L2, the energy spread along k_f, and an incident divergence if you give one.
+              <b>Energy</b>: Mantid PyChop's resolution for the chopper setting (its ARCS and SEQUOIA parameters tuned to ORNL vanadium data, Mantid PR #38591), at the elastic line; it narrows with energy transfer. The range defaults to −0.2 to 0.95 Ei (SNS autoreduction). <b>Q</b>: NEXPLAN has no Q-resolution model for these instruments; this geometric estimate takes the pixel and sample sizes over L2, the energy spread along k_f, and an incident divergence if you give one.
             </>
           )}
         </>

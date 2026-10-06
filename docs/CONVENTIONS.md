@@ -248,9 +248,10 @@ neutron scattering); code in
   the fraction of symmetry families with at least one member seen so far, over the families among the simulated
   reflections (the strongest 6000 present with d ≥ d_min). Friedel mates are merged only when the amplitudes are
   real.
-- **Reflection coverage** (single crystal; NeuXtalViz's "individual peak" coverage, models/experiment_planner.py
-  @ 655afa3): every detector position where the chosen reflection can be recorded, optionally with its symmetry
-  equivalents, as the free goniometer axes sweep their ranges.
+- **Reflection coverage** (single crystal; after the "individual peak" coverage of NeuXtalViz's experiment planner,
+  neutrons/NeuXtalViz-tools models/experiment_planner.py @ 655afa3): every detector position where the chosen
+  reflection can be recorded, optionally with its symmetry equivalents, as the free goniometer axes sweep their
+  ranges.
   - Each point is coloured by its wavelength, λ = 2d sin θ at that pixel.
   - White-beam instruments use a grid of settings: 1° steps, doubled for each extra free axis, each axis at most one
     turn. A setting counts when λ = −2q_z/|q|² is in the band and k_f hits a panel.
@@ -268,8 +269,9 @@ neutron scattering); code in
   - A ray stops at the nearest panel (NOMAD, SEQUOIA and CNCS have overlapping panels).
   - Tested by rotating forward to the returned angles, against the stepped sweep, against the ω-only and χ = 135°
     analytic cases, against the exact rule |ν| ≤ half-size for an ω-only track at 2θ = 10–150°, and against a 0.002°
-    ω sweep on the real TOPAZ panels (no swept cell missed beyond one per reflection). It replaced the stepped sweep
-    for display, which left gaps because the beam turns twice as fast as the crystal.
+    ω sweep on the real TOPAZ panels (no swept cell missed beyond one per reflection). The Detectors page draws this
+    map: the beam turns twice as fast as the crystal, so a map drawn from NEXPLAN's stepped sweep left empty
+    pixels between its points. *Find a setting* still uses the stepped sweep.
 - **Measurement plans:** an orientation list (TOPAZ) or a rotation scan of one axis (CORELLI, optionally
   interleaved with the half-way steps; chopper spectrometers with exact crossings). Completeness is cumulative over
   the plan. The reciprocal slice shades each point of a lattice plane by the number of settings that record it
@@ -285,7 +287,7 @@ neutron scattering); code in
     reflection by reflection against `observeAt` on the real TOPAZ panels.
   - A recording of a wanted reflection is **well placed** when |λ − λ_mid| ≤ f·(λ_max − λ_min)/2 and the hit lies at
     least m of the panel's width and height from every edge (|x| ≤ (1 − 2m)·w/2, |y| ≤ (1 − 2m)·h/2); f = 0.5 and
-    m = 0.1 by default, both editable. This is how TOPAZ users choose settings for wanted peaks.
+    m = 0.1 by default, both editable: the middle half of the band, and at least a tenth of the panel from each edge.
   - **Full coverage** (greedy selection): each pick maximises the wanted reflections it places well for the first
     time, then those it records for the first time, then the new families, then the families it records a second and
     a third time, then the families it records; it stops when a pick adds nothing. Settings already in the list count
@@ -370,8 +372,8 @@ neutron scattering); code in
   - Single crystals rotate about the vertical axis ψ (counter-clockwise, Mantid sense +1).
   - A monochromatic rotation scan solves the Bragg condition exactly instead of stepping. Rotating about one axis
     keeps |q| and makes q_z = C + P cos ψ + Q sin ψ, with C, P, Q from ψ = 0°, 90° and 180°. Setting
-    q_z = −λ|q|²/2 gives at most two angles per turn. These crossings are binned into the scan steps, so no
-    reflection is missed between steps. Tested against a brute-force 0.01° scan.
+    q_z = −λ|q|²/2 gives at most two angles per turn. Each crossing is counted in the scan step nearest
+    to it. Tested against a brute-force 0.01° scan.
   - The elastic powder pattern is the intensity per unit solid angle against 2θ, each line of area (over 2θ)
     Σ|F|²/(sin²θ cos θ), a Gaussian of FWHM 2 tan θ·√((Δd/d)² + (ΔE/2E)²). It is zero where no panel covers 2θ. (The
     rings painted on the detectors carry the same line with its profile in ln d, hence Σ|F|²/(4 sin³θ): the two
@@ -424,9 +426,10 @@ neutron scattering); code in
     PyChop's output. The chopper setting in the header gives the elastic width ΔE/E = FWHM(0)/Ei for the simulations'
     band (Δλ/λ = ΔE/2E) as well. Defaults are PyChop's 300 Hz with ARCS-100-1.5, SEQ-100-2.0 or CNCS High Flux. A typed
     ΔE/E ("Custom") is kept, and so is the last width where a chopper does not transmit.
-  - Q for chopper spectrometers (estimate; nothing is published): outgoing angular σ from the median pixel and the
-    sample size over L2 (uniform widths, σ = w/√12), physical angles along unit directions across k̂_f, the incident
-    divergence if given, and σ_E as a spread 0.482596·σ_E/(2k_f) of |k_f| along k̂_f (dk/dE for k² = 0.482596·E).
+  - Q for chopper spectrometers (a geometric estimate; NEXPLAN has no Q-resolution model for them): outgoing angular
+    σ from the median pixel and the sample size over L2 (uniform widths, σ = w/√12), physical angles along unit
+    directions across k̂_f, the incident divergence if given, and σ_E as a spread 0.482596·σ_E/(2k_f) of |k_f| along
+    k̂_f (dk/dE for k² = 0.482596·E).
   - Bins: FWHM along axis i is 2.3548·√C_ii, C = M·Σ·Mᵀ/(2π)², M = (UB·W)⁻¹·Rᵀ. These are sampled at up to 24
     settings, the pixel grid and 5 wavelengths (or energy transfers) where the plan records within d_min. The bin is
     the 25th percentile over the bins per FWHM (2 by default; 3 for energy, from the elastic FWHM), rounded to the

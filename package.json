@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Browser-native X-ray and neutron diffraction calculator, UB workbench and experiment planner",
+  "description": "Personal toolkit for planning neutron experiments at the SNS, in the browser",
   "license": "AGPL-3.0-only",
   "engines": {
     "node": ">=22.18"

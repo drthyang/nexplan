@@ -1,7 +1,7 @@
 # NEXPLAN: scientific implementation and validation plan
 
 Revision 2 · 2026-10-02 · supersedes the 2026-10-02 draft.
-Status: public beta at `https://drthyang.github.io/nexplan/` (2026-10-05). The M0–M4 deliverables are built; the M5
+Status: a personal toolkit, public at `https://drthyang.github.io/nexplan/` since 2026-10-05. The M0–M4 deliverables are built; the M5
 research release waits on print certification of the scattering tables. Nothing is certified for research use.
 
 ## 0. What changed from the draft, and why

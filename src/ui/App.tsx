@@ -335,7 +335,7 @@ export function App() {
         {showNotice && (
           <div className="disclaimer" role="note">
             <span>
-              <b>Public beta</b> · tables cross-checked, not yet certified; validate before publishing · files stay in your browser ·{" "}
+              <b>Work in progress</b> · tables cross-checked, not yet against print; check before publishing · files stay in your browser ·{" "}
               <a href={README} target="_blank" rel="noreferrer">Data provenance</a>
             </span>
             <button type="button" className="disclaimer__close" aria-label="Hide this notice" title="Hide this notice" onClick={hideNotice}>

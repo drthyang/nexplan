@@ -28,8 +28,9 @@
  * direction outright, one that turns with a stage is tested at each solution's
  * angles, and the search goes on past a blocked one.
  *
- * This is the continuous version of NeuXtalViz's stepped "individual peak"
- * coverage (simulate.ts reflectionCoverage), without sampling gaps.
+ * The stepped sweep (simulate.ts reflectionCoverage, after NeuXtalViz's
+ * "individual peak" planner) gives goniometer settings to pick from; this
+ * solves per pixel instead, to draw a filled map of the reachable pixels.
  */
 import type { Mat3, Vec3 } from "@materia/core/math/types";
 import { mulMat, mulVec, transpose } from "@materia/core/math/mat3";

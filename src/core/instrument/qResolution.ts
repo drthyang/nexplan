@@ -19,9 +19,9 @@
  * containment scale, so a Gaussian σ is the value divided by √χ²₃(0.997) = 3.7325; the fitted mosaic of the
  * calibration crystal is left out, and the sample's is an input.
  *
- * Chopper spectrometers (`directCovariance`) have no published Q resolution. The estimate there is geometric: the
- * outgoing angle from the pixel and the sample over L2, an incident divergence if given, and the energy resolution
- * (pychop.ts) as a spread of k_f along k̂_f.
+ * Chopper spectrometers (`directCovariance`): NEXPLAN has no Q-resolution model for them. The estimate there is
+ * geometric: the outgoing angle from the pixel and the sample over L2, an incident divergence if given, and the
+ * energy resolution (pychop.ts) as a spread of k_f along k̂_f.
  */
 import type { Mat3, Vec3 } from "@materia/core/math/types";
 
