@@ -17,7 +17,10 @@ instrument definitions are pinned to. The transcription tests are in `src/core/m
 | Goniometer | R = R₀·R₁·…, counter-clockwise positive; Universal ω(y), χ(z), φ(y) | `Geometry/src/Instrument/Goniometer.cpp` `recalculateR` (quaternion product in axis order), `makeUniversalGoniometer` (298–302); `Goniometer.h:32–34` (CCW = +1) | 1e-12, all SNS goniometers in the catalog |
 | Wavelength and k_f of a reflection | λ = −2q_z/\|q\|², k_f = q + ẑ/λ | `DataObjects/src/Peak.cpp` `setQLabFrame`: 1/λ′ = \|Q\|²/(2·Q_beam), Q_beam = qSign·Q·ẑ | 1e-12; Crystallography convention gives +h, Inelastic (Mantid's default) labels the same peak −h |
 | Neutron scattering lengths | Sears (1992) via NIST | `Kernel/src/NeutronAtom.cpp`, all 370 rows | see [NEUTRON_SEARS1992](NEUTRON_SEARS1992.md): ¹⁷⁵Lu and ¹⁷⁶Lu differ in Mantid's transcription |
-| Detector geometry | flattened from the Mantid IDFs | `instrument/*_Definition*.xml` | IDF reader semantics in `scripts/data/idf.ts` |
+| Detector geometry | flattened from the Mantid IDFs | `instrument/*_Definition*.xml`; `Geometry/src/Instrument/InstrumentDefinitionParser.cpp` | IDF reader semantics in `scripts/data/idf.ts`, defaults as the parser's (rotation axis components, `idstepbyrow`) |
+| Pixel column and row | ISAW: col = (x/w + ½)·n + ½, centres at 1 … n | `SaveIsawPeaks.cpp:367-369`, `Peak.cpp:255-260`, `RectangularDetector::getXYForDetectorID` | Mantid's Peak Row/Col of a rectangular detector are 0-based: round(col) − 1 |
+| Sign of hkl | crystallographic, q = k_f − k_i = UB·h | `LoadIsawUB.cpp:129-159`, `SaveIsawUB.cpp:126-136` (UB's sign kept); `LoadIsawPeaks.cpp:427-432`, `SaveIsawPeaks.cpp:292-294` (hkl × qSign) | under Q.convention = Inelastic (the default) Mantid labels the same peak −hkl; the MDNorm limits are mirrored for it |
+| Detector map | γ = atan2(u_x, u_z), ν = asin(u_y), plotted equirectangularly | `MantidWidgets/InstrumentView/UnwrappedCylinder.cpp`, `RotationSurface.cpp` | Mantid's cylindrical view is equal-area (sin ν upwards); cos 2θ = cos γ·cos ν either way |
 
 ## End-to-end checks against Mantid output
 

@@ -57,7 +57,9 @@ research release waits on print certification of the scattering tables. Nothing 
 | License: AGPL-3.0-only, full text in `LICENSE` | done |
 | Detector masks (edge pixels, panels, Mantid mask files by detector ID) and sample-environment shadows (lab or stage frame), in every hit test | done; gaps between the tubes of a pack are not modelled |
 | Counting time (flux) | not started |
-| Binning: recorded HKL range along chosen axes and bins from the resolution (TOPAZ, CORELLI: garnet-tools' Q model; ARCS, SEQUOIA, CNCS: PyChop ΔE and a geometric Q estimate), as MDNorm parameters | done; tested against garnet-tools and PyChop run on pinned files |
+| Binning: recorded HKL range along chosen axes and bins from the resolution (TOPAZ, CORELLI: garnet-tools' Q model; ARCS, SEQUOIA, CNCS: PyChop ΔE and a geometric Q estimate), as MDNorm parameters | done; tested against garnet-tools and PyChop run on pinned files; limits written for Mantid's default Q convention or the crystallographic one |
+| Code review of the formulas against the literature and pinned upstream code (2026-10-06; not the domain-expert review of M5) | done: corrections and their tests in CONVENTIONS §13 (focused banks, TOF on Q, exact coverage, MDNorm Q convention, centring completion, coincident images, smaller ones); references in CONVENTIONS §12 |
+| UI review (2026-10-06) | done: pages in three groups (Sample · Setup · Simulation); Δd/d set where it acts (powder views) rather than in the bar; one d_min note per page; structure viewer without the light and finish knobs |
 
 ## 1. Product objective
 
@@ -115,7 +117,7 @@ generate reference fixtures, never on the user's machine.
 |---|---|---|
 | `core/math/*` | Vec3/Mat3/complex/linear algebra | Unit tests: inverse, determinant, complex ops |
 | `core/crystal/unitCell` | metric G, G*, d, Q = 2π/d, volume | Analytic triclinic cases vs an independent metric implementation (rel. 1e-12) |
-| `core/crystal/symmetry` | `equivalentPositions`, `siteMultiplicity`, `isReflectionAbsent` | Absences vs gemmi for all 230 groups; multiplicities vs ITA |
+| `core/crystal/symmetry` | `isReflectionAbsent` as an independent cross-check in the tests, and the 3D viewer's cell expansion; the core uses its own exact implementations (`src/core/symmetry`) | Absences vs gemmi for all 230 groups; multiplicities vs ITA |
 | `core/diffraction/profile` | unit-area Gaussian, Lorentzian, pseudo-Voigt, TCH | Area = 1 within 1e-6 by quadrature |
 | `core/diffraction/intensity` `lorentzPolarization` | CW Debye–Scherrer L and X-ray polarization | Formula vs ITC Vol. C §6.2.5; add monochromator term |
 | `core/scattering/cromerMannData` | ITC CM coefficients (comparison mode only) | Done: `docs/data-verification/MATERIA_TABLES.md` |
@@ -155,12 +157,13 @@ re-copies the pinned files and fails if any copied file was edited locally.
    physics convention: time dependence exp(−iωt), and Im of the scattering amplitude positive by the optical
    theorem. The crystallographic convention, F = Σ f exp(+2πi h·x) with f″ > 0, is the complex conjugate of the
    physics convention. So the neutron term in F is **conj(b) = b′ + i b″**. Tables store b exactly as printed; the
-   structure factor conjugates. A test enforces that X-ray f″ > 0 and neutron absorption give Bijvoet differences
-   of the same sign for the same structure.
+   structure factor conjugates. Tests enforce that every absorbing nucleus gets a positive imaginary amplitude (the
+   sign of X-ray f″), that |F(h)|² equals the physics-convention amplitude, and that the printed b would give I(−h).
+   (There are no anomalous X-ray terms yet to compare Bijvoet differences with.)
 8. Elastic Bragg condition λ ≤ 2d. Inaccessible reflections are rejected; arcsine inputs are clamped only for
    documented round-off (|x| − 1 < 1e-12).
 9. X-ray f in electrons; neutron b in fm. Raw \|F\|² from the two are never compared on a common absolute scale.
-10. F(000) is a diagnostic only and is excluded from reflection lists.
+10. F(000) is excluded from reflection lists (it is not computed).
 11. B_iso = 8π²U_iso, T = exp(−B s²), s = sinθ/λ = 1/(2d).
 
 Basis change, with column vectors and A_new = A_old·P, matching ITA (a′, b′, c′) = (a, b, c)P:
@@ -237,10 +240,10 @@ f0(s) = Σ₁⁵ aᵢ exp(−bᵢ s²) + c, for 0 ≤ s ≤ 6 Å⁻¹. Outside t
    valid.
 3. **GSAS-II Tl3+:** a2 is 18.3481 where the other three sources have 18.3841. It looks like a digit transposition,
    and gives f(0) − N = −0.041 e.
-4. **MATERIA neutron table** (at `0ee9a7e`; fixed in PR #27): In = 2.08 fm (Sears 4.065); imaginary parts dropped for B, Cd, Sm, Eu, Gd, Dy, In; Pu and
-   Cm take isotope values; Au = 7.9 fm is Rauch 2003, not Sears 1992. MATERIA's X-ray CM table matches all four
-   transcriptions for 96 of 97 rows. The 97th, Si, is absent from cctbx under that label and identical to the other
-   three.
+4. **MATERIA neutron table** (at `0ee9a7e`; fixed in PR #27): In = 2.08 fm (Sears 4.065); imaginary parts dropped for B,
+   Cd, Sm, Eu, Gd, Dy, In; Pu and Cm take isotope values; Au = 7.9 fm is Rauch 2003, not Sears 1992. MATERIA's X-ray CM
+   table matches all four transcriptions for 96 of 97 rows. The 97th, Si, is absent from cctbx under that label and
+   identical to the other three.
 5. **Dans_Diffraction Sears file:** the sign of the imaginary part is inconsistent (B +0.213, ³He −1.483).
 
 ### 5.5 Manifest and update policy
@@ -267,8 +270,9 @@ regression suite and a changelog entry.
 - **Data blocks.** List all blocks with their phase name, formula and cell. The user selects one. Keep the input bytes
   and their sha256.
 - **CIF 2.0.** The magic `#\#CIF_2.0` and DDLm-only names are detected and rejected with a message.
-- **Symmetry operations.** Parse each operation as rational affine x′ = Rx + t, with R in {−1, 0, 1} and t in
-  twelfths or twenty-fourths. Anything else is rejected. Uploaded text is never evaluated as code.
+- **Symmetry operations.** Parse each operation as rational affine x′ = Rx + t, with R an integer matrix of
+  determinant ±1 and t in twenty-fourths (a decimal within 10⁻⁴ of k/24 is snapped to it). Anything else is rejected.
+  Uploaded text is never evaluated as code.
 - **Symmetry sources, in order:**
   1. explicit operations;
   2. Hall symbol;
@@ -277,18 +281,18 @@ regression suite and a changelog entry.
 
   Conflicts between sources are reported. Explicit operations win only after the group they generate is checked to be
   closed.
-- **Site expansion.** Expand each asymmetric-unit site once. Remove duplicates within that site's orbit using a
-  distance tolerance in Å (default 0.01 Å). Keep distinct species that share a position (disorder). Cross-check
-  against `_atom_site_symmetry_multiplicity` where it is given.
+- **Site expansion.** Expand each asymmetric-unit site once. Merge images within that site's orbit closer than a
+  distance tolerance in Å (0.02 Å), by connected groups so that the result stays symmetric. Keep distinct species that
+  share a position (disorder). Cross-check against `_atom_site_symmetry_multiplicity` where it is given.
 - **Validation.** Volume > 0, metric positive-definite, 0 < occupancy ≤ 1, and the sum of occupancies at a shared
   site ≤ 1 + 1e-3.
 - **Defaults.** Missing occupancy or ADP takes a visible, recorded default (1 and 0).
-- **Anisotropic ADPs.** Not supported in v1. They are reported and never silently discarded. The user can either
-  convert them to U_eq, a recorded assumption, or stop.
+- **Anisotropic ADPs.** Not supported in v1. They are reported and never silently discarded: the site uses the
+  file's U_iso_or_equiv, or else U_eq computed from the U^ij (Fischer & Tillmanns 1988), a recorded assumption.
 - **Species.** Resolve from `_atom_site_type_symbol`, which includes charge (`Fe3+`, `Fe+3`, `O2-`). Fall back to
-  `_atom_type_symbol`, then to the label with case-insensitive element matching, which needs user confirmation when
-  ambiguous (`CA` could be C or Ca). Isotopes come only from an explicit rule: `D`, `2H`, `H2` in a type symbol, or a
-  user choice.
+  the label with case-insensitive element matching, which needs user confirmation when ambiguous (`CA` could be C or
+  Ca). Isotopes come only from an explicit rule: `D` or a mass number (`2H`, `57Fe`) in a type symbol, or a user
+  choice. (`H2` is read as hydrogen, not deuterium: as a label it usually names a second H site.)
 
 ### 6.1 Published-structure databases
 
@@ -306,7 +310,7 @@ Unchanged from the draft.
 - **Structure factor.** F(h) = Σⱼ oⱼ·aⱼ(s)·Tⱼ(s)·exp(2πi h·xⱼ) over the expanded cell, where aⱼ is complex:
   f0 for X-ray, conj(b) for neutrons.
 - **Enumeration.** Use the per-axis bound |hᵢ| ≤ ⌊|aᵢ|/d_min⌋, then filter by |g| ≤ 1/d_min. A tested limit on the
-  count (default 2 × 10⁶ signed reflections) raises an error suggesting a larger d_min. The output is never
+  count (the app passes 4 × 10⁵ signed reflections) raises an error suggesting a larger d_min. The output is never
   truncated.
 - **Absence classes.** *Systematic*: some op has hR = h and h·t ∉ ℤ. *Accidental*: |F| is small but not
   systematic, with the threshold reported. *Present*.
@@ -366,7 +370,7 @@ is recorded in the relevant report, as `XRAY_WK1995.md` does.
 | Complex F | Analytic structures; gemmi with matched tables | \|Δ\| ≤ 1e-8·S + 1e-8\|F_ref\| |
 | Absences | gemmi `is_systematically_absent`, all settings | exact |
 | Enumeration | Brute force over a cube, triclinic cells | identical sets |
-| Complex-b sign | X-ray f″ vs neutron b″ Bijvoet parity | same sign |
+| Complex-b sign | Im a > 0 for every absorber; physics-convention \|F\|²; printed b gives I(−h) | exact |
 | UB invariant | Synthetic P, R | rel ≤ 1e-12 |
 | ISAW round trip | Mantid fixtures | within serialized precision |
 | Powder area | Quadrature, grid convergence | rel ≤ 1e-4 |
@@ -381,7 +385,7 @@ handedness; real ISAW files; malformed CIFs.
 
 Match the layout and style of MATERIA, NEBULA3D and the RMCProfile Workbench: the same typography, color tokens,
 panel structure, header with status chips, light and dark themes, and phone/tablet behavior. Shared tokens live in
-`src/ui/theme.css` and are copied from those projects, not reinvented.
+`src/ui/tokens.css` and are copied from those projects, not reinvented.
 
 - **Calculation-status panel:** the dataset tiers used, assumptions applied, unsupported inputs and limits.
 - **Exports** (CSV, JSON, session file) record:
