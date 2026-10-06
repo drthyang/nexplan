@@ -1,13 +1,14 @@
 /**
  * Neutron time-of-flight powder diffraction at one detector bank.
  *
- * Position (GSAS-II convention, GSASIIlattice.py):  t = ZERO + DIFC·d + DIFA·d²  (µs)
+ * Position (GSAS-II convention, GSASIIlattice.py):  t = ZERO + DIFC·d + DIFA·d²  (µs; GSAS-II's DIFB/d term is 0)
  * DIFC from geometry (Mantid Unit.cpp):              DIFC = (m_n/h)·L·2 sinθ
  *   with m_n/h = 252.778 µs/(m·Å) (CODATA 2018), L = L1 + L2 (m), 2θ the bank angle.
- * Intensity (GSAS-II GSASIIstrMath.py, "TOF Lorentz correction"):
- *   I = Σ|F|² · sinθ · d⁴   for incident-spectrum-normalized data.
+ * Intensity (GSAS-II GSASIIstrMath.py, "TOF Lorentz correction"; Von Dreele, Jorgensen & Windsor,
+ * J. Appl. Cryst. 15, 581 (1982)):
+ *   I = Σ|F|² · sinθ · d⁴   (line area on the TOF axis) for incident-spectrum-normalized data.
  * Peak shape (GSAS-II GSASIIpwd.py; MATERIA tofBackToBack): back-to-back
- *   exponentials ⊗ Gaussian with α = α₁/d, β = β₀ + β₁/d⁴, σ² = σ₀ + σ₁d² + σ₂d⁴,
+ *   exponentials ⊗ Gaussian with α = α₁/d, β = β₀ + β₁/d⁴ + β_q/d², σ² = σ₀ + σ₁d² + σ₂d⁴ + σ_q·d,
  *   or a Gaussian of constant relative resolution Δd/d (FWHM_t = (Δd/d)·t).
  *
  * Not modelled: the incident spectrum and detector efficiency (assumed
@@ -142,7 +143,11 @@ export function backToBackValidFrom(shape: Extract<TofShape, { kind: "backToBack
   return from;
 }
 
-/** GSAS-II's FWHM (µs) of the back-to-back profile at d with no Lorentzian: 2.35482·σ + ln2·(α + β)/(αβ). */
+/**
+ * GSAS-II's FWHM (µs) of the back-to-back profile at d with no Lorentzian: 2.35482·σ + ln2·(α + β)/(αβ)
+ * (GSASIIpwd.py getFWHM). It adds the Gaussian and exponential widths, so it overstates the profile's true FWHM
+ * (by 6–10 % for POWGEN's 0.8 Å frame at d = 0.5–4 Å); a "≥ 1 FWHM apart" test with it errs on the side of overlap.
+ */
 export function backToBackFwhm(shape: Extract<TofShape, { kind: "backToBack" }>, d: number): number {
   const p = backToBackAt(shape, d);
   return 2.35482 * p.sigma + (Math.LN2 * (p.alpha + p.beta)) / (p.alpha * p.beta);
@@ -175,9 +180,11 @@ function narrowestRelativeWidth(shape: TofShape, peaks: readonly PowderPeak[]): 
 /**
  * Pattern on a logarithmic TOF grid (constant Δt/t, as TOF data are usually
  * binned), each peak a unit-area shape times its integrated intensity, so the
- * area over TOF equals Σ intensities. For a d or Q axis the same density is
- * transformed with its Jacobian (|dt/dd| = DIFC + 2·DIFA·d; |dt/dQ| = |dt/dd|·d²/2π)
- * so areas are preserved on every axis.
+ * area over TOF equals Σ intensities. On a d or Q axis the same values are
+ * relabelled (d from t, Q = 2π/d), as Mantid's ConvertUnits keeps a histogram's
+ * values: each bin of vanadium-normalised data is a ratio of sample to vanadium
+ * counts, which a change of axis does not alter. Line areas then go as Σ|F|²·d⁴ on d
+ * and Σ|F|²·d² ∝ Σ|F|²/Q² on Q (the powder cross-section).
  */
 export function synthesizeTof(
   peaks: readonly PowderPeak[],
@@ -209,20 +216,14 @@ export function synthesizeTof(
     for (let i = lo; i <= Math.min(hi, n - 1); i++) y[i]! += p.intensity * tofShapeAt(shape, p, t[i]! - p.tof!);
   }
   if (axis === "tof") return { x: t, y };
-  // Density transform to d (or Q), reversed for Q so x increases.
+  // The same values on d (or Q, reversed so that x increases).
   const x = new Float64Array(n);
   const yd = new Float64Array(n);
   for (let i = 0; i < n; i++) {
     const d = dFromTof(bank, t[i]!);
-    const dtdd = bank.difc + 2 * bank.difa * d;
-    if (axis === "d") {
-      x[i] = d;
-      yd[i] = y[i]! * dtdd;
-    } else {
-      const j = n - 1 - i;
-      x[j] = (2 * Math.PI) / d;
-      yd[j] = (y[i]! * dtdd * d * d) / (2 * Math.PI);
-    }
+    const j = axis === "d" ? i : n - 1 - i;
+    x[j] = axis === "d" ? d : (2 * Math.PI) / d;
+    yd[j] = y[i]!;
   }
   return { x, y: yd };
 }

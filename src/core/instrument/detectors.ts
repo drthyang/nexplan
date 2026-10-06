@@ -3,10 +3,12 @@
  *
  * Panels are in the Mantid lab frame (beam +z, up +y), metres, with the sample
  * at the origin. A ray leaves the sample along the unit vector u (the
- * direction of k_f). Pixel coordinates follow the ISAW / Mantid peaks-file
- * convention, verified on TOPAZ_3007: col = (x/width + ½)·nCols + ½ and
+ * direction of k_f). Pixel coordinates follow the ISAW peaks-file convention,
+ * verified on TOPAZ_3007: col = (x/width + ½)·nCols + ½ and
  * row = (y/height + ½)·nRows + ½, where x and y are the hit's offsets from the
  * panel centre along `base` and `up` (so pixel centres sit at 1 … n).
+ * Mantid's own Peak Row/Col of a rectangular detector are 0-based pixel indices:
+ * round(col) − 1.
  *
  * Masks (acceptance.ts) ride on the panels: a ray stops at the first panel it
  * meets, and is not recorded when that panel is off or the pixel masked.

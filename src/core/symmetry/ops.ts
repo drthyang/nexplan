@@ -3,8 +3,9 @@
  *
  * R is an integer matrix and t is stored as integer numerators over 24 (the
  * denominator gemmi uses), reduced mod 24. Every operation from a CIF is parsed
- * by a strict grammar; text is never evaluated as code, and a translation that
- * is not a multiple of 1/24 is rejected instead of rounded.
+ * by a strict grammar; text is never evaluated as code. A translation must be a
+ * multiple of 1/24: a fraction that is not is rejected, and a decimal is snapped
+ * to the nearest k/24 only when it lies within 1e-4 of it (0.3333 → 1/3).
  */
 
 export const TDEN = 24;

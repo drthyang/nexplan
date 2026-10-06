@@ -1,7 +1,9 @@
 /**
  * Instrumental Q resolution as a covariance (Å⁻², Q = 2π|q|) for a detector direction and wavelength.
  *
- * Form (A. D. Stoica, Acta Cryst. A31, 193 (1975); J. B. Forsyth (1988)), as ORNL's garnet-tools models single-crystal
+ * Form (A. D. Stoica, Acta Cryst. A31, 193–196 (1975); J. B. Forsyth, in Chemical Crystallography with Pulsed
+ * Neutrons and Synchrotron X-rays, eds. Carrondo & Jeffrey, Springer Netherlands (1988), pp. 117–135; the mosaic term is the
+ * small-rotation result δQ = δω × Q), as ORNL's garnet-tools models single-crystal
  * peak shapes (neutrons/garnet-tools @ 4eb3206, src/garnet/reduction/resolution.py `_model_design_lab`,
  * BSD-3-Clause):
  *
@@ -112,7 +114,11 @@ export function whiteBeamCovariance(u: Vec3, lambda: number, p: WhiteBeamResolut
  * σ_E (meV) of |k_f| = √(0.482596·E_f) (Å⁻¹).
  */
 export function directCovariance(u: Vec3, ki: number, kf: number, sigmaE: number, outH: number, outV: number, incident: number, mosaic = 0): Mat3 {
-  const [gf, nf] = outgoing(u);
+  // outH and outV are physical angles (pixel and sample sizes over L2), so both directions are unit vectors here;
+  // garnet's γ̂f, of length cos ν, belongs to an uncertainty in the coordinate γ.
+  const [g, nf] = outgoing(u);
+  const rho = Math.hypot(u[0], u[2]);
+  const gf: Vec3 = [g[0] / rho, g[1] / rho, g[2] / rho];
   const m = new Array<number>(9).fill(0);
   outer([1, 0, 0], ki ** 2 * incident ** 2, m);
   outer([0, 1, 0], ki ** 2 * incident ** 2, m);

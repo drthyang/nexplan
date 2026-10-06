@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { cwPeaks } from "../core/diffraction/powder.ts";
 import { backToBackFwhm, backToBackValidFrom, synthesizeTof, tofFromWavelength, tofPeaks, type TofBank, type TofShape } from "../core/diffraction/tof.ts";
-import { focusedBank, focusedPeaks, focusedTofBank, meanSinTheta } from "../core/instrument/focus.ts";
+import { focusedBank, focusedPeaks, focusedTofBank, recordsD } from "../core/instrument/focus.ts";
 import type { ChopperFrame } from "../core/ub/instruments.ts";
 import { elasticPattern } from "../core/instrument/powderRings.ts";
 import { coveredTwoTheta, dRangeAt, panelDifc } from "../core/instrument/simulate.ts";
@@ -17,7 +17,7 @@ import { Card, Segmented } from "./components.tsx";
 import { CoverageChart, type CoverageLine } from "./CoverageChart.tsx";
 import { downloadText, exact, fmt, hklText } from "./format.ts";
 import { PowderPlot } from "./PowderPlot.tsx";
-import { AcceptanceNote, DMinNote, defaultPanel, InstrumentRequired, lam, LOWEST_SUGGESTED_DMIN, suggestDMin, usePowderGroups, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
+import { AcceptanceNote, DOverDField, defaultPanel, InstrumentRequired, lam, LOWEST_SUGGESTED_DMIN, suggestDMin, usePowderGroups, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
 
 /** GSAS-II TOF profile of a POWGEN frame, held at the shortest d where the fitted parameters are physical. */
 function frameShape(pr: NonNullable<ChopperFrame["profile"]>): Extract<TofShape, { kind: "backToBack" }> {
@@ -115,15 +115,6 @@ export function InstrumentPowder(props: SimPageProps) {
   );
   const lines = useMemo<CoverageLine[]>(() => groups.map((x) => ({ d: x.d, weight: x.sumF2, label: x.families.map((f) => `(${hklText(f.hkl)})`).join(" + ") })), [groups]);
   const panelOrder = useMemo(() => info.map((a, i) => ({ a, i })).sort((x, y) => x.a.twoThetaCenter - y.a.twoThetaCenter), [info]);
-
-  if (!instrument || !bank || !pa)
-    return (
-      <InstrumentRequired exp={exp} onExp={onExp} need="any" title="Choose an instrument">
-        The instrument powder pattern needs an SNS detector array.
-      </InstrumentRequired>
-    );
-
-  const peakSel = sel !== null ? peaks.findIndex((p) => p.d === groups[sel]!.d) : -1;
   // For a selected line: its width here, whether the nearest line is at least one FWHM away (separated), and the
   // sharpest bank (NOMAD) or POWGEN frame that records it, with the widths in use.
   const selNote = useMemo(() => {
@@ -146,7 +137,7 @@ export function InstrumentPowder(props: SimPageProps) {
     }
     if (byBank && focused.length > 1) {
       const options = focused
-        .filter((f) => Number.isFinite(meanSinTheta(f.bank, g.d, exp.lambdaMin, exp.lambdaMax)))
+        .filter((f) => recordsD(f.bank, g.d, exp.lambdaMin, exp.lambdaMax))
         .map((f) => ({ label: f.spec.name, rel: exp.peakWidth === "instrument" && f.spec.dOverD !== undefined ? f.spec.dOverD : exp.dOverD }));
       const best = options.reduce<(typeof options)[number] | undefined>((b, o) => (!b || o.rel < b.rel ? o : b), undefined);
       if (best) parts.push(`sharpest bank recording it: ${best.label} (${fmt(100 * best.rel, 2)} %)`);
@@ -160,6 +151,15 @@ export function InstrumentPowder(props: SimPageProps) {
     return parts.join(" · ");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sel, mono, groups, peaks, fb, bank, tofShape, byBank, focused, exp.peakWidth, exp.dOverD, exp.lambdaMin, exp.lambdaMax, instrument]);
+
+  if (!instrument || !bank || !pa)
+    return (
+      <InstrumentRequired exp={exp} onExp={onExp} need="any" title="Choose an instrument">
+        The instrument powder pattern needs an SNS detector array.
+      </InstrumentRequired>
+    );
+
+  const peakSel = sel !== null ? peaks.findIndex((p) => p.d === groups[sel]!.d) : -1;
   const seen = dRangeAt(pa.twoThetaCenter, exp.lambdaMin, exp.lambdaMax);
   // What the pattern cannot show because reflections stop at d_min: the shortest d this view records, and the shaded range.
   const calcDMin = result.provenance.dMin;
@@ -188,7 +188,7 @@ export function InstrumentPowder(props: SimPageProps) {
   const what = mono
     ? `${instrument.goniometer.label} elastic powder pattern; lambda ${lambda0} A; 2theta ${fmt(covered[0]?.[0] ?? 0, 2)}-${fmt(covered.at(-1)?.[1] ?? 0, 2)} deg (zero in detector gaps); intensity per solid angle sumF2/(sin^2 th cos th)`
     : fb
-      ? `${instrument.goniometer.label} ${fb.spec.name} focused (${fb.idx.length} panels: ${fb.spec.panels.join(" ")}); effective 2theta ${fb.bank.twoThetaDeg} deg, L1 ${l1} m, L2 ${fb.bank.l2} m, DIFC ${exact(fb.bank.difc)} us/A; I = sumF2*d^4*<sin th>(d), solid-angle weighted over the cells that record d`
+      ? `${instrument.goniometer.label} ${fb.spec.name} focused (${fb.idx.length} panels: ${fb.spec.panels.join(" ")}); effective 2theta ${fb.bank.twoThetaDeg} deg, L1 ${l1} m, L2 ${fb.bank.l2} m, DIFC ${exact(fb.bank.difc)} us/A; I = sumF2*d^4*sin(th_f) at the effective angle (vanadium-normalised: angle and solid angle cancel cell by cell), lines recorded by some cell`
       : `${instrument.goniometer.label} ${panels[panel]!.name} as one bank at 2theta ${exact(pa.twoThetaCenter)} deg, L1+L2 ${exact(l1 + pa.l2)} m, DIFC ${exact(bank.difc)} us/A; I = sumF2*sin(th)*d^4`;
   const provenance = `# NEXPLAN; ${result.structure.name || result.blockName} (data_${result.blockName}), input sha256 ${result.provenance.inputSha256}; lambda band ${exp.lambdaMin}-${exp.lambdaMax} A; d_min ${calcDMin} A; dd/d ${exp.dOverD}`;
   const exportPeaks = () => {
@@ -225,21 +225,20 @@ export function InstrumentPowder(props: SimPageProps) {
           mono
             ? "Elastic intensity per unit solid angle against 2θ over all panels, as a chopper spectrometer records it at the elastic line: I = Σ|F|²/(sin²θ cosθ) (CW powder Lorentz factor, no polarization for neutrons), each peak a Gaussian of FWHM 2·tanθ·√((Δd/d)² + (ΔE/2E)²); zero where no panel covers 2θ. Click a peak to select it in the coverage chart."
             : fb
-              ? "Neutron TOF pattern of a focused bank, as the data are reduced: the bank's panels are split into cells, each recording d from λmin/(2 sinθ) to λmax/(2 sinθ) at its own angle; after focusing and vanadium normalisation a line at d has I = Σ|F|²·d⁴·⟨sinθ⟩(d), the mean over the cells that record d weighted by their solid angles. Drawn on the bank's calibrated DIFC where ORNL publishes one, else DIFC = 252.778·(L1 + L2)·2 sinθ µs/Å with the effective 2θ and L2 (no DIFA, ZERO). Peak widths: the instrument's published resolution (NOMAD's measured Δd/d per bank; POWGEN's GSAS-II profile for the chosen frame, which widens with d), or the Δd/d of the bar."
+              ? "Neutron TOF pattern of a focused bank, as the data are reduced: the bank's panels are split into cells, each recording d from λmin/(2 sinθ) to λmax/(2 sinθ) at its own angle; after focusing and vanadium normalisation the angle, solid angle and incident spectrum cancel cell by cell, so a line at d has I = Σ|F|²·d⁴·sinθ_f on the focused TOF axis (the GSAS-II TOF Lorentz factor at the effective angle θ_f), wherever some cell records it. Drawn on the bank's calibrated DIFC where ORNL publishes one, else DIFC = 252.778·(L1 + L2)·2 sinθ µs/Å with the effective 2θ and L2 (no DIFA, ZERO). Peak widths: the instrument's published resolution (NOMAD's measured Δd/d per bank; POWGEN's GSAS-II profile for the chosen frame, which widens with d), or a constant Δd/d set beside them."
               : "Neutron TOF pattern of the selected panel treated as one bank at its centre angle: DIFC = 252.778·(L1 + L2)·2 sinθ µs/Å (no DIFA, ZERO; real banks are calibrated). I = Σ|F|²·sinθ·d⁴ (GSAS-II TOF Lorentz factor, incident spectrum normalised out), Gaussian peaks of constant Δd/d on a logarithmic TOF grid. Pick another panel below, in the coverage strip, or on the Detectors page."
         }
         actions={
-          mono ? undefined : (
-            <>
-              {focused.length > 0 && <Segmented label="Pattern of" value={exp.powderView} onChange={(v) => onExp({ ...exp, powderView: v })} options={[{ value: "bank", label: "Focused bank" }, { value: "panel", label: "One panel" }]} />}
-              {instrumentWidth && (
-                <span title={`Peak widths: ${instrumentWidth.detail}, or the Δd/d set in the bar`}>
-                  <Segmented label="Peak widths" value={exp.peakWidth} onChange={(v) => onExp({ ...exp, peakWidth: v })} options={[{ value: "instrument", label: "Instrument" }, { value: "fixed", label: "Δd/d" }]} />
-                </span>
-              )}
-              <Segmented label="Axis" value={axis} onChange={setAxis} options={[{ value: "tof", label: "TOF" }, { value: "d", label: "d" }, { value: "q", label: "Q" }]} />
-            </>
-          )
+          <>
+            {!mono && focused.length > 0 && <Segmented label="Pattern of" value={exp.powderView} onChange={(v) => onExp({ ...exp, powderView: v })} options={[{ value: "bank", label: "Focused bank" }, { value: "panel", label: "One panel" }]} />}
+            {!mono && instrumentWidth && (
+              <span title={`Peak widths: ${instrumentWidth.detail}, or a constant Δd/d`}>
+                <Segmented label="Peak widths" value={exp.peakWidth} onChange={(v) => onExp({ ...exp, peakWidth: v })} options={[{ value: "instrument", label: "Instrument" }, { value: "fixed", label: "Δd/d" }]} />
+              </span>
+            )}
+            {!widthFromInstrument && <DOverDField exp={exp} onExp={onExp} />}
+            {!mono && <Segmented label="Axis" value={axis} onChange={setAxis} options={[{ value: "tof", label: "TOF" }, { value: "d", label: "d" }, { value: "q", label: "Q" }]} />}
+          </>
         }
       >
         {cutoff && (
@@ -346,7 +345,6 @@ export function InstrumentPowder(props: SimPageProps) {
               <p className="empty-note">
                 TOF window {fmt(fb.bank.difc * fb.bank.dMin, 0)}–{fmt(fb.bank.difc * fb.bank.dMax, 0)} µs on the focused DIFC · {peaks.length.toLocaleString()} peaks.
               </p>
-              <DMinNote result={result} info={info} lambdaMin={exp.lambdaMin} onDMin={onDMin} />
               <AcceptanceNote panels={panels} shadows={shadows} />
             </Card>
           ) : (
@@ -397,7 +395,6 @@ export function InstrumentPowder(props: SimPageProps) {
                 TOF window {fmt(bank.difc * seen.dMin, 0)}–{fmt(bank.difc * seen.dMax, 0)} µs at the panel centre · {peaks.length.toLocaleString()} peaks.
               </p>
             )}
-            <DMinNote result={result} info={info} lambdaMin={exp.lambdaMin} onDMin={onDMin} />
             <AcceptanceNote panels={panels} shadows={shadows} />
           </Card>
           )}

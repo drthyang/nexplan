@@ -11,7 +11,7 @@
  *    detector factors depend only on d (and the instrument), so at similar d
  *    the ratio of strengths is the ratio of line intensities for equal volumes.
  *  - TOF weighting j|F|²d⁴/v_c² (fm²/Å²): at a fixed detector angle the TOF
- *    Lorentz factor λ⁴/sin²θ ∝ d⁴ (as in powderRings.ts), so ranking lines by it
+ *    Lorentz factor λ⁴/sin³θ = 16·d⁴·sinθ ∝ d⁴ (per unit solid angle, powderRings.ts), so ranking lines by it
  *    matches a measured TOF pattern apart from the source spectrum.
  */
 

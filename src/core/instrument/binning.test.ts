@@ -3,7 +3,7 @@ import type { Mat3, Vec3 } from "@materia/core/math/types";
 import { goniometerMatrix } from "../ub/goniometer.ts";
 import { SNS_INSTRUMENTS } from "../ub/instrumentsSns.ts";
 import { ubFromU } from "../ub/ub.ts";
-import { energyBinning, niceStep, roundRange, suggestBinning } from "./binning.ts";
+import { energyBinning, mdnormBinning, niceStep, roundRange, suggestBinning } from "./binning.ts";
 import { panelSamples } from "./hklRange.ts";
 import { FWHM_PER_SIGMA, GARNET_RESOLUTION, whiteBeamCovariance } from "./qResolution.ts";
 
@@ -13,6 +13,22 @@ const I3: Mat3 = [
   [0, 0, 1],
 ];
 const corelli = SNS_INSTRUMENTS.find((i) => i.id === "corelli")!;
+
+describe("MDNorm limits and Mantid's Q convention", () => {
+  it("crystallographic: as recorded; Inelastic (Mantid's default, which labels h as −h): mirrored, the slab centre too", () => {
+    const axis = { min: -4.18, step: 0.01, max: 4.59 };
+    expect(mdnormBinning(axis, "crystallography")).toBe("-4.18,0.01,4.59");
+    expect(mdnormBinning(axis, "inelastic")).toBe("-4.59,0.01,4.18");
+    expect(mdnormBinning({ min: 0, step: 0.05, max: 2.5 }, "inelastic")).toBe("-2.5,0.05,0");
+    expect(mdnormBinning(axis, "crystallography", { centre: 1, thickness: 0.1 })).toBe("0.95,1.05");
+    expect(mdnormBinning(axis, "inelastic", { centre: 1, thickness: 0.1 })).toBe("-1.05,-0.95");
+    // A point recorded at h lies in the mirrored box at −h, the label Mantid gives it.
+    for (const h of [-4.18, 0.3, 4.59]) {
+      const [lo, , hi] = mdnormBinning(axis, "inelastic").split(",").map(Number);
+      expect(-h >= lo! && -h <= hi!).toBe(true);
+    }
+  });
+});
 
 describe("binning", () => {
   it("nice steps round to the nearest of 1, 2, 2.5, 5 × 10ⁿ; ranges round out to whole bins on multiples of the step", () => {

@@ -156,28 +156,36 @@ export function expandModel(model: StructureModel, opts: { mergeTolerance?: numb
   const multiplicities: number[] = [];
   const diagnostics: Diagnostic[] = [];
   model.sites.forEach((site, siteIndex) => {
-    // Cluster coincident images; each cluster becomes its centroid. The centroid set is
-    // invariant under the group, so a site on a rounded special position (0.3333 for 1/3)
-    // still expands to an exactly symmetric arrangement.
-    const clusters: { first: [number, number, number]; sum: [number, number, number]; n: number }[] = [];
-    let closest = Infinity;
-    for (const op of ops) {
-      const x = applyOp(op, site.fract).map(wrap) as [number, number, number];
-      let hit: (typeof clusters)[number] | undefined;
-      for (const cl of clusters) {
-        const d = periodicDistance(G, x, cl.first);
-        if (d < tol) {
-          hit = cl;
-          break;
-        }
-        closest = Math.min(closest, d);
+    // Coincident images: every pair closer than tol is linked, and each connected component becomes its centroid.
+    // The operations are isometries that permute the images, so they permute the components too, and the centroid
+    // set is invariant under the group whatever the order of the operations: a site on a rounded special position
+    // (0.3333 for 1/3) still expands to an exactly symmetric arrangement.
+    const images = ops.map((op) => applyOp(op, site.fract).map(wrap) as [number, number, number]);
+    const n = images.length;
+    const parent = images.map((_, k) => k);
+    const root = (k: number): number => (parent[k] === k ? k : (parent[k] = root(parent[k]!)));
+    const dist: number[] = [];
+    for (let a = 0; a < n; a++)
+      for (let b = a + 1; b < n; b++) {
+        const d = periodicDistance(G, images[a]!, images[b]!);
+        dist.push(d);
+        if (d < tol) parent[root(b)] = root(a);
       }
-      if (hit) {
-        for (let i = 0; i < 3; i++) hit.sum[i]! += x[i]! - Math.round(x[i]! - hit.first[i]!);
-        hit.n++;
-      } else clusters.push({ first: x, sum: [...x], n: 1 });
-    }
-    const orbit = clusters.map((cl) => cl.sum.map((v) => wrap(v / cl.n)) as [number, number, number]);
+    // The closest pair of images left in different components.
+    let closest = Infinity;
+    for (let a = 0, k = 0; a < n; a++) for (let b = a + 1; b < n; b++, k++) if (root(a) !== root(b)) closest = Math.min(closest, dist[k]!);
+    const components = new Map<number, { first: [number, number, number]; sum: [number, number, number]; n: number }>();
+    images.forEach((x, k) => {
+      const r = root(k);
+      const cl = components.get(r);
+      if (!cl) components.set(r, { first: x, sum: [...x], n: 1 });
+      else {
+        // Unwrapped next to the component's first image (members are within a few tol of it).
+        for (let i = 0; i < 3; i++) cl.sum[i]! += x[i]! - Math.round(x[i]! - cl.first[i]!);
+        cl.n++;
+      }
+    });
+    const orbit = [...components.values()].map((cl) => cl.sum.map((v) => wrap(v / cl.n)) as [number, number, number]);
     if (closest < warnTol) {
       // Partially occupied images close together are usually deliberate split-site disorder.
       const split = site.occupancy <= 0.5 + 1e-6;

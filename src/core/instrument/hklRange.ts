@@ -16,9 +16,10 @@
  * optionally within |q| ≤ q_max: each pixel's segment is clipped to that sphere
  * (|q| is linear in 1/λ for a white beam, quadratic in k_f for a direct one),
  * and the clipped ends are still the extremes.
- * Pixels are sampled on a grid per panel that includes its edges, where a
- * linear coordinate is extreme for a flat panel, so the box is exact to the
- * grid spacing at the corners.
+ * Pixels are sampled on a grid per panel that includes its edges. The pixel
+ * direction u = p/|p| is not linear in the position p on the panel, so an
+ * extreme can lie inside it; the box is exact to second order in the grid
+ * spacing (under 2·10⁻⁴ r.l.u. on CORELLI, nil on TOPAZ, against a 64 × 64 grid).
  */
 import type { Mat3, Vec3 } from "@materia/core/math/types";
 import { inverse, mulMat, mulVec, transpose } from "@materia/core/math/mat3";

@@ -16,11 +16,10 @@ import type { UbState } from "./ubShared.ts";
 const TABS = ["structure", "reflections", "orientation", "detectors", "powder", "crystal"] as const;
 type Tab = (typeof TABS)[number];
 
-/** Pages, grouped as the work goes: the sample, its setup, the instrument's detectors, and what a measurement records. */
+/** Pages, grouped as the work goes: the sample, how it sits in the instrument, and what a measurement records. */
 const TAB_GROUPS: readonly { readonly label: string; readonly tabs: readonly (readonly [Tab, string])[] }[] = [
   { label: "Sample", tabs: [["structure", "Structure"], ["reflections", "Reflections"]] },
-  { label: "Setup", tabs: [["orientation", "Orientation"]] },
-  { label: "Instrument", tabs: [["detectors", "Detectors"]] },
+  { label: "Setup", tabs: [["orientation", "Orientation"], ["detectors", "Detectors"]] },
   { label: "Simulation", tabs: [["powder", "Powder"], ["crystal", "Single crystal"]] },
 ];
 
@@ -67,8 +66,7 @@ const DEFAULT_TOF: TofInput = { twoThetaDeg: 90, flightPathM: 20, difa: 0, zero:
 
 function readTheme(): Theme {
   try {
-    // "scatterplan-theme" is the key used before the rename to NEXPLAN.
-    return (localStorage.getItem("nexplan-theme") ?? localStorage.getItem("scatterplan-theme")) === "dark" ? "dark" : "light";
+    return localStorage.getItem("nexplan-theme") === "dark" ? "dark" : "light";
   } catch {
     return "light";
   }
@@ -376,7 +374,7 @@ export function App() {
                     <span className="ui-control">
                       <span className="ui-control-label">
                         <span className="sym">λ</span> band
-                        <InfoBadge>The wavelength band reaching the sample (white beam, time of flight). Defaults from the instrument; POWGEN's follows the chopper frame, chosen beside it (from POWGEN's characterisation file).</InfoBadge>
+                        <InfoBadge>The wavelength band reaching the sample (white beam, time of flight). Defaults from the instrument; POWGEN's follows the chopper frame chosen beside it (from POWGEN's characterisation file).</InfoBadge>
                       </span>
                       <UnitField label="Minimum wavelength" value={Number(experiment.lambdaMin.toPrecision(4))} unit="Å" min={0.05} width="6ch" onCommit={(v) => setExperiment({ ...experiment, lambdaMin: Math.min(v, experiment.lambdaMax - 0.01) })} />
                       <UnitField label="Maximum wavelength" value={Number(experiment.lambdaMax.toPrecision(4))} unit="Å" min={0.06} width="6ch" onCommit={(v) => setExperiment({ ...experiment, lambdaMax: Math.max(v, experiment.lambdaMin + 0.01) })} />
@@ -402,13 +400,6 @@ export function App() {
                       )}
                     </span>
                   )}
-                  <span className="ui-control">
-                    <span className="ui-control-label">
-                      Δ<span className="sym">d</span>/<span className="sym">d</span>
-                      <InfoBadge>Relative resolution (FWHM) of simulated powder peaks and rings. Real banks vary with angle and are calibrated.</InfoBadge>
-                    </span>
-                    <UnitField label="Relative resolution (FWHM)" value={Number((100 * experiment.dOverD).toPrecision(6))} unit="%" min={0.01} max={20} width="4ch" onCommit={(v) => setExperiment({ ...experiment, dOverD: v / 100 })} />
-                  </span>
                 </>
               ) : (
                 <>
@@ -494,8 +485,8 @@ export function App() {
                     <option value="unpolarized">Unpolarized lab source</option>
                     <option value="mono:26.6">Graphite monochromator (Cu, 2θM 26.6°)</option>
                     <option value="mono:12.1">Graphite monochromator (Mo, 2θM 12.1°)</option>
-                    <option value="lin:0.95">Synchrotron, 95 % polarized ⟂ plane</option>
-                    <option value="lin:1">Synchrotron, fully polarized ⟂ plane</option>
+                    <option value="lin:0.95">Synchrotron, vertical scattering plane (95 % polarized ⟂)</option>
+                    <option value="lin:1">Synchrotron, vertical scattering plane (fully polarized ⟂)</option>
                   </select>
                 </span>
               )}
@@ -510,7 +501,7 @@ export function App() {
                   <circle cx="70" cy="30" r="8" fill="var(--accent)" />
                 </svg>
                 <h2>Neutron Experiment Planner</h2>
-                <p>Start from a crystal structure (CIF 1.1). NEXPLAN calculates neutron and X-ray reflections, structure factors and powder patterns, orients the crystal from a UB matrix, and plans the measurement on SNS instruments: which settings record the peaks you want, and what each detector bank sees. Everything runs in this browser tab; nothing is uploaded.</p>
+                <p>Start from a crystal structure (CIF 1.1), choose an SNS instrument in the header, and see which goniometer settings record the peaks you want and what each detector bank sees. Everything runs in this browser tab; nothing is uploaded.</p>
                 <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", justifyContent: "center" }}>
                   <button type="button" className="ui-btn-primary" onClick={() => fileInput.current?.click()}>
                     Choose a CIF file
@@ -528,10 +519,9 @@ export function App() {
               <ol className="workflow" aria-label="How NEXPLAN works">
                 {(
                   [
-                    ["Sample", "Load a CIF: cell, symmetry, sites and the scattering lengths used, each with its source; every reflection with d, Q and complex F; scattering power against a standard."],
-                    ["Setup", "Pick an SNS instrument in the header (or a generic X-ray or neutron beam), load the UB (ISAW or Mantid) or re-index it, and set the goniometer within its limits."],
-                    ["Instrument", "The real SNS detector array in 3D and unrolled: where spots land now, everywhere a reflection can reach, powder rings in a time-of-flight slice."],
-                    ["Simulation", "Powder patterns per focused bank (NOMAD, POWGEN) or panel; TOPAZ orientation lists from wanted peaks, CORELLI and ψ scans, completeness and slices; CSV export."],
+                    ["Sample", "Cell, symmetry and sites from the CIF, with the scattering lengths used and their sources; every reflection with d, Q and complex F; scattering power against a standard."],
+                    ["Setup", "Load or re-index the UB (ISAW or Mantid) and set the goniometer within its limits; see the real detector array in 3D and unrolled, with masks and sample-environment shadows."],
+                    ["Simulation", "Powder patterns per focused bank (NOMAD, POWGEN) or panel; orientation lists from wanted peaks (TOPAZ), rotation scans (CORELLI, chopper spectrometers), completeness, slices and MDNorm binning; CSV export."],
                   ] as [string, string][]
                 ).map(([title, text], i) => (
                   <li key={title}>

@@ -68,6 +68,11 @@ export interface Binning {
   readonly dMin?: number;
   /** A slice: this axis is integrated over a slab about `centre` (r.l.u.) instead of binned. */
   readonly slab?: { readonly axis: number; readonly centre: number };
+  /**
+   * Mantid's Q.convention for the MDNorm call (absent: "inelastic", Mantid's default). NEXPLAN's indices are
+   * crystallographic (q = k_f − k_i = UB·h); with the same UB, Mantid's default labels that reflection −h.
+   */
+  readonly qConvention?: "inelastic" | "crystallography";
 }
 
 /**
@@ -226,6 +231,7 @@ export function binningOf(exp: ExperimentState): Binning {
     mosaicDeg: finite(b?.mosaicDeg, 0, 20) ? b.mosaicDeg : 0,
     ...(finite(b?.dMin, 0.05, 100) ? { dMin: b.dMin } : {}),
     ...(b?.slab && [0, 1, 2].includes(b.slab.axis) && finite(b.slab.centre, -1000, 1000) ? { slab: { axis: b.slab.axis, centre: b.slab.centre } } : {}),
+    ...(b?.qConvention === "crystallography" ? { qConvention: "crystallography" as const } : {}),
   };
 }
 

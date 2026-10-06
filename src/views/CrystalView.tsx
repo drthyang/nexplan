@@ -3,10 +3,10 @@
  * StructureView (web-refinement src/app/ui/StructureView.tsx @ 0ee9a7e):
  * occupancy-wedge spheres sized 0.38 × covalent radius, covalent-radius
  * bonds, cell wireframe, a/b/c arrows, orthographic/perspective camera,
- * view-along buttons, light and finish knobs, and WebGL-rendered legend
- * swatches. Magnetic moments, displacements and the standard-cell overlay are
- * not ported. From the RMCProfile Workbench: theme-aware stage background and
- * labels, Reset view, PNG export (1×, 3×) and full resource disposal.
+ * view-along buttons and WebGL-rendered legend swatches. Magnetic moments,
+ * displacements, the standard-cell overlay and MATERIA's light and finish
+ * knobs are not ported. From the RMCProfile Workbench: theme-aware stage
+ * background and labels, Reset view, PNG export and full resource disposal.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -23,30 +23,27 @@ const MAX_BOND_LABELS = 80;
 const MAX_ATOM_LABELS = 400;
 const MAX_BOND_ATOMS = 1600;
 
-const FINISHES = {
-  matte: { shininess: 4, specular: 0x000000 },
-  standard: { shininess: 60, specular: 0x222222 },
-  glossy: { shininess: 140, specular: 0x666666 },
-} as const;
-type Finish = keyof typeof FINISHES;
+/** Scene light and sphere finish: MATERIA's light level 2 and glossy finish. */
+const LIGHT = 2;
+const SHININESS = 140;
+const SPECULAR = 0x666666;
 
 /** a, b, c arrow colours (MATERIA: red, green, blue). */
 const AXIS_COLORS = { a: 0xd94a4a, b: 0x2ea043, c: 0x3b6ef1 } as const;
 
-function renderAtomSwatches(elements: readonly string[], finish: Finish, lightLevel: number, gl: { renderer: THREE.WebGLRenderer; canvas: HTMLCanvasElement }): Record<string, string> {
+function renderAtomSwatches(elements: readonly string[], gl: { renderer: THREE.WebGLRenderer; canvas: HTMLCanvasElement }): Record<string, string> {
   const scene = new THREE.Scene();
-  scene.add(new THREE.AmbientLight(0xffffff, 0.85 * lightLevel));
-  const dl = new THREE.DirectionalLight(0xffffff, 0.55 * lightLevel);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.85 * LIGHT));
+  const dl = new THREE.DirectionalLight(0xffffff, 0.55 * LIGHT);
   dl.position.set(1, 1.5, 1);
   scene.add(dl);
   const cam = new THREE.OrthographicCamera(-1.12, 1.12, 1.12, -1.12, -10, 10);
   cam.position.set(0, 0, 5);
   cam.lookAt(0, 0, 0);
   const geo = new THREE.SphereGeometry(1, 48, 48);
-  const { shininess, specular } = FINISHES[finish];
   const out: Record<string, string> = {};
   for (const el of elements) {
-    const mat = new THREE.MeshPhongMaterial({ color: new THREE.Color(elementColor(el)), shininess, specular });
+    const mat = new THREE.MeshPhongMaterial({ color: new THREE.Color(elementColor(el)), shininess: SHININESS, specular: SPECULAR });
     const mesh = new THREE.Mesh(geo, mat);
     scene.add(mesh);
     gl.renderer.render(scene, cam);
@@ -64,15 +61,11 @@ export function CrystalView({ structure, theme, fileStem, minHeight = 420 }: { s
   const [showAtomLabels, setShowAtomLabels] = useState(false);
   const [showAxes, setShowAxes] = useState(true);
   const [perspective, setPerspective] = useState(false);
-  const [lightLevel, setLightLevel] = useState(2);
-  const [finish, setFinish] = useState<Finish>("glossy");
   const [resetToken, setResetToken] = useState(0);
   const uniqueElements = useMemo(() => [...new Set(structure.sites.map((s) => s.element))], [structure]);
   const [swatches, setSwatches] = useState<Record<string, string>>({});
   const swatchGL = useRef<{ renderer: THREE.WebGLRenderer; canvas: HTMLCanvasElement } | null>(null);
   const viewState = useRef<{ key: string; pos: number[]; target: number[]; up: number[]; zoom: number } | null>(null);
-  const lights = useRef<{ ambient: THREE.AmbientLight; directional: THREE.DirectionalLight } | null>(null);
-  const atomMats = useRef<THREE.MeshPhongMaterial[]>([]);
   const live = useRef<{ camera: THREE.PerspectiveCamera | THREE.OrthographicCamera; controls: OrbitControls; renderer: THREE.WebGLRenderer; scene: THREE.Scene; span: number } | null>(null);
 
   const atoms = useMemo(() => buildCellAtoms(structure), [structure]);
@@ -125,11 +118,10 @@ export function CrystalView({ structure, theme, fileStem, minHeight = 420 }: { s
     controls.enableDamping = true;
     controls.dampingFactor = 0.1;
 
-    const ambient = new THREE.AmbientLight(0xffffff, 0.85 * lightLevel);
-    const dl = new THREE.DirectionalLight(0xffffff, 0.55 * lightLevel);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.85 * LIGHT);
+    const dl = new THREE.DirectionalLight(0xffffff, 0.55 * LIGHT);
     dl.position.set(1, 1.5, 1);
     scene.add(ambient, dl);
-    lights.current = { ambient, directional: dl };
     const centerV = new THREE.Vector3(...center);
     const labelH = span * 0.05;
 
@@ -145,11 +137,8 @@ export function CrystalView({ structure, theme, fileStem, minHeight = 420 }: { s
       }
       return g;
     };
-    const { shininess, specular } = FINISHES[finish];
-    atomMats.current = [];
     const addSphere = (geo: THREE.SphereGeometry, color: THREE.ColorRepresentation, xyz: Vec3) => {
-      const mat = new THREE.MeshPhongMaterial({ color: new THREE.Color(color), shininess, specular });
-      atomMats.current.push(mat);
+      const mat = new THREE.MeshPhongMaterial({ color: new THREE.Color(color), shininess: SHININESS, specular: SPECULAR });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(xyz[0], xyz[1], xyz[2]);
       scene.add(mesh);
@@ -294,8 +283,6 @@ export function CrystalView({ structure, theme, fileStem, minHeight = 420 }: { s
     return () => {
       viewState.current = { key: viewKey, pos: camera.position.toArray(), target: controls.target.toArray(), up: camera.up.toArray(), zoom: camera.zoom };
       live.current = null;
-      lights.current = null;
-      atomMats.current = [];
       cancelAnimationFrame(raf);
       ro.disconnect();
       controls.dispose();
@@ -308,23 +295,7 @@ export function CrystalView({ structure, theme, fileStem, minHeight = 420 }: { s
       }
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement);
     };
-    // lightLevel and finish update the live scene below without a rebuild.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [atoms, corners, center, span, showBondLengths, showAtomLabels, showAxes, perspective, structure, theme, resetToken, minHeight]);
-
-  useEffect(() => {
-    if (!lights.current) return;
-    lights.current.ambient.intensity = 0.85 * lightLevel;
-    lights.current.directional.intensity = 0.55 * lightLevel;
-  }, [lightLevel]);
-
-  useEffect(() => {
-    const { shininess, specular } = FINISHES[finish];
-    for (const m of atomMats.current) {
-      m.shininess = shininess;
-      m.specular.set(specular);
-    }
-  }, [finish]);
 
   useEffect(() => {
     if (uniqueElements.length === 0) return;
@@ -338,8 +309,8 @@ export function CrystalView({ structure, theme, fileStem, minHeight = 420 }: { s
       gl = { renderer, canvas };
       swatchGL.current = gl;
     }
-    setSwatches(renderAtomSwatches(uniqueElements, finish, lightLevel, gl));
-  }, [uniqueElements, finish, lightLevel]);
+    setSwatches(renderAtomSwatches(uniqueElements, gl));
+  }, [uniqueElements]);
 
   useEffect(
     () => () => {
@@ -356,9 +327,10 @@ export function CrystalView({ structure, theme, fileStem, minHeight = 420 }: { s
     [],
   );
 
-  const exportPng = (scale: number) => {
+  // Three times the on-screen resolution: enough for a slide or a figure.
+  const exportPng = () => {
     const s = live.current;
-    if (s) savePng(s.renderer, s.scene, s.camera, `${fileStem}-structure${scale > 1 ? `@${scale}x` : ""}.png`, scale);
+    if (s) savePng(s.renderer, s.scene, s.camera, `${fileStem}-structure.png`, 3);
   };
 
   if (atoms.length === 0) return <p className="empty-note">No atomic sites to display.</p>;
@@ -378,8 +350,7 @@ export function CrystalView({ structure, theme, fileStem, minHeight = 420 }: { s
             ))}
           </span>
           <button type="button" className="ui-pill" onClick={() => setResetToken((n) => n + 1)}>Reset view</button>
-          <button type="button" className="ui-pill" onClick={() => exportPng(1)}>PNG</button>
-          <button type="button" className="ui-pill" onClick={() => exportPng(3)} title="Three times the on-screen resolution">PNG 3×</button>
+          <button type="button" className="ui-pill" onClick={exportPng} title="Save the view as a PNG at three times the on-screen resolution">PNG</button>
         </span>
       </div>
       <div ref={mountRef} className={cx("viewer-stage")} style={{ minHeight }} />
@@ -390,20 +361,6 @@ export function CrystalView({ structure, theme, fileStem, minHeight = 420 }: { s
             {el}
           </span>
         ))}
-        <span className="viewer-toolbar__end">
-          <label className="ui-check" title="Scene light level">
-            Light
-            <input type="range" min={0.3} max={2} step={0.05} value={lightLevel} onChange={(e) => setLightLevel(Number(e.target.value))} />
-          </label>
-          <label className="ui-check" title="Sphere surface finish">
-            Finish
-            <select className="ui-select ui-select--inline" value={finish} onChange={(e) => setFinish(e.target.value as Finish)}>
-              <option value="matte">matte</option>
-              <option value="standard">standard</option>
-              <option value="glossy">glossy</option>
-            </select>
-          </label>
-        </span>
       </div>
       {atoms.length > MAX_BOND_ATOMS && <p className="empty-note">Bonds are hidden above {MAX_BOND_ATOMS} atoms.</p>}
     </div>

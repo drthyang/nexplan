@@ -164,10 +164,14 @@ export function resolveSymmetry(input: SymmetryInput): ResolvedSymmetry {
     const listed = [...unique.values()];
     let ops = closeGroup(listed);
     let source: ResolvedSymmetry["source"] = "ops";
-    // Older CIFs often list coset representatives without the lattice-centring translations.
+    // Older CIFs often list coset representatives without the lattice-centring translations. Only a list with
+    // no centring of its own is completed: one that has some (e.g. reverse-setting R operations under an
+    // obverse-assuming letter) would gain a second centring and the wrong group.
     const letter = (input.hm ?? fromHall?.hm ?? "").trim().charAt(0).toUpperCase();
     const rhombAxes = letter === "R" && input.cell ? rhombohedralAxes(input.cell) === "R" : false;
-    const centring = rhombAxes ? [] : (CENTRING[letter] ?? []);
+    const isIdentity = (o: SymOp) => o.R.every((r, i) => r.every((v, j) => v === (i === j ? 1 : 0)));
+    const ownCentring = ops.some((o) => isIdentity(o) && o.t.some((v) => v !== 0));
+    const centring = rhombAxes || ownCentring ? [] : (CENTRING[letter] ?? []);
     const centringOps = centring.map((t) => makeOp([[1, 0, 0], [0, 1, 0], [0, 0, 1]], t));
     const opsKeys = new Set(ops.map(opKey));
     if (centringOps.some((c) => !opsKeys.has(opKey(c)))) ops = closeGroup([...listed, ...centringOps]);

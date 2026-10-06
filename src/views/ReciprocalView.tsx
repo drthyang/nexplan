@@ -327,12 +327,13 @@ export function ReciprocalView(props: ReciprocalViewProps) {
           <button
             type="button"
             className="ui-pill"
+            title="Save the view as a PNG at three times the on-screen resolution"
             onClick={() => {
               const s = live.current;
               if (s) savePng(s.renderer, s.scene, s.camera, `${fileStem}-reciprocal.png`, 3);
             }}
           >
-            PNG 3×
+            PNG
           </button>
         </span>
       </div>

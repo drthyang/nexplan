@@ -1470,7 +1470,16 @@ input.ui-range {
 
 .dim-note {
   color: var(--muted);
+  font-size: var(--fs-85);
   font-variant-numeric: tabular-nums;
+}
+
+/* Inside running text (a note or a legend) a dim note keeps the text's size. */
+.selection-note .dim-note,
+.warn-note .dim-note,
+.lambda-legend .dim-note,
+.plot-hint .dim-note {
+  font-size: inherit;
 }
 
 /* Instrument page */

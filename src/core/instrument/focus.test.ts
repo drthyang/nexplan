@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { difcFromGeometry, tofPeaks } from "../diffraction/tof.ts";
 import type { DetectorPanel } from "./detectors.ts";
-import { focusCells, focusedBank, focusedPeaks, focusedTofBank, meanSinTheta } from "./focus.ts";
+import { focusCells, focusedBank, focusedPeaks, focusedTofBank, recordsD } from "./focus.ts";
 
 /** A w × h panel facing the sample at distance L, its centre at scattering angle 2θ in the horizontal plane. */
 function facing(twoThetaDeg: number, L: number, w: number, h: number, name = "p"): DetectorPanel {
@@ -36,23 +36,56 @@ describe("focused-bank cells", () => {
     });
   });
 
-  it("two panels: ⟨sin θ⟩ is their solid-angle-weighted mean where both record d, and one panel's value where only it does", () => {
+  it("two panels: a line is in the pattern when either records it, with I = Σ|F|²·d⁴·sin θ_f whichever does", () => {
     // Small panels at 30° and 150°, the second twice the area (twice the solid angle at equal distance).
     const a = facing(30, 1, 0.01, 0.01, "a");
     const b = facing(150, 1, 0.02, 0.01, "b");
     const bank = focusedBank("ab", [a, b], 20, 0.5, 2.5, { nx: 1, ny: 1 });
     const sa = Math.sin((15 * Math.PI) / 180);
     const sb = Math.sin((75 * Math.PI) / 180);
-    // d = 1.2 Å: λ = 0.62 Å at 30° and 2.32 Å at 150°, both in the band.
-    expect(meanSinTheta(bank, 1.2, 0.5, 2.5)).toBeCloseTo((sa + 2 * sb) / 3, 6);
-    // d = 3 Å: λ = 1.55 Å at 30°, but 5.8 Å at 150° (outside): only panel a.
-    expect(meanSinTheta(bank, 3, 0.5, 2.5)).toBeCloseTo(sa, 9);
+    // d = 1.2 Å: λ = 0.62 Å at 30° and 2.32 Å at 150°, both in the band. d = 3 Å: λ = 1.55 Å at 30°, but 5.8 Å
+    // at 150° (outside): only panel a. d = 6 Å: 3.1 Å at 30°, outside: neither.
+    expect(recordsD(bank, 1.2, 0.5, 2.5)).toBe(true);
+    expect(recordsD(bank, 3, 0.5, 2.5)).toBe(true);
+    expect(recordsD(bank, 6, 0.5, 2.5)).toBe(false);
+    const sf = Math.sin((bank.twoThetaDeg * Math.PI) / 360);
+    const lines = [1.2, 3, 6].map((d, k) => ({ d, sumF2: 5 + k, families: [{ hkl: [k + 1, 0, 0] }], multiplicity: 2 })) as never;
+    const peaks = focusedPeaks(lines, bank, 0.5, 2.5);
+    expect(peaks.map((p) => p.d)).toEqual([1.2, 3]);
+    peaks.forEach((p) => expect(p.intensity).toBeCloseTo(p.sumF2 * p.d ** 4 * sf, 9));
     // The bank records d from λmin/(2 sin 75°) to λmax/(2 sin 15°).
     expect(bank.dMin).toBeCloseTo(0.5 / (2 * sb), 9);
     expect(bank.dMax).toBeCloseTo(2.5 / (2 * sa), 9);
     // Effective 2θ: the solid-angle-weighted mean, unless given.
     expect(bank.twoThetaDeg).toBeCloseTo((30 + 2 * 150) / 3, 6);
     expect(focusedBank("ab", [a, b], 20, 0.5, 2.5, { nx: 1, ny: 1, twoThetaDeg: 90, l2: 1 }).difc).toBeCloseTo(difcFromGeometry(21, 90), 9);
+  });
+
+  it("matches focusing and vanadium normalisation done count by count, for any incident spectrum", () => {
+    // Independent of the formula: each cell's line counts and its vanadium counts per unit d, from the incident
+    // spectrum, summed over the cells (focusing) and divided. Cell c records a line at λ_c = 2d sin θ_c with
+    // N_c ∝ φ(λ_c)·λ_c⁴·Ω_c·Σ|F|²/sin³θ_c (per unit solid angle, powderRings.ts); vanadium gives φ(λ)·Ω_c per unit λ,
+    // i.e. φ(λ_c)·Ω_c·2 sin θ_c per unit d.
+    const phi = (l: number) => l ** -4 * Math.exp(-((1.1 / l) ** 2)) + 0.3; // Maxwellian-like, arbitrary
+    const bank = focusedBank("w", [facing(20, 1, 0.01, 0.01, "a"), facing(60, 1.3, 0.03, 0.02, "b"), facing(140, 0.8, 0.01, 0.04, "c")], 20, 0.3, 3, { nx: 1, ny: 1 });
+    const lines = [0.6, 0.9, 1.4, 2.1, 3.5, 5].map((d, k) => ({ d, sumF2: 1 + k, families: [{ hkl: [k + 1, 0, 0] }], multiplicity: 2 })) as never;
+    const normalised = (d: number, f2: number) => {
+      let sample = 0;
+      let vanadium = 0;
+      for (const c of bank.cells) {
+        const s = Math.sin((c.twoTheta * Math.PI) / 360);
+        const l = 2 * d * s;
+        if (l < 0.3 || l > 3) continue;
+        sample += (phi(l) * l ** 4 * c.omega * f2) / s ** 3;
+        vanadium += phi(l) * c.omega * 2 * s;
+      }
+      return sample / vanadium; // line area in d of the focused, normalised data
+    };
+    const peaks = focusedPeaks(lines, bank, 0.3, 3);
+    expect(peaks.length).toBeGreaterThan(4);
+    // On the focused TOF axis the area is DIFC_f times the area in d; DIFC_f ∝ sin θ_f, so I/(area in d) is constant.
+    const ratios = peaks.map((p) => p.intensity / normalised(p.d, p.sumF2));
+    for (const r of ratios) expect(r / ratios[0]!).toBeCloseTo(1, 12);
   });
 
   it("the drawing bank spans the focused d range on the focused DIFC", () => {

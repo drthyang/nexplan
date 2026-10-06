@@ -17,7 +17,7 @@ export function ChopperControls({ exp, onExp }: { exp: ExperimentState; onExp: (
       <span className="ui-control-label">
         Chopper
         <InfoBadge>
-          The chopper setting gives the elastic width ΔE/E through Mantid PyChop's resolution model (within about 10 % of ORNL's vanadium widths; ARCS reads 10–16 % narrow), and with it the wavelength band of the simulation. Custom: type ΔE/E instead.
+          The chopper setting gives the elastic width ΔE/E through Mantid PyChop's resolution model (its ARCS and SEQUOIA parameters tuned to ORNL vanadium data, Mantid PR #38591), and with it the wavelength band of the simulation. Custom: type ΔE/E instead.
         </InfoBadge>
       </span>
       <select className="ui-select" aria-label="Chopper setting" value={d.chopper} onChange={(e) => onExp(withDgs(exp, { ...d, chopper: e.target.value }))}>

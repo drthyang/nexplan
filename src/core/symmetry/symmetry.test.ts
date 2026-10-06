@@ -115,6 +115,20 @@ describe("resolveSymmetry", () => {
     expect(r.assumptions[0]).toMatch(/centring/);
   });
 
+  it("does not add a second centring to a list that has its own (R 3, reverse setting, hexagonal axes)", () => {
+    // Reverse centring (1/3, 2/3, 1/3), (2/3, 1/3, 2/3); the letter R alone would add the obverse one.
+    const rot = ["x,y,z", "-y,x-y,z", "-x+y,-x,z"];
+    const shift = (t: string, a: string, b: string, c: string) => t.split(",").map((p, i) => `${p}+${[a, b, c][i]}`).join(",");
+    const ops = rot.flatMap((t) => [t, shift(t, "1/3", "2/3", "1/3"), shift(t, "2/3", "1/3", "2/3")]);
+    const r = resolveSymmetry({ ops, hm: "R 3", cell: { a: 6, b: 6, c: 14, alpha: 90, beta: 90, gamma: 120 } });
+    expect(r.ops).toHaveLength(9);
+    expect(r.source).toBe("ops");
+    // Reverse condition h − k + l = 3n (ITA Table 2.2.13.1): (1 0 2) and (−1 0 1) present, (1 0 1) absent.
+    expect(isSystematicallyAbsent(r.ops, [1, 0, 2])).toBe(false);
+    expect(isSystematicallyAbsent(r.ops, [-1, 0, 1])).toBe(false);
+    expect(isSystematicallyAbsent(r.ops, [1, 0, 1])).toBe(true);
+  });
+
   it("rejects an incomplete non-centred operation list", () => {
     expect(() => resolveSymmetry({ ops: ["x,y,z", "-y,x,z"], hm: "P 4" })).toThrow(/not closed/);
   });

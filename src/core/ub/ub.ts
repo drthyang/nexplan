@@ -105,13 +105,13 @@ export function axisAngle(R: Mat3): { axis: Vec3; angleDeg: number } {
   const angle = Math.acos(Math.max(-1, Math.min(1, (tr - 1) / 2)));
   if (angle < 1e-9) return { axis: [0, 0, 1], angleDeg: 0 };
   if (Math.PI - angle < 1e-6) {
-    // 180°: axis from the diagonal of (R + I)/2.
-    const xx = Math.sqrt(Math.max(0, (R[0][0] + 1) / 2));
-    const yy = Math.sqrt(Math.max(0, (R[1][1] + 1) / 2));
-    const zz = Math.sqrt(Math.max(0, (R[2][2] + 1) / 2));
-    const axis: [number, number, number] = [xx, Math.sign(R[0][1] || 1) * yy, Math.sign(R[0][2] || 1) * zz];
+    // 180°: R = 2nnᵀ − I, so (R + Rᵀ)/4 + I/2 = nnᵀ; its column with the largest diagonal is n times a nonzero
+    // component, which fixes the relative signs (the overall sign of a 180° axis is arbitrary).
+    const S = [0, 1, 2].map((i) => [0, 1, 2].map((j) => (R[i]![j]! + R[j]![i]!) / 4 + (i === j ? 0.5 : 0)));
+    const k = [0, 1, 2].reduce((best, i) => (S[i]![i]! > S[best]![best]! ? i : best), 0);
+    const axis = [S[0]![k]!, S[1]![k]!, S[2]![k]!];
     const n = Math.hypot(...axis);
-    return { axis: [axis[0] / n, axis[1] / n, axis[2] / n], angleDeg: 180 };
+    return { axis: [axis[0]! / n, axis[1]! / n, axis[2]! / n], angleDeg: 180 };
   }
   const s = 2 * Math.sin(angle);
   return { axis: [(R[2][1] - R[1][2]) / s, (R[0][2] - R[2][0]) / s, (R[1][0] - R[0][1]) / s], angleDeg: angle / DEG };

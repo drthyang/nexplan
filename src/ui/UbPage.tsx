@@ -372,7 +372,7 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
         <Card
           title="Re-index for another cell"
           meta="change of basis · the views stay in the CIF cell"
-          info="ITA convention (a′, b′, c′) = (a, b, c)·P. Each new axis and its index use the same coefficients (a′ = a + b goes with h′ = h + k), i.e. h′ = Pᵀ·h and UB′ = UB·P⁻ᵀ, so every reflection keeps its q. The three rows are Mantid TransformHKL's HKLTransform, M = Pᵀ (h′ = M·h, UB′ = UB·M⁻¹; Mantid requires det > 0). Standard transformations from ITA Vol. A (2016) Table 5.1.3.1. Coefficients take integers, decimals or fractions such as 1/2 or −1/3."
+          info="ITA convention (a′, b′, c′) = (a, b, c)·P. Each new axis and its index use the same coefficients (a′ = a + b goes with h′ = h + k), i.e. h′ = Pᵀ·h and UB′ = UB·P⁻ᵀ, so every reflection keeps its q. The three rows are Mantid TransformHKL's HKLTransform, M = Pᵀ (h′ = M·h, UB′ = UB·M⁻¹; Mantid requires det > 0). Standard transformations from ITA Vol. A, 5th ed. (2002), Table 5.1.3.1 (H. Arnold). Coefficients take integers, decimals or fractions such as 1/2 or −1/3."
           actions={
             <button type="button" className="ui-pill" onClick={() => setP(IDENTITY)}>
               Reset

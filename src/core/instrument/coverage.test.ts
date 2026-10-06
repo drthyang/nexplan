@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { Vec3 } from "@materia/core/math/types";
 import { mulMat, mulVec } from "@materia/core/math/mat3";
 import instruments from "../../data/instruments.json";
-import { goniometerMatrix, laueCondition } from "../ub/goniometer.ts";
+import { axisRotation, goniometerMatrix, laueCondition } from "../ub/goniometer.ts";
 import { UNIVERSAL } from "../ub/instruments.ts";
 import { ubFromU } from "../ub/ub.ts";
 import { coveragePanelLambdas, coverageSolver } from "./coverage.ts";
-import type { DetectorPanel } from "./detectors.ts";
+import { rayHit, type DetectorPanel } from "./detectors.ts";
 import { cylinderAngles, directionAngles, reflectionCoverage } from "./simulate.ts";
 
 const DEG = Math.PI / 180;
@@ -75,6 +75,43 @@ describe("exact coverage solver", () => {
     const part = coverageSolver({ ...omegaOnly, axes: [{ ...omegaOnly.axes[0]!, min: 0, max: 90 }] }, UB, [[4, 0, 0]], 0.4, 3.5);
     expect(part.solve(dirOf(60, 0), tol)?.angles[0]).toBeCloseTo(30, 6);
     expect(part.solve(dirOf(-60, 0), tol)).toBeUndefined();
+  });
+
+  it("an element is reached when the track crosses it: |ν| ≤ its half-size at every 2θ (q̂ moves 1/(2 sin θ) as fast as u azimuthally)", () => {
+    // ω only, q along a: the track is the horizontal plane. An element of angular radius tol centred at elevation ν
+    // touches it exactly when |ν| ≤ tol. A single tolerance of tol/2 on q̂ accepted only |ν| ≤ tol·sin θ.
+    const solver = coverageSolver(omegaOnly, cubic(10), [[1, 0, 0]], 0.01, 50);
+    const tol = 0.1 * DEG;
+    for (const tt of [10, 30, 60, 90, 150]) {
+      expect(solver.solve(dirOf(tt, 0.9 * 0.1), tol), `2θ ${tt}°`).toBeDefined();
+      expect(solver.solve(dirOf(tt, 1.1 * 0.1), tol), `2θ ${tt}°`).toBeUndefined();
+    }
+  });
+
+  it("panel cells: every cell a dense ω sweep lands in is covered, with at most a cell or so more (TOPAZ cryogenic)", () => {
+    const grids = panels.map((p) => ({ nx: Math.min(64, p.nCols), ny: Math.min(128, p.nRows) }));
+    // A tilted crystal (U = R_x(25°)·R_z(10°)), so that q along b is not on the ω axis.
+    const UB = mulMat(mulMat(axisRotation([1, 0, 0], 25), axisRotation([0, 0, 1], 10)), cubic(8.0844));
+    for (const h of [[0, 4, 0], [1, 1, 1], [5, -3, 3]] as Vec3[]) {
+      const lam = coveragePanelLambdas(panels, grids, coverageSolver(omegaOnly, UB, [h], 0.4, 3.5));
+      const swept = new Set<string>();
+      for (let w = 0; w < 360; w += 0.002) {
+        const s = laueCondition(mulVec(mulMat(goniometerMatrix(omegaOnly, [w]), UB), h));
+        if (!(s.lambda >= 0.4 && s.lambda <= 3.5)) continue;
+        const hit = rayHit(panels, s.kf.map((v) => v / Math.hypot(...s.kf)) as unknown as Vec3);
+        if (!hit) continue;
+        const p = panels[hit.panel]!;
+        const g = grids[hit.panel]!;
+        swept.add(`${hit.panel}:${Math.floor(((hit.col - 0.5) / p.nCols) * g.nx)}:${Math.floor(((hit.row - 0.5) / p.nRows) * g.ny)}`);
+      }
+      const covered = new Set<string>();
+      lam.forEach((l, k) => l.forEach((v, c) => !Number.isNaN(v) && covered.add(`${k}:${c % grids[k]!.nx}:${Math.floor(c / grids[k]!.nx)}`)));
+      expect(swept.size, `${h}`).toBeGreaterThan(20);
+      const missed = [...swept].filter((c) => !covered.has(c)).length;
+      const extra = [...covered].filter((c) => !swept.has(c)).length;
+      expect(missed, `${h} missed`).toBeLessThanOrEqual(1);
+      expect(extra, `${h} extra`).toBeLessThanOrEqual(Math.ceil(0.05 * swept.size));
+    }
   });
 
   it("ω, φ with χ = 135°: reachable exactly where |q̂_y| ≤ cos 45°; never outside the Bragg window", () => {

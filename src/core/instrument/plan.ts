@@ -14,10 +14,14 @@
  *  3. Greedy maximum coverage: add the candidate that places the most wanted
  *     reflections well that were not yet, then records the most wanted ones not
  *     yet recorded, then the most new families; once every reachable family is
- *     recorded, the most second and then third recordings (redundancy). Greedy
- *     is within (1 − 1/e) of the best coverage for the same number of settings
- *     (Nemhauser, Wolsey & Fisher, Math. Program. 14, 265 (1978)). Settings
+ *     recorded, the most second and then third recordings (redundancy). Settings
  *     already in the list count as measured, so suggestions extend it.
+ *     Guarantee: the first goal is a coverage function, monotone and
+ *     submodular, and each pick maximises it first, so k picks place at least
+ *     1 − (1 − 1/k)^k ≥ 1 − 1/e of the most wanted reflections that any k grid
+ *     settings (added to those listed) place well; with none wanted, the same
+ *     holds for families recorded (Nemhauser, Wolsey & Fisher, Math. Program.
+ *     14, 265 (1978)). The later goals only break ties and carry no guarantee.
  *
  * A wanted reflection is a set of equivalent hkl (its symmetry family in the
  * reflection list), or a single hkl when it is not in the list (absent, weak or
@@ -109,12 +113,16 @@ function preparePanel(p: DetectorPanel): PreparedPanel {
  */
 function hitOffset(panels: readonly PreparedPanel[], ux: number, uy: number, uz: number, blocked: Blocked | undefined): number {
   if (blocked?.(ux, uy, uz)) return -1;
+  // The ray stops at the nearest panel it crosses (as rayHit), recorded there or not; panels can overlap along a
+  // ray (NOMAD, SEQUOIA, CNCS), so every candidate is checked.
+  let bestT = Infinity;
+  let result = -1;
   for (const p of panels) {
     if (ux * p.dir[0] + uy * p.dir[1] + uz * p.dir[2] < p.cosR) continue;
     const denom = ux * p.n[0] + uy * p.n[1] + uz * p.n[2];
     if (Math.abs(denom) < 1e-12) continue;
     const t = p.cn / denom;
-    if (!(t > 0)) continue;
+    if (!(t > 0) || t >= bestT) continue;
     const dx = ux * t - p.c[0];
     const dy = uy * t - p.c[1];
     const dz = uz * t - p.c[2];
@@ -122,10 +130,11 @@ function hitOffset(panels: readonly PreparedPanel[], ux: number, uy: number, uz:
     const y = dx * p.up[0] + dy * p.up[1] + dz * p.up[2];
     const fx = Math.abs(x) / p.hw;
     const fy = Math.abs(y) / p.hh;
-    // The ray stops at the first panel it meets, recorded there or not.
-    if (fx <= 1 && fy <= 1) return recordsAt(p.src, x, y) ? Math.max(fx, fy) : -1;
+    if (fx > 1 || fy > 1) continue;
+    bestT = t;
+    result = recordsAt(p.src, x, y) ? Math.max(fx, fy) : -1;
   }
-  return -1;
+  return result;
 }
 
 export interface PlanTarget {
@@ -273,9 +282,11 @@ export type PlanGoal = "coverage" | "fewest";
  * order, the wanted reflections it newly places well, the wanted reflections it newly records (`wanted[i][w]`:
  * level 0, 1 or 2 of wanted reflection w at candidate i), the new families, the families it records for the
  * second and third time (redundancy, used for scaling and absorption corrections), then the families it
- * records in all; it stops when a pick would add nothing on any of these. "fewest" is greedy set cover
- * (within ln n + 1 of the fewest settings: Johnson, J. Comput. Syst. Sci. 9, 256 (1974); Chvátal, Math.
- * Oper. Res. 4, 233 (1979)): the same first two, then the lowest summed `costs` of those wanted reflections
+ * records in all; it stops when a pick would add nothing on any of these. "fewest" is greedy set cover: until
+ * every wanted reflection that some grid setting places well is placed well, it uses at most H(n) ≤ ln n + 1
+ * times the fewest grid settings that do so (Johnson, J. Comput. Syst. Sci. 9, 256 (1974); Lovász, Discrete
+ * Math. 13, 383 (1975); Chvátal, Math. Oper. Res. 4, 233 (1979)); settings added afterwards only to record the
+ * rest are outside that bound. Each pick takes the same first two, then the lowest summed `costs` of those wanted reflections
  * (placementOf: nearest mid band and panel centre), then new families; it stops once no wanted reflection
  * gains (with none wanted, once no family is new). `covered` and `wantedBefore` describe settings measured.
  */

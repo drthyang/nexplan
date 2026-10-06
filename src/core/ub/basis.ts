@@ -3,7 +3,7 @@
  * columns of P are the new axes in the old basis): standard transformations,
  * supercells, and P entries written as fractions.
  *
- * Standard P from International Tables for Crystallography Vol. A (2016),
+ * Standard P from International Tables for Crystallography Vol. A, 5th ed. (2002), H. Arnold, ch. 5.1,
  * Table 5.1.3.1 (centred cell → primitive; hexagonal R obverse → rhombohedral).
  */
 import type { Mat3 } from "@materia/core/math/types";

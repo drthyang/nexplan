@@ -8,7 +8,7 @@ import type { Mat3, Vec3 } from "@materia/core/math/types";
 import { determinant, transpose } from "@materia/core/math/mat3";
 import type { Shadows } from "../core/instrument/acceptance.ts";
 import { blockedAt } from "../core/instrument/acceptance.ts";
-import { energyBinning, niceStep, suggestBinning, type Binning } from "../core/instrument/binning.ts";
+import { energyBinning, mdnormBinning, niceStep, suggestBinning, type Binning } from "../core/instrument/binning.ts";
 import type { DetectorPanel } from "../core/instrument/detectors.ts";
 import { kOfEnergy, panelSamples, type Beam } from "../core/instrument/hklRange.ts";
 import { energyResolution } from "../core/instrument/pychop.ts";
@@ -117,17 +117,17 @@ export function BinningCard({
   const energy = chopper && elastic !== undefined ? energyBinning(elastic, eMin, eMax, b.perFwhmE) : undefined;
   // A slice integrates one axis over a slab two (median) FWHM thick about its centre.
   const slab = b.slab && bins ? { ...b.slab, thickness: niceStep(2 * bins.axes[b.slab.axis as 0 | 1 | 2].fwhm50) } : undefined;
-  const binning = (i: number) => {
-    const a = bins!.axes[i as 0 | 1 | 2];
-    if (slab?.axis !== i) return `${a.min},${a.step},${a.max}`;
-    const half = slab.thickness / 2;
-    return `${Number((slab.centre - half).toFixed(6))},${Number((slab.centre + half).toFixed(6))}`;
-  };
+  // Mantid's default Q convention labels the reflection NEXPLAN calls h as −h with the same UB: mdnormBinning mirrors.
+  const inelastic = b.qConvention !== "crystallography";
+  const binning = (i: number) => mdnormBinning(bins!.axes[i as 0 | 1 | 2], inelastic ? "inelastic" : "crystallography", slab?.axis === i ? slab : undefined);
   const total = bins ? bins.axes.reduce((n, a, i) => n * (slab?.axis === i ? 1 : a.bins), 1) * (energy?.bins ?? 1) : 0;
 
   const call = bins
     ? [
         `# NEXPLAN binning suggestion: ${catalogEntry(exp.instrumentId)?.label ?? exp.instrumentId}, ${settings.length} setting${settings.length > 1 ? "s" : ""}, d >= ${dMin} A; bin = FWHM/${b.perFwhmQ} (sharpest quarter)${energy ? `, dE bin = FWHM(0)/${b.perFwhmE}` : ""}`,
+        inelastic
+          ? `# For Q.convention = "Inelastic" (Mantid's default), which labels NEXPLAN's (h k l) as (-h -k -l): limits mirrored`
+          : `# For Q.convention = "Crystallography": indices as NEXPLAN's (h k l)`,
         `MDNorm(InputWorkspace="data", ${white ? 'SolidAngleWorkspace="sa", FluxWorkspace="flux"' : 'SolidAngleWorkspace="sa"'},`,
         `       QDimension0="${b.axes[0]!.join(",")}", QDimension1="${b.axes[1]!.join(",")}", QDimension2="${b.axes[2]!.join(",")}",`,
         ...bins.axes.map((_, i) => `       Dimension${i}Name="QDimension${i}", Dimension${i}Binning="${binning(i)}",`),
@@ -163,7 +163,7 @@ export function BinningCard({
             </>
           ) : (
             <>
-              <b>Energy</b>: Mantid PyChop's resolution for the chopper setting (within about 10 % of ORNL's vanadium widths; ARCS reads 10–16 % narrow), at the elastic line; it narrows with energy transfer. The range defaults to −0.2 to 0.95 Ei (SNS autoreduction). <b>Q</b>: no published resolution exists for these instruments; the estimate takes the pixel and sample sizes over L2, the energy spread along k_f, and an incident divergence if you give one.
+              <b>Energy</b>: Mantid PyChop's resolution for the chopper setting (its ARCS and SEQUOIA parameters tuned to ORNL vanadium data, Mantid PR #38591), at the elastic line; it narrows with energy transfer. The range defaults to −0.2 to 0.95 Ei (SNS autoreduction). <b>Q</b>: no published resolution exists for these instruments; the estimate takes the pixel and sample sizes over L2, the energy spread along k_f, and an incident divergence if you give one.
             </>
           )}
         </>
@@ -237,6 +237,20 @@ export function BinningCard({
           <span className="supercell">
             <Segmented label="Q bins per resolution FWHM" value={String(b.perFwhmQ)} onChange={(v) => setB({ perFwhmQ: Number(v) })} options={["2", "3", "4"].map((v) => ({ value: v, label: `Q ${v}` }))} />
             {chopper && <Segmented label="Energy bins per resolution FWHM" value={String(b.perFwhmE)} onChange={(v) => setB({ perFwhmE: Number(v) })} options={["2", "3", "4"].map((v) => ({ value: v, label: `E ${v}` }))} />}
+          </span>
+        </div>
+        <div className="form-row">
+          <span className="ui-control-label">Mantid Q</span>
+          <span className="supercell" title="Mantid's Q.convention when the data are converted to MD. NEXPLAN's indices are crystallographic (q = k_f − k_i, as ISAW peaks files); Mantid's default, Inelastic, labels the same reflection (−h −k −l) with the same UB, so the MDNorm limits are mirrored for it.">
+            <Segmented
+              label="Mantid Q convention"
+              value={inelastic ? "inelastic" : "crystallography"}
+              onChange={(v) => setB({ qConvention: v })}
+              options={[
+                { value: "inelastic", label: "Inelastic (default)" },
+                { value: "crystallography", label: "Crystallography" },
+              ]}
+            />
           </span>
         </div>
         <div className="form-row">

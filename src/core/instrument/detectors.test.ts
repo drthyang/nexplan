@@ -41,6 +41,21 @@ describe("ray–panel geometry", () => {
   });
 });
 
+describe("IDF reader defaults, as Mantid's parser (InstrumentDefinitionParser.cpp @ 67c2f43)", () => {
+  it("a rotation axis defaults per component, axis-z to 1; idstepbyrow to the pixels along the fill", () => {
+    const xml = `<instrument name="T">
+      <component type="bank" idstart="1000" idstep="2"><location x="0" y="0" z="1" rot="90" axis-x="1"/></component>
+      <type name="bank" is="rectangular_detector" type="pixel" xpixels="4" xstart="-0.015" xstep="0.01" ypixels="3" ystart="-0.01" ystep="0.01"/>
+      <type name="pixel" is="detector"/>
+    </instrument>`;
+    const p = flattenIdf(xml).panels[0]!;
+    // axis-x="1" alone is the axis (1, 0, 1) (lines 645-655), so 90° about it takes +y to (−1, 0, 1)/√2.
+    p.up.forEach((v, i) => expect(v).toBeCloseTo([-Math.SQRT1_2, 0, Math.SQRT1_2][i]!, 12));
+    // Filled along y first: id = idstart + column·idstepbyrow + row·idstep, idstepbyrow = ypixels (lines 1489-1492).
+    expect(p.ids).toEqual([1000, 3, 2]);
+  });
+});
+
 describe("generated instrument geometry", () => {
   it("has the seven SNS instruments with sensible panels facing the sample region", () => {
     const byId = new Map(instruments.instruments.map((i) => [i.id, i]));
@@ -57,7 +72,11 @@ describe("generated instrument geometry", () => {
   });
 });
 
-describe.skipIf(!existsSync(idf2011) || !existsSync(peaksPath) || !existsSync(matPath))("TOPAZ_3007: IDF reader and pixel mapping vs Mantid", () => {
+// The pinned Mantid files (npm run data:fetch). A skipped suite still runs its body to collect tests, so it returns early.
+const haveTopaz3007 = existsSync(idf2011) && existsSync(peaksPath) && existsSync(matPath);
+
+describe.skipIf(!haveTopaz3007)("TOPAZ_3007: IDF reader and pixel mapping vs Mantid", () => {
+  if (!haveTopaz3007) return;
   const geom = flattenIdf(readFileSync(idf2011, "utf8"));
   const lines = readFileSync(peaksPath, "utf8").split("\n");
   const detcal = lines.filter((l) => l.trim().startsWith("5 ")).map((l) => l.trim().split(/\s+/).map(Number));

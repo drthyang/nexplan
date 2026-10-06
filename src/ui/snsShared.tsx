@@ -118,6 +118,21 @@ export function DMinNote({ result, info, lambdaMin, onDMin }: { result: CalcSucc
   );
 }
 
+/**
+ * Δd/d (FWHM) of simulated powder lines and rings, shown on the powder views where it sets the widths: inline
+ * among a card's actions, or as a row of a card's form (`row`).
+ */
+export function DOverDField({ exp, onExp, row = false }: { exp: ExperimentState; onExp: (e: ExperimentState) => void; row?: boolean }) {
+  return (
+    <span className={row ? "form-row" : "ui-control"} title="Relative resolution (FWHM) of the simulated powder lines. Real banks vary with angle and are calibrated.">
+      <span className="ui-control-label">
+        Δ<span className="sym">d</span>/<span className="sym">d</span>
+      </span>
+      <UnitField label="Relative resolution Δd/d (FWHM)" value={Number((100 * exp.dOverD).toPrecision(6))} unit="%" min={0.01} max={20} width="4ch" onCommit={(v) => onExp({ ...exp, dOverD: v / 100 })} />
+    </span>
+  );
+}
+
 /** On the simulation pages other than Detectors: the masks and shadows in effect, which are set on the Detectors page. */
 export function AcceptanceNote({ panels, shadows }: { panels: readonly DetectorPanel[]; shadows: Shadows | undefined }) {
   const c = maskedPixelCount(panels);

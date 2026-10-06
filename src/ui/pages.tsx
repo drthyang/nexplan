@@ -568,7 +568,7 @@ export function PowderPage({
         }
         info={
           tof
-            ? "TOF intensity = Σ|F|² over every signed hkl at the same d × sinθ·d⁴ (GSAS-II TOF Lorentz factor), for data normalized by the incident spectrum. t = ZERO + DIFC·d + DIFA·d². Peaks are unit-area shapes; switching to d or Q transforms the density, so areas are preserved. No absorption or extinction."
+            ? "TOF intensity = Σ|F|² over every signed hkl at the same d × sinθ·d⁴ (GSAS-II TOF Lorentz factor), for data normalized by the incident spectrum. t = ZERO + DIFC·d + DIFA·d². Peaks are unit-area shapes in TOF; on d or Q the same values are relabelled, as normalised data are (each bin is a ratio to vanadium). No absorption or extinction."
             : "Intensity = Σ|F|² over every signed hkl at the same d, times the CW powder Lorentz factor 1/(sin²θ cosθ) and, for X-rays, the chosen polarization factor. No absorption, texture or extinction. Peaks are unit-area pseudo-Voigts on the chosen axis."
         }
         actions={
@@ -713,15 +713,15 @@ function TofShapeControls({ shape, onChange }: { shape: TofShape; onChange: (s: 
       ) : (
         <span className="ui-control">
           <span className="ui-control-label">
-            α, β₀, β₁, σ₁²
+            α, β₀, β₁, σ₁
             <InfoBadge>
-              GSAS-II back-to-back exponentials ⊗ Gaussian: α = α₁/d, β = β₀ + β₁/d⁴, σ² = σ₀ + σ₁²·d² + σ₂·d⁴ (µs). Use the values from your instrument parameter file; the defaults are only typical of a ~20 m, 90° bank.
+              GSAS-II back-to-back exponentials ⊗ Gaussian (instrument-file names alpha, beta-0, beta-1, sig-1): α = α₁/d, β = β₀ + β₁/d⁴ (µs⁻¹), σ² = σ₁·d² (µs², σ₁ in µs²/Å²; sig-0 and sig-2 are 0 here). Use the values from your instrument parameter file; the defaults are only typical of a ~20 m, 90° bank.
             </InfoBadge>
           </span>
           <UnitField label="alpha1" value={shape.alpha1} unit="" min={1e-6} onCommit={(v) => onChange({ ...shape, alpha1: v })} width="4ch" />
           <UnitField label="beta0" value={shape.beta0} unit="" min={1e-6} onCommit={(v) => onChange({ ...shape, beta0: v })} width="4ch" />
           <UnitField label="beta1" value={shape.beta1} unit="" min={0} onCommit={(v) => onChange({ ...shape, beta1: v })} width="4ch" />
-          <UnitField label="sig1" value={shape.sig1} unit="µs²" min={0} onCommit={(v) => onChange({ ...shape, sig1: v })} width="4ch" />
+          <UnitField label="sig1" value={shape.sig1} unit="µs²/Å²" min={0} onCommit={(v) => onChange({ ...shape, sig1: v })} width="4ch" />
         </span>
       )}
     </>

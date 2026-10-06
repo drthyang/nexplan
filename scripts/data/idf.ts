@@ -90,8 +90,8 @@ function axisRot(axis: V3, deg: number): M3 {
 }
 
 const num = (s: string | undefined, d = 0) => (s === undefined ? d : Number(s));
-const axisOf = (a: Readonly<Record<string, string>>): V3 =>
-  a["axis-x"] === undefined && a["axis-y"] === undefined && a["axis-z"] === undefined ? [0, 0, 1] : [num(a["axis-x"]), num(a["axis-y"]), num(a["axis-z"])];
+/** A rotation axis: each component defaults on its own to (0, 0, 1), as Mantid reads it (axis-x="1" alone is (1, 0, 1)). */
+const axisOf = (a: Readonly<Record<string, string>>): V3 => [num(a["axis-x"], 0), num(a["axis-y"], 0), num(a["axis-z"], 1)];
 
 /** Local frame of one <location>: translation in the parent frame and rotation of the child frame. */
 function locationFrame(loc: XmlNode): Frame {
@@ -186,7 +186,8 @@ export function flattenIdf(xml: string): InstrumentGeometry {
       // Pixel (i, j) is column i, row j: `base` follows the sign of xstep, `up` that of ystep.
       const byY = (comp.idfillbyfirst ?? "y") === "y";
       const step = num(comp.idstep ?? "1");
-      const byRow = num(comp.idstepbyrow ?? String(byY ? ny * step : nx * step));
+      // Mantid's default idstepbyrow is the pixel count along the fill direction, whatever idstep is.
+      const byRow = num(comp.idstepbyrow ?? String(byY ? ny : nx));
       const ids: [number, number, number] = [num(comp.idstart ?? "0"), byY ? byRow : step, byY ? step : byRow];
       const cLocal: V3 = [num(a.xstart) + ((nx - 1) * xs) / 2, num(a.ystart) + ((ny - 1) * ys) / 2, 0];
       panels.push({

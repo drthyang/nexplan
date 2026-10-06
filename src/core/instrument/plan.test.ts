@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Vec3 } from "@materia/core/math/types";
-import { goniometerMatrix } from "../ub/goniometer.ts";
+import { mulMat, mulVec } from "@materia/core/math/mat3";
+import { goniometerMatrix, laueCondition } from "../ub/goniometer.ts";
 import { SNS_INSTRUMENTS } from "../ub/instrumentsSns.ts";
 import { ubFromU } from "../ub/ub.ts";
 import { candidateGrid, familyCounts, greedyCover, landingOf, suggestSettings, targetCoverage, wantedStatus, type PlanTarget } from "./plan.ts";
+import type { DetectorPanel } from "./detectors.ts";
 import { observeAt, simulateSettings } from "./simulate.ts";
 
 const topaz = (id: string) => SNS_INSTRUMENTS.find((i) => i.id === id)!;
@@ -70,6 +72,31 @@ describe("recorded targets: same test as observeAt (λ in the band, k_f on a pan
       total += slow.size;
     }
     expect(total).toBeGreaterThan(500);
+  });
+});
+
+describe("overlapping panels", () => {
+  it("a ray stops at the nearest panel it crosses, whatever the panel order (as observeAt)", () => {
+    // Two panels across the same k_f, 1 m and 2 m out; the near one switched off hides the far one.
+    const R = goniometerMatrix(cryo.goniometer, [0]);
+    const target: PlanTarget[] = [{ h: [2, 0, -1], family: 0 }];
+    const q = mulVec(mulMat(R, UB), [2, 0, -1]);
+    const s = laueCondition(q);
+    expect(s.lambda).toBeGreaterThan(0.4);
+    expect(s.lambda).toBeLessThan(3.5);
+    const u = s.kf.map((v) => v / Math.hypot(...s.kf)) as unknown as Vec3;
+    const side: Vec3 = [u[2] / Math.hypot(u[0], u[2]), 0, -u[0] / Math.hypot(u[0], u[2])];
+    const up: Vec3 = [side[1] * u[2] - side[2] * u[1], side[2] * u[0] - side[0] * u[2], side[0] * u[1] - side[1] * u[0]];
+    const panel = (L: number, off: boolean): DetectorPanel => ({ name: `p${L}`, kind: "rectangular", center: [L * u[0], L * u[1], L * u[2]], base: side, up, width: 0.2, height: 0.2, nCols: 16, nRows: 16, ...(off ? { off } : {}) });
+    for (const order of [
+      [panel(2, false), panel(1, true)],
+      [panel(1, true), panel(2, false)],
+    ]) {
+      expect(targetCoverage(cryo.goniometer, [[0]], UB, target, order, 0.4, 3.5)[0]).toBe(0);
+      expect(observeAt(R, UB, target, order, 0.4, 3.5)).toHaveLength(0);
+    }
+    // With the near panel on, it records.
+    expect(targetCoverage(cryo.goniometer, [[0]], UB, target, [panel(2, false), panel(1, false)], 0.4, 3.5)[0]).toBe(1);
   });
 });
 

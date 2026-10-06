@@ -12,7 +12,7 @@
  * and φ with χ fixed at 135°; the cryogenic goniometer drives ω only (neutrons/
  * NeuXtalViz-tools src/NeuXtalViz/config/instruments.py:170-186 @ 655afa3; ORNL TOPAZ
  * page). Wavelength band 0.4–3.5 Å (ORNL TOPAZ specification sheet, 2018). L1 =
- * 18.035 m (mantid instrument/TOPAZ_Definition_2022-11-21.xml:27).
+ * 18.035 m (mantid instrument/TOPAZ_Definition_2022-11-21.xml:26).
  *
  * Validated end to end against Mantid's TOPAZ_3007 peaks (src/core/ub/topaz.test.ts).
  */

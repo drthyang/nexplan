@@ -12,7 +12,7 @@ import type { ReflectionList, StructureFactors } from "./reflections.ts";
 export type Polarization =
   | { readonly kind: "none" } // neutrons
   | { readonly kind: "unpolarized" } // laboratory X-ray, no monochromator: (1 + cos²2θ)/2
-  | { readonly kind: "monochromator"; readonly twoThetaMDeg: number } // (1 + cos²2θ_M cos²2θ)/(1 + cos²2θ_M)
+  | { readonly kind: "monochromator"; readonly twoThetaMDeg: number } // (1 + cos²2θ_M cos²2θ)/(1 + cos²2θ_M): mosaic crystal, coplanar (Azároff, Acta Cryst. 8, 701 (1955))
   | { readonly kind: "linear"; readonly fraction: number }; // synchrotron: f·1 + (1−f)·cos²2θ, f = fraction polarized ⟂ to the scattering plane
 
 export interface PowderSettings {
@@ -127,13 +127,18 @@ export function groupByD(refl: ReflectionList, sf: StructureFactors, ops: readon
   return groups;
 }
 
-/** CW peaks: groups with d ≥ λ/2, Lorentz 1/(sin²θ cosθ) and the polarization factor. */
+/**
+ * CW peaks: groups with d ≥ λ/2, Lorentz 1/(sin²θ cosθ) and the polarization factor. A line within 0.02° of
+ * 2θ = 180° (cos θ < 1e-4) is left out: its Debye–Scherrer cone closes onto the incident beam, where the Lorentz
+ * factor diverges and no detector records.
+ */
 export function cwPeaks(groups: readonly PeakGroup[], settings: PowderSettings): PowderPeak[] {
   const out: PowderPeak[] = [];
   for (const g of groups) {
     const x = settings.wavelength / (2 * g.d);
     if (x > 1 + 1e-12) continue;
     const theta = Math.asin(Math.min(1, x));
+    if (Math.cos(theta) < 1e-4) continue;
     const lp = (settings.lorentz ? powderLorentz(theta) : 1) * polarizationFactor(settings.polarization, 2 * theta);
     out.push({ ...g, twoTheta: (2 * theta) / DEG, lambda: settings.wavelength, lp, intensity: g.sumF2 * lp });
   }

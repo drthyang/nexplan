@@ -14,8 +14,14 @@
  *    of M₁·Rot(n₂, s₂b)·w along n₁ is C + P cos(s₂b) + Q sin(s₂b) (Rodrigues),
  *    which must equal t·n₁: at most two b per turn, each giving one a.
  * Both angles are checked against the axis ranges. Elements are pixels of
- * finite size, so the conditions are met within the element's angular
- * half-size (k_f turns twice as fast as q, so q̂ gets half of it).
+ * finite size, so each condition is met within the element's reach along that
+ * condition's direction. With 2θ and the azimuth φ about the beam,
+ * q̂ = (cos θ cos φ, cos θ sin φ, −sin θ): a step of the scattered direction u by
+ * α along 2θ and β across it (azimuthally) moves q̂ by α/2 along ∂q̂/∂θ and by
+ * β/(2 sin θ) along the azimuth. So q̂ moves half as fast as u along 2θ but
+ * faster than u azimuthally at angles below 2θ = 60°; each condition's tolerance
+ * is the element's extent (its support function, to first order) along the
+ * u-direction that changes that condition.
  *
  * Masked elements are not reachable, nor are directions the sample
  * environment blocks (acceptance.ts): a shadow fixed in the lab blocks the
@@ -29,7 +35,7 @@ import type { Mat3, Vec3 } from "@materia/core/math/types";
 import { mulMat, mulVec, transpose } from "@materia/core/math/mat3";
 import { axisRotation, type GoniometerModel } from "../ub/goniometer.ts";
 import { labFixed, shadowBlocks, shadowTest, type Shadows } from "./acceptance.ts";
-import { recordsAt, type DetectorPanel } from "./detectors.ts";
+import { rayHit, recordsAt, type DetectorPanel } from "./detectors.ts";
 
 const DEG = Math.PI / 180;
 const I3: Mat3 = [
@@ -73,8 +79,11 @@ export interface CoverageSolution {
 
 export interface CoverageSolver {
   readonly d: number;
-  /** Whether some allowed setting sends a reflection along unit direction u (element half-size tolKf, rad). */
-  solve(u: Vec3, tolKf: number): CoverageSolution | undefined;
+  /**
+   * Whether some allowed setting sends a reflection anywhere in the element at unit direction u: a disc of angular
+   * radius tolKf (rad), or with `half` the element's two half-sides as vectors in the tangent plane at u (rad).
+   */
+  solve(u: Vec3, tolKf: number, half?: readonly [Vec3, Vec3]): CoverageSolution | undefined;
 }
 
 /**
@@ -113,8 +122,8 @@ export function coverageSolver(model: GoniometerModel, UB: Mat3, hs: readonly Ve
   /** A solution the environment leaves open (shadows that turn with a stage, at its angles). */
   const open = (sol: CoverageSolution, u: Vec3) => labOnly || !shadowBlocks(shadows, sol.angles, u);
 
-  /** Outer (or only) axis: the angle that turns w onto t about n₁, if allowed. */
-  const outer = (w: Vec3, t: Vec3, tolAng: number): number | undefined => {
+  /** Outer (or only) axis: the angle that turns w onto t about n₁, if allowed (tolAng across the cone, tolRot along it). */
+  const outer = (w: Vec3, t: Vec3, tolAng: number, tolRot: number): number | undefined => {
     const wn = dot(w, f1.n);
     const tn = dot(t, f1.n);
     if (Math.abs(Math.acos(clamp1(wn)) - Math.acos(clamp1(tn))) > tolAng) return undefined;
@@ -124,26 +133,47 @@ export function coverageSolver(model: GoniometerModel, UB: Mat3, hs: readonly Ve
     const lt = Math.hypot(...tp);
     if (lw < 1e-9 || lt < 1e-9) return inRange(f1.min, f1.min, f1.max, 0); // along the axis: any angle
     const rot = Math.atan2(dot(f1.n, cross(wp, tp)), dot(wp, tp)) / DEG; // counter-clockwise about n₁
-    return inRange(rot / f1.s, f1.min, f1.max, tolAng / lt / DEG);
+    return inRange(rot / f1.s, f1.min, f1.max, tolRot / lt / DEG);
   };
 
   return {
     d,
-    solve(u: Vec3, tolKf: number) {
+    solve(u: Vec3, tolKf: number, half?: readonly [Vec3, Vec3]) {
       if (labBlocked?.(u[0], u[1], u[2])) return undefined;
-      const cos2t = clamp1(u[2]);
-      const theta = Math.acos(cos2t) / 2;
-      const lambda = 2 * d * Math.sin(theta);
-      const dl = d * Math.cos(theta) * tolKf; // λ change across the element (2θ ± tolKf)
+      const theta = Math.acos(clamp1(u[2])) / 2;
+      const sinT = Math.sin(theta);
+      const cosT = Math.cos(theta);
+      const st = Math.max(1e-9, sinT);
+      const phi = Math.atan2(u[1], u[0]);
+      const cp = Math.cos(phi);
+      const sp = Math.sin(phi);
+      // Unit tangents at u along 2θ and along the azimuth, and the element's reach along a u-space gradient
+      // gT·e2θ + gP·eφ (the support function of the disc or of the rectangle).
+      const e2t: Vec3 = [Math.cos(2 * theta) * cp, Math.cos(2 * theta) * sp, -Math.sin(2 * theta)];
+      const ephi: Vec3 = [-sp, cp, 0];
+      const reach = (gT: number, gP: number) =>
+        half ? Math.abs(gT * dot(e2t, half[0]) + gP * dot(ephi, half[0])) + Math.abs(gT * dot(e2t, half[1]) + gP * dot(ephi, half[1])) : tolKf * Math.hypot(gT, gP);
+      const lambda = 2 * d * sinT;
+      const dl = d * cosT * reach(1, 0); // λ = 2d sin θ changes by d cos θ per radian of 2θ
       if (lambda + dl < lambdaMin || lambda - dl > lambdaMax) return undefined;
       const qhat = unit(sub(u, [0, 0, 1]));
       const t = mulVec(M0t, qhat);
-      const tolAng = tolKf / 2;
+      // q̂ moves by α/2 along e_r = ∂q̂/∂θ and β/(2 sin θ) along e_φ for a step α·e2θ + β·eφ of u; so along a unit
+      // direction D (frame of t) it reaches as far as the element's reach along (D·e_r/2)·e2θ + (D·e_φ/(2 sin θ))·eφ.
+      const er = mulVec(M0t, [-sinT * cp, -sinT * sp, -cosT]);
+      const ep = mulVec(M0t, ephi);
+      const tolAlong = (D: Vec3) => {
+        const l = Math.hypot(...D);
+        if (l < 1e-12) return Math.max(reach(0.5, 0), reach(0, 1 / (2 * st)));
+        return reach(dot(D, er) / (2 * l), dot(D, ep) / (2 * st * l));
+      };
+      const tolAng = tolAlong(sub(f1.n, scale(t, dot(f1.n, t)))); // across the cone about n₁
+      const tolRot = tolAlong(cross(f1.n, t)); // along it
       const lam = Math.min(lambdaMax, Math.max(lambdaMin, lambda));
       for (let r = 0; r < ws.length; r++) {
         const w = ws[r]!;
         if (!f2) {
-          const a = outer(w, t, tolAng);
+          const a = outer(w, t, tolAng, tolRot);
           const sol = a === undefined ? undefined : { lambda: lam, angles: anglesOf(a), reflection: r };
           if (sol && open(sol, u)) return sol;
           continue;
@@ -178,7 +208,7 @@ export function coverageSolver(model: GoniometerModel, UB: Mat3, hs: readonly Ve
           const b = inRange(beta / f2.s, f2.min, f2.max, amp > 0 ? tolDot / amp / DEG : 0);
           if (b === undefined) continue;
           const w1 = mulVec(M1, mulVec(axisRotation(f2.n, f2.s * b), w));
-          const a = outer(w1, t, tolAng);
+          const a = outer(w1, t, tolAng, tolRot);
           const sol = a === undefined ? undefined : { lambda: lam, angles: anglesOf(a, b), reflection: r };
           if (sol && open(sol, u)) return sol;
         }
@@ -200,9 +230,12 @@ export function coveragePanelLambdas(panels: readonly DetectorPanel[], grids: re
         if (!recordsAt(p, x, y)) continue;
         const v: Vec3 = [p.center[0] + x * p.base[0] + y * p.up[0], p.center[1] + x * p.base[1] + y * p.up[1], p.center[2] + x * p.base[2] + y * p.up[2]];
         const l2 = Math.hypot(...v);
-        const tol = Math.hypot(p.width / nx, p.height / ny) / 2 / l2;
-        const sol = solver.solve(scale(v, 1 / l2), tol);
-        if (sol) out[j * nx + i] = sol.lambda;
+        const u = scale(v, 1 / l2);
+        // The cell's half-sides, seen from the sample: projected onto the tangent plane at u, in radians.
+        const side = (e: Vec3, h: number): Vec3 => scale(sub(e, scale(u, dot(e, u))), h / l2);
+        const sol = solver.solve(u, Math.hypot(p.width / nx, p.height / ny) / 2 / l2, [side(p.base, p.width / nx / 2), side(p.up, p.height / ny / 2)]);
+        // A ray stops at the nearest panel (NOMAD, SEQUOIA and CNCS have overlaps): checked only for the few cells reached.
+        if (sol && rayHit(panels, u)?.panel === k) out[j * nx + i] = sol.lambda;
       }
     return out;
   });
@@ -220,7 +253,9 @@ export function coverageMapLambdas(panelOf: Int16Array, width: number, height: n
       const c = j * width + i;
       if (panelOf[c]! < 0) continue;
       const g = (-180 + ((i + 0.5) / width) * 360) * DEG;
-      const sol = solver.solve([Math.cos(nu) * Math.sin(g), Math.sin(nu), Math.cos(nu) * Math.cos(g)], tol);
+      // The cell's half-sides: along γ (∂u/∂γ = cos ν·(cos γ, 0, −sin γ)) and along ν.
+      const half: [Vec3, Vec3] = [scale([Math.cos(g), 0, -Math.sin(g)], (dg / 2) * Math.cos(nu)), scale([-Math.sin(nu) * Math.sin(g), Math.cos(nu), -Math.sin(nu) * Math.cos(g)], dn / 2)];
+      const sol = solver.solve([Math.cos(nu) * Math.sin(g), Math.sin(nu), Math.cos(nu) * Math.cos(g)], tol, half);
       if (sol) out[c] = sol.lambda;
     }
   }

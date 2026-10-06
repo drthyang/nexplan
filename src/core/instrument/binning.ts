@@ -121,7 +121,23 @@ export function suggestBinning(
   return { axes, extent };
 }
 
-/** An energy-transfer axis (meV): the range rounded out to whole bins of FWHM(E = 0)/perFwhm, rounded down to a nice step. */
+/** Mantid's Q.convention: "inelastic" (q = k_i − k_f, Mantid's default) or "crystallography" (q = k_f − k_i, as here). */
+export type QConvention = "inelastic" | "crystallography";
+
+/**
+ * One MDNorm DimensionNBinning value for a projection axis whose recorded range is given in NEXPLAN's
+ * (crystallographic) indices: "min,step,max", or "min,max" for a slab of the given thickness about `slab.centre`
+ * (MDNorm v1 integrates an axis given two values). Mantid's default convention labels the reflection NEXPLAN calls h
+ * as −h with the same UB (ISAW UB files keep UB's sign; ISAW peaks files flip hkl), so for it every limit is mirrored.
+ */
+export function mdnormBinning(axis: { readonly min: number; readonly step: number; readonly max: number }, convention: QConvention, slab?: { readonly centre: number; readonly thickness: number }): string {
+  const num = (x: number) => Number(x.toFixed(6));
+  const sign = convention === "inelastic" ? -1 : 1;
+  if (slab) return `${num(sign * slab.centre - slab.thickness / 2)},${num(sign * slab.centre + slab.thickness / 2)}`;
+  return convention === "inelastic" ? `${num(-axis.max)},${axis.step},${num(-axis.min)}` : `${num(axis.min)},${axis.step},${num(axis.max)}`;
+}
+
+/** An energy-transfer axis (meV): the range rounded out to whole bins of FWHM(E = 0)/perFwhm, the bin rounded to the nearest nice step (1, 2, 2.5, 5 × 10ⁿ, on a log scale). */
 export function energyBinning(elasticFwhm: number, eMin: number, eMax: number, perFwhm: number): { min: number; max: number; step: number; bins: number } {
   const step = niceStep(elasticFwhm / perFwhm);
   return { ...roundRange(eMin, eMax, step), step };

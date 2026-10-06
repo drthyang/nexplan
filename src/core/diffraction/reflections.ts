@@ -146,7 +146,11 @@ export function structureFactors(model: StructureModel, expansion: Expansion, re
   return { re, im, f2, scale, amplitudes };
 }
 
-/** Classification: systematic absence (from symmetry), accidental near-zero, or present. */
+/**
+ * Classification: systematic absence (from the space-group operations), "accidental" |F| ≈ 0, or present. The
+ * accidental class takes every zero the operations do not force: the special reflection conditions of occupied
+ * Wyckoff positions (Si (2 2 2): 8a of Fd-3m needs h + k + l = 4n for all-even hkl) as well as chance cancellations.
+ */
 export type ReflectionClass = "systematic" | "accidental" | "present";
 export function classify(refl: ReflectionList, sf: StructureFactors, i: number, relTol = 1e-8): ReflectionClass {
   if (refl.absent[i]) return "systematic";

@@ -17,7 +17,8 @@
  *  - a box: γ₁ … γ₂ × ν₁ … ν₂.
  * Each is fixed in the lab, or turns with a goniometer stage: mounted on axis
  * k, it turns with axes 0 … k (R = R₀·R₁·…, axis 0 outermost), so a lab
- * direction u is tested at (R₀ … R_k)ᵀ·u. At zero angles the two frames agree.
+ * direction u is tested at (R₀ … R_k)ᵀ·u. The two frames agree only where that
+ * product is the identity (not, for example, above TOPAZ's χ fixed at 135°).
  */
 import type { Mat3, Vec3 } from "@materia/core/math/types";
 import { mulMat } from "@materia/core/math/mat3";

@@ -2,10 +2,11 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import gemmiSf from "../../fixtures/sf-gemmi-neutron.json";
 import wkValues from "../../fixtures/xray-f0-wk1995-values.json";
+import neutronTable from "../data/neutron-sears1992.json";
 import { gaussLegendre } from "@materia/core/math/quadrature";
 import { readCifStructure } from "../io/cif/structure.ts";
 import { classify, enumerateReflections, ReflectionLimitError, structureFactors, type ReflectionList } from "./diffraction/reflections.ts";
-import { familyRepresentative, polarizationFactor, powderLorentz, powderPeaks, synthesizeProfile } from "./diffraction/powder.ts";
+import { cwPeaks, familyRepresentative, polarizationFactor, powderLorentz, powderPeaks, synthesizeProfile } from "./diffraction/powder.ts";
 import { parseTypeSymbol, speciesFromLabel } from "./scattering/species.ts";
 import { amplitudeFor, f0, neutronB, ScatteringLookupError, xrayRow } from "./scattering/tables.ts";
 import { buildModel, expandModel, ModelBuildError, type StructureModel } from "./structure/model.ts";
@@ -81,11 +82,18 @@ describe("scattering tables", () => {
     expect(() => neutronB({ element: "Fe", z: 26, charge: 0 }, { validatedOnly: true })).toThrow(/not certified/);
   });
 
-  it("crystallographic amplitude is conj(b_Sears): absorption term positive, like X-ray f''", () => {
-    for (const el of ["B", "Cd", "Sm", "Eu", "Gd", "Dy"]) {
-      const a = amplitudeFor({ element: el, z: 0, charge: 0 }, { kind: "neutron" }).at(0);
-      expect(a.im, el).toBeGreaterThan(0);
+  it("crystallographic amplitude is conj(b_Sears): every absorbing nucleus gets a positive imaginary part, like X-ray f''", () => {
+    let checked = 0;
+    for (const e of neutronTable.entries as { id: string; element: string; z: number; kind: string; complex: boolean; bCoh?: { re: number; im: number } }[]) {
+      if (!e.complex || e.kind === "element-row-radioactive") continue;
+      const mass = e.kind === "isotope" ? Number(/^(\d+)/.exec(e.id)![1]) : undefined; // isotope rows: "3He", "157Gd"
+      const sp = { element: e.element, z: e.z, charge: 0, ...(mass !== undefined ? { isotope: mass } : {}) };
+      const a = amplitudeFor(sp, { kind: "neutron" }).at(0);
+      expect(e.bCoh!.im, e.id).toBeLessThan(0); // stored as printed: b = b′ − i b″
+      expect(a, e.id).toEqual({ re: e.bCoh!.re, im: -e.bCoh!.im });
+      checked++;
     }
+    expect(checked).toBeGreaterThanOrEqual(15);
   });
 });
 
@@ -103,6 +111,27 @@ describe("structure model and expansion", () => {
     expect(model("cod-1010129.cif").symmetry.setting?.xhm).toBe("F d -3 m:1");
     const disorder = expandModel(model("cod-9001364.cif")).diagnostics.filter((d) => /share a position/.test(d.message));
     expect(disorder).toHaveLength(2);
+  });
+
+  it("merges near-coincident images symmetrically, whatever the order of the operations", () => {
+    // P4, a = 10 Å: Fe 0.0105 Å off the 4-fold axis. Neighbouring images are 0.0148 Å apart (< 0.02 Å, merged),
+    // opposite ones 0.021 Å (not merged directly, but joined through their neighbours): one atom on the axis.
+    // Leader clustering gave 2 atoms here, or 4, depending on the order.
+    const p4 = (x: number, ops: string[]) =>
+      `data_t\n_cell_length_a 10\n_cell_length_b 10\n_cell_length_c 5\n_cell_angle_alpha 90\n_cell_angle_beta 90\n_cell_angle_gamma 90\n_symmetry_space_group_name_H-M 'P 4'\nloop_\n_symmetry_equiv_pos_as_xyz\n${ops.join("\n")}\nloop_\n_atom_site_label\n_atom_site_type_symbol\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n_atom_site_occupancy\n_atom_site_U_iso_or_equiv\nFe1 Fe ${x} 0 0 1 0.01\n`;
+    const orders = [
+      ["x,y,z", "-y,x,z", "-x,-y,z", "y,-x,z"],
+      ["x,y,z", "-x,-y,z", "-y,x,z", "y,-x,z"],
+    ];
+    for (const ops of orders) {
+      const ex = expandModel(buildModel(readCifStructure(p4(0.00105, ops))));
+      expect(ex.multiplicities).toEqual([1]);
+      for (const v of ex.atoms[0]!.fract) expect(Math.min(v, 1 - v)).toBeLessThan(1e-12);
+      // 0.0226 Å between neighbours: all four kept, and reported.
+      const apart = expandModel(buildModel(readCifStructure(p4(0.0016, ops))));
+      expect(apart.multiplicities).toEqual([4]);
+      expect(apart.diagnostics.some((d) => /0\.023 Å apart/.test(d.message))).toBe(true);
+    }
   });
 
   it("asks instead of guessing when the file gives only an ambiguous symbol", () => {
@@ -255,6 +284,8 @@ describe("structure factors", () => {
     const refl = enumerateReflections(m.cell, m.symmetry.ops, 1.5);
     const sf = structureFactors(m, expandModel(m), refl, { kind: "neutron" });
     const sites = m.sites.map((s) => ({ b: neutronB(s.species).b, x: s.fract }));
+    const index = new Map<string, number>();
+    for (let i = 0; i < refl.count; i++) index.set(`${refl.h[i]},${refl.k[i]},${refl.l[i]}`, i);
     let bijvoet = 0;
     for (let i = 0; i < refl.count; i++) {
       const h = [refl.h[i]!, refl.k[i]!, refl.l[i]!];
@@ -268,6 +299,9 @@ describe("structure factors", () => {
         wi += b.re * Math.sin(ph) + b.im * Math.cos(ph);
       }
       expect(Math.abs(sf.f2[i]! - (pr * pr + pi * pi))).toBeLessThan(1e-9 * sf.f2[i]! + 1e-9);
+      // The printed b in the crystallographic formula gives the intensity of −h instead.
+      const minus = index.get(`${-h[0]!},${-h[1]!},${-h[2]!}`)!;
+      expect(Math.abs(sf.f2[minus]! - (wr * wr + wi * wi))).toBeLessThan(1e-9 * sf.f2[minus]! + 1e-9);
       if (Math.abs(sf.f2[i]! - (wr * wr + wi * wi)) > 1e-3) bijvoet++;
     }
     expect(bijvoet).toBeGreaterThan(0);
@@ -298,6 +332,13 @@ describe("powder", () => {
     expect(polarizationFactor({ kind: "monochromator", twoThetaMDeg: 0 }, 2 * th)).toBeCloseTo((1 + Math.cos(2 * th) ** 2) / 2, 14);
     expect(polarizationFactor({ kind: "linear", fraction: 1 }, 2 * th)).toBe(1);
     expect(polarizationFactor({ kind: "none" }, 2 * th)).toBe(1);
+  });
+
+  it("a line at exact backscattering (2θ = 180°) is left out, not given a divergent Lorentz factor", () => {
+    const line = (d: number) => ({ d, q: (2 * Math.PI) / d, sumF2: 1, families: [] });
+    const peaks = cwPeaks([line(0.75), line(0.76), line(1.5)], { wavelength: 1.5, lorentz: true, polarization: { kind: "none" } });
+    expect(peaks.map((p) => p.d)).toEqual([0.76, 1.5]);
+    expect(Math.max(...peaks.map((p) => p.lp))).toBeLessThan(1e3);
   });
 
   it("profile area equals Σ intensity (unit-area pseudo-Voigt), converged on the grid", () => {

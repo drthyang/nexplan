@@ -1,9 +1,12 @@
 /**
  * Energy resolution of the SNS direct-geometry chopper spectrometers (ARCS, SEQUOIA, CNCS): a port of the
- * closed-form model in Mantid's PyChop (scripts/pychop @ 67c2f43, GPL-3.0-or-later; R. I. Bewley, D. Le and
- * others): Instruments.py getVanVar and getResolution, and Chop.py tikeda (Ikeda–Carpenter moderator), tchop
- * (Fermi chopper), tube_mts (³He tube absorption depth) and sam0 (sample). Instrument parameters are those of
- * arcs.yaml, sequoia.yaml (tuned to ORNL vanadium data, mantid PR #38591) and cncs.yaml at that commit.
+ * closed-form model in Mantid's PyChop (scripts/pychop @ 67c2f43, GPL-3.0-or-later; CHOP by T. G. Perring, the
+ * Python port by R. A. Ewings after J. W. Taylor's Matlab version, MulpyRep by D. J. Voneshen after R. I. Bewley;
+ * the theory, as Chop.py cites it: Carlile, Taylor & Williams, RAL-85-052; Perring, PhD thesis, University of
+ * Cambridge (1991); Perring, RAL-94-025, ICANS XII (1993)): Instruments.py getVanVar and getResolution, and
+ * Chop.py tikeda (Ikeda–Carpenter moderator), tchop (Fermi chopper), tube_mts (³He tube absorption depth) and sam0
+ * (sample). Instrument parameters are those of arcs.yaml, sequoia.yaml (tuned to ORNL vanadium data, mantid
+ * PR #38591) and cncs.yaml at that commit.
  *
  * The result is the Gaussian-equivalent FWHM (meV) of the incoherent elastic line at energy transfer E: time
  * widths at the moderator, the chopper(s), the aperture, the sample and the detector, propagated to the

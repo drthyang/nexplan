@@ -82,13 +82,20 @@ describe("TOF powder pattern", () => {
   ];
 
   for (const shape of shapes) {
-    it(`profile area equals Σ intensity on TOF, d and Q axes (${shape.kind})`, () => {
+    it(`TOF area equals Σ intensity; d and Q relabel the same values, with areas I/(dt/dd) and I·2π/((dt/dd)·d²) (${shape.kind})`, () => {
       const peaks = tofPeaks(groups, bank);
-      const expected = peaks.reduce((s, p) => s + p.intensity, 0);
-      for (const axis of ["tof", "d", "q"] as const) {
+      const tof = synthesizeTof(peaks, bank, shape, "tof");
+      const total = peaks.reduce((s, p) => s + p.intensity, 0);
+      expect(Math.abs(trapezoid(tof.x, tof.y) - total) / total).toBeLessThan(2e-3);
+      const dtdd = (d: number) => bank.difc + 2 * bank.difa * d;
+      const expected = { d: peaks.reduce((s, p) => s + p.intensity / dtdd(p.d), 0), q: peaks.reduce((s, p) => s + (p.intensity * 2 * Math.PI) / (dtdd(p.d) * p.d ** 2), 0) };
+      for (const axis of ["d", "q"] as const) {
         const { x, y } = synthesizeTof(peaks, bank, shape, axis);
-        expect(Math.abs(trapezoid(x, y) - expected) / expected, axis).toBeLessThan(2e-3);
+        // A ratio of counts per bin: the TOF values, relabelled (Q reversed so that x increases).
+        expect([...y]).toEqual(axis === "d" ? [...tof.y] : [...tof.y].reverse());
         for (let i = 1; i < x.length; i++) expect(x[i]!).toBeGreaterThan(x[i - 1]!);
+        // To first order in the line width, the Jacobian is constant across a line (the back-to-back tails are long).
+        expect(Math.abs(trapezoid(x, y) - expected[axis]) / expected[axis], axis).toBeLessThan(1e-2);
       }
     });
   }
@@ -107,8 +114,8 @@ describe("TOF powder pattern", () => {
     const { x, y } = synthesizeTof(peaks, bank, { kind: "gaussian", dOverD: 0.001 }, "q");
     let iMax = 0;
     for (let i = 1; i < y.length; i++) if (y[i]! > y[iMax]!) iMax = i;
-    // Constant Δd/d makes a peak's width in Q proportional to Q, so its height goes as intensity·d.
-    const strongest = peaks.reduce((a, b) => (b.intensity * b.d > a.intensity * a.d ? b : a));
+    // Heights are the TOF heights: constant Δd/d makes a peak's TOF width ∝ d, so its height goes as intensity/d.
+    const strongest = peaks.reduce((a, b) => (b.intensity / b.d > a.intensity / a.d ? b : a));
     const q = (2 * Math.PI) / strongest.d;
     expect(Math.abs(x[iMax]! - q) / q).toBeLessThan(5e-4);
   });

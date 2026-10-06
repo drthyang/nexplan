@@ -8,12 +8,19 @@
  * λmax/(2 sin θ_c).
  *
  * Focusing sums the sample counts of the cells in d, and divides by the summed
- * vanadium counts. Per unit solid angle the sample gives Σ|F|²·d⁴·sin θ_c for a
- * line at d (the GSAS-II TOF Lorentz factor, incident spectrum normalised out;
- * see powderRings.ts), and vanadium scatters isotropically, so the cells are
- * weighted by Ω_c over those that record d:
+ * vanadium counts. With φ(λ) the incident spectrum, a line at d puts
+ * N_c ∝ φ(λ_c)·λ_c⁴·Ω_c·Σ|F|²/sin³θ_c = 16·φ(λ_c)·d⁴·sin θ_c·Ω_c·Σ|F|² counts in
+ * cell c (λ_c = 2d sin θ_c; per unit solid angle, see powderRings.ts), while
+ * vanadium, an isotropic scatterer, gives φ(λ)·Ω_c per unit λ, i.e.
+ * φ(λ_c)·2 sin θ_c·Ω_c per unit d. The spectrum, angle and solid angle cancel
+ * cell by cell, so the focused, normalised line has area ∝ Σ|F|²·d⁴ in d,
+ * whichever cells record it, and on the focused TOF axis (×DIFC_f)
  *
- *   I(d) = Σ|F|²·d⁴·⟨sin θ⟩(d),   ⟨sin θ⟩(d) = Σ_c Ω_c sin θ_c [d ∈ c] / Σ_c Ω_c [d ∈ c].
+ *   I(d) = Σ|F|²·d⁴·sin θ_f,
+ *
+ * the GSAS-II TOF Lorentz factor at the bank's effective angle, as GSAS-II fits
+ * focused data (GSASIIstrMath.py; Von Dreele, Jorgensen & Windsor, J. Appl.
+ * Cryst. 15, 581 (1982)). A line is in the pattern when some cell records it.
  *
  * Lines are drawn on the focused bank's TOF axis, t = DIFC_f·d with
  * DIFC_f = (m_n/h)·(L1 + L2_f)·2 sin θ_f, where the effective L2_f and 2θ_f are
@@ -137,32 +144,26 @@ export function focusedBank(
   return { name, cells, twoThetaDeg, l2: L2, difc: opts.difc ?? difcFromGeometry(l1 + L2, twoThetaDeg), dMin: lambdaMin / (2 * sMax), dMax: lambdaMax / (2 * sMin), twoThetaMin: ttMin, twoThetaMax: ttMax, omega };
 }
 
-/** ⟨sin θ⟩(d) over the cells that record d, weighted by solid angle; NaN when none does. */
-export function meanSinTheta(bank: FocusedBank, d: number, lambdaMin: number, lambdaMax: number): number {
-  let w = 0;
-  let ws = 0;
-  for (const c of bank.cells) {
-    const s = Math.sin((c.twoTheta * DEG) / 2);
-    const lambda = 2 * d * s;
-    if (lambda < lambdaMin * (1 - 1e-12) || lambda > lambdaMax * (1 + 1e-12)) continue;
-    w += c.omega;
-    ws += c.omega * s;
-  }
-  return w > 0 ? ws / w : NaN;
+/** Whether some cell of the bank records spacing d (its λ = 2d sin θ_c in the band). */
+export function recordsD(bank: FocusedBank, d: number, lambdaMin: number, lambdaMax: number): boolean {
+  return bank.cells.some((c) => {
+    const lambda = 2 * d * Math.sin((c.twoTheta * DEG) / 2);
+    return lambda >= lambdaMin * (1 - 1e-12) && lambda <= lambdaMax * (1 + 1e-12);
+  });
 }
 
 /**
- * Lines of the focused pattern: I = Σ|F|²·d⁴·⟨sin θ⟩(d), at t = DIFC_f·d. The cells record a line at
- * different wavelengths, so `lambda` here is only nominal (λ at the effective angle) and is not exported.
+ * Lines of the focused pattern: I = Σ|F|²·d⁴·sin θ_f at t = DIFC_f·d, for the lines some cell records. The cells
+ * record a line at different wavelengths, so `lambda` here is only nominal (λ at the effective angle) and is not
+ * exported.
  */
 export function focusedPeaks(groups: readonly PeakGroup[], bank: FocusedBank, lambdaMin: number, lambdaMax: number): PowderPeak[] {
   const sf = Math.sin((bank.twoThetaDeg * DEG) / 2);
   const out: PowderPeak[] = [];
   for (const g of groups) {
     if (g.d < bank.dMin * (1 - 1e-12) || g.d > bank.dMax * (1 + 1e-12)) continue;
-    const s = meanSinTheta(bank, g.d, lambdaMin, lambdaMax);
-    if (!Number.isFinite(s)) continue;
-    const lp = s * g.d ** 4;
+    if (!recordsD(bank, g.d, lambdaMin, lambdaMax)) continue;
+    const lp = sf * g.d ** 4;
     out.push({ ...g, tof: bank.difc * g.d, lambda: 2 * g.d * sf, lp, intensity: g.sumF2 * lp });
   }
   return out;

@@ -51,6 +51,19 @@ describe("Busing–Levy B and the UB split", () => {
     }
   });
 
+  it("axis and angle of a rotation, 180° included (the axis up to its sign)", () => {
+    for (const axis of [[0, 1, 1], [0, 1, -1], [1, -2, 0.5], [0, 0, 1], [-1, 1, 1]] as Vec3[]) {
+      const n = Math.hypot(...axis);
+      const unitAxis = axis.map((v) => v / n);
+      for (const deg of [180, 179.9999999, 120]) {
+        const aa = axisAngle(rot(axis, deg));
+        expect(aa.angleDeg).toBeCloseTo(deg, 5);
+        const cos = aa.axis.reduce((s, v, i) => s + v * unitAxis[i]!, 0);
+        expect(deg === 120 ? cos : Math.abs(cos)).toBeCloseTo(1, 6);
+      }
+    }
+  });
+
   it("basis change keeps the physical vector: UB′·(Pᵀh) = UB·h, and handles supercells", () => {
     const UB = ubFromU(rot([1, 1, 0.3], 23), tri);
     const P: Mat3 = [

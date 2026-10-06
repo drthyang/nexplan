@@ -10,9 +10,10 @@
  *  - Powder (sample fixed): a reflection of spacing d reaches a pixel at angle
  *    2θ when λ = 2d·sinθ lies in the band; each panel calibrates as
  *    DIFC = (m_n/h)·(L1 + L2)·2 sinθ at its centre.
- *  - Detector map: the "unrolled cylinder" of the Mantid instrument view with
- *    the axis vertical: γ = atan2(u_x, u_z) in the horizontal plane (0 along
- *    the beam, +90° towards +x) and elevation ν = asin(u_y).
+ *  - Detector map: the directions unrolled about the vertical axis, plotted
+ *    equirectangularly: γ = atan2(u_x, u_z) in the horizontal plane (0 along
+ *    the beam, +90° towards +x) and elevation ν = asin(u_y). (Mantid's
+ *    cylindrical instrument view is the equal-area version, sin ν upwards.)
  */
 import type { Mat3, Vec3 } from "@materia/core/math/types";
 import { mulMat, mulVec } from "@materia/core/math/mat3";

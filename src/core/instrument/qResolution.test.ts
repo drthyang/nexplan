@@ -60,4 +60,17 @@ describe("Q resolution: garnet-tools' model for TOPAZ and CORELLI", () => {
     expect(fwhmAlong(S, u) / FWHM_PER_SIGMA).toBeCloseTo((0.482596 * 0.2) / (2 * 2.5), 10);
     expect(fwhmAlong(S, [0, 1, 0])).toBeCloseTo(0, 12);
   });
+
+  it("chopper spectrometers (estimate): the outgoing angular spreads are physical angles, k_f·σ in Q at any elevation", () => {
+    // Out of the horizontal plane (azimuth up to 27° at 2θ = 70°) the horizontal spread is still k_f·σ_H, not
+    // k_f·σ_H·cos ν with ν the elevation of k_f.
+    for (const nu of [0, 16, 27]) {
+      const u = kfOf(70, nu);
+      const S = directCovariance(u, 3, 2.5, 0, 0.004, 0.002, 0);
+      const h = [u[2], 0, -u[0]].map((v) => v / Math.hypot(u[0], u[2])) as unknown as Vec3; // horizontal, ⟂ k_f
+      const v = [-u[0] * u[1], u[0] ** 2 + u[2] ** 2, -u[1] * u[2]].map((x) => x / Math.hypot(u[0], u[2])) as unknown as Vec3; // ⟂ both
+      expect(fwhmAlong(S, h) / FWHM_PER_SIGMA, `azimuth ${nu}°`).toBeCloseTo(2.5 * 0.004, 12);
+      expect(fwhmAlong(S, v) / FWHM_PER_SIGMA, `azimuth ${nu}°`).toBeCloseTo(2.5 * 0.002, 12);
+    }
+  });
 });

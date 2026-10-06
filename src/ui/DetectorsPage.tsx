@@ -30,7 +30,7 @@ import { flightPathRange, paintAcceptanceMap, paintLambdaMap, paintLambdaPanels,
 import { AcceptanceCard } from "./AcceptanceCard.tsx";
 import type { Shadows } from "../core/instrument/acceptance.ts";
 import type { Blocked, DetectorPanel } from "../core/instrument/detectors.ts";
-import { DMinNote, defaultPanel, findHkl, GoniometerLimits, HklField, HklNotice, InstrumentRequired, lam, useHklPick, useObservations, usePowderGroups, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
+import { DMinNote, DOverDField, defaultPanel, findHkl, GoniometerLimits, HklField, HklNotice, InstrumentRequired, lam, useHklPick, useObservations, usePowderGroups, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
 import { familyMembers, PRESENT_CAP } from "./ubShared.ts";
 import type { GoniometerModel } from "../core/ub/goniometer.ts";
 import { GoniometerControls } from "./UbPage.tsx";
@@ -686,22 +686,27 @@ function PowderDetectors({ result, theme, exp, onExp, onDMin, instrument, panels
                 </>
               )}
             </dl>
-            {ringsOn && !mono && (
-              <div className="form-row" style={{ marginTop: "0.6rem" }}>
-                <span className="ui-control-label">
-                  Slice Δ<span className="sym">t</span>/<span className="sym">t</span>
-                </span>
-                <input
-                  className="ui-range"
-                  type="range"
-                  min={0.1}
-                  max={5}
-                  step={0.1}
-                  value={100 * sliceWidth}
-                  aria-label="Time slice width (relative)"
-                  onChange={(e) => setSliceWidth(Number(e.target.value) / 100)}
-                />
-                <span className="dim-note">{fmt(100 * sliceWidth, 1)} %</span>
+            {ringsOn && (
+              <div className="form-rows" style={{ marginTop: "0.6rem" }}>
+                {!mono && (
+                  <div className="form-row">
+                    <span className="ui-control-label">
+                      Slice Δ<span className="sym">t</span>/<span className="sym">t</span>
+                    </span>
+                    <input
+                      className="ui-range"
+                      type="range"
+                      min={0.1}
+                      max={5}
+                      step={0.1}
+                      value={100 * sliceWidth}
+                      aria-label="Time slice width (relative)"
+                      onChange={(e) => setSliceWidth(Number(e.target.value) / 100)}
+                    />
+                    <span className="dim-note">{fmt(100 * sliceWidth, 1)} %</span>
+                  </div>
+                )}
+                <DOverDField exp={exp} onExp={onExp} row />
               </div>
             )}
             <DMinNote result={result} info={info} lambdaMin={exp.lambdaMin} onDMin={onDMin} />

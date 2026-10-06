@@ -103,7 +103,7 @@ export function ScatteringPowerCard({ result }: { result: CalcSuccess }) {
     <Card
       title="Neutron scattering power"
       meta={refOk ? `${sample.name} against ${refOk.name}` : "against a reference material"}
-      info="Per unit volume of material, from the cell contents and the Sears (1992) cross-sections: Σ = (1/v_c)·Σ m·o·σ, in cm⁻¹ (1 barn/Å³ = 1 cm⁻¹). The Bragg line strength j|F|²/v_c² (fm²/Å⁶) is the sample-dependent factor of a line's integrated intensity per unit volume; flux, Lorentz and detector factors depend only on d, so at similar d the ratio of strengths is the ratio of line intensities for equal sample volumes. TOF weighting multiplies by d⁴, the Lorentz factor λ⁴/sin²θ at a fixed detector angle, so lines rank as in a measured TOF pattern apart from the source spectrum. A powder's packing fraction scales all values equally. These compare materials; they are not counting times."
+      info="Per unit volume of material, from the cell contents and the Sears (1992) cross-sections: Σ = (1/v_c)·Σ m·o·σ, in cm⁻¹ (1 barn/Å³ = 1 cm⁻¹). The Bragg line strength j|F|²/v_c² (fm²/Å⁶) is the sample-dependent factor of a line's integrated intensity per unit volume; flux, Lorentz and detector factors depend only on d, so at similar d the ratio of strengths is the ratio of line intensities for equal sample volumes. TOF weighting multiplies by d⁴, as the TOF Lorentz factor λ⁴/sin³θ = 16·d⁴·sinθ does at a fixed detector angle, so lines rank as in a measured TOF pattern apart from the source spectrum. A powder's packing fraction scales all values equally. These compare materials; they are not counting times."
       actions={
         <>
           <span className="ui-control">

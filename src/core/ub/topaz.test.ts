@@ -49,7 +49,11 @@ function readPeaks(text: string): PeakRow[] {
 
 const universal = UNIVERSAL; // R_y(ω)·R_z(χ)·R_y(φ)
 
-describe.skipIf(!existsSync(matPath) || !existsSync(peaksPath))("TOPAZ_3007 (Mantid test data): UB · goniometer · Laue", () => {
+// The pinned Mantid files (npm run data:fetch). A skipped suite still runs its body to collect tests, so it returns early.
+const haveTopaz3007 = existsSync(matPath) && existsSync(peaksPath);
+
+describe.skipIf(!haveTopaz3007)("TOPAZ_3007 (Mantid test data): UB · goniometer · Laue", () => {
+  if (!haveTopaz3007) return;
   const ub = parseIsawUB(readFileSync(matPath, "utf8"));
   const peaks = readPeaks(readFileSync(peaksPath, "utf8"));
 

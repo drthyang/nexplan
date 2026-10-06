@@ -22,8 +22,8 @@
  *    incident-energy range).
  *  - NOMAD (0.1–3 Å, ORNL instrument page) and POWGEN are powder diffractometers: the sample
  *    is fixed (no goniometer axes). POWGEN's band depends on the
- *    choppers: the default is one 60 Hz frame (≈ 3956/(60·63) ≈ 1.05 Å wide for its ~63 m
- *    flight path) centred on 1.066 Å; adjust it to the chopper setting.
+ *    choppers: the default is the 60 Hz frame centred on 1.5 Å (0.967–2.033 Å, about
+ *    3956/(60·63) ≈ 1.05 Å wide for its ~63 m flight path); the bar offers the standard frames.
  *  - ARCS, SEQUOIA and CNCS are direct-geometry chopper spectrometers: a monochromatic
  *    beam of energy Ei, simulated here for elastic scattering (Bragg peaks at Ei), for single
  *    crystals on a vertical rotation ψ or for powders. Ei ranges and elastic resolution from the
