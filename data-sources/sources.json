@@ -354,30 +354,6 @@
       "file": "cncs.yaml",
       "sha256": "f2e655a207f8ea91c0978e5ba199dcad6b24b030ba21ab609cb4554d4a6d42a4",
       "license": "GPL-3.0-or-later (Mantid). Used to generate a reference fixture; the formulas and parameters ported to TypeScript are attributed."
-    },
-    {
-      "id": "garnet-resolution",
-      "role": "crosscheck",
-      "dataset": "q-resolution",
-      "description": "ORNL garnet-tools src/garnet/reduction/resolution.py @ 4eb3206: the single-crystal resolution model (_model_design_lab, after Stoica 1975 and Forsyth 1988). Run by scripts/data/gen_qres_reference.py to make fixtures/qres-garnet.json, the reference for src/core/instrument/qResolution.ts.",
-      "urls": [
-        "https://raw.githubusercontent.com/neutrons/garnet-tools/4eb32068bb31eafc90b28767fd26bd91f7b8bb97/src/garnet/reduction/resolution.py"
-      ],
-      "file": "resolution.py",
-      "sha256": "6a889d6c8b7c52179e64c531557b3bb8586993f7456741e0a08f6ba0124b8633",
-      "license": "BSD-3-Clause (neutrons/garnet-tools). The model form and the fitted parameters are ported with attribution."
-    },
-    {
-      "id": "garnet-instruments",
-      "role": "crosscheck",
-      "dataset": "q-resolution",
-      "description": "ORNL garnet-tools src/garnet/config/instruments.py @ 4eb3206: instrument settings, with the fitted DivergenceParams for TOPAZ and CORELLI. Run by scripts/data/gen_qres_reference.py to make fixtures/qres-garnet.json, the reference for src/core/instrument/qResolution.ts.",
-      "urls": [
-        "https://raw.githubusercontent.com/neutrons/garnet-tools/4eb32068bb31eafc90b28767fd26bd91f7b8bb97/src/garnet/config/instruments.py"
-      ],
-      "file": "instruments.py",
-      "sha256": "6e32ccab8de03279e0829051bf4aae83ec440633e4290abf1e30753fc613b20b",
-      "license": "BSD-3-Clause (neutrons/garnet-tools). The model form and the fitted parameters are ported with attribution."
     }
   ]
 }

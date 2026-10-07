@@ -6,44 +6,6 @@ require.
 
 ## Code ported from other projects
 
-### garnet-tools (BSD-3-Clause)
-
-`src/core/instrument/qResolution.ts` ports the single-crystal Q-resolution model and its fitted parameters from
-ORNL's garnet-tools ([neutrons/garnet-tools](https://github.com/neutrons/garnet-tools) at commit `4eb3206`:
-`src/garnet/reduction/resolution.py`, `src/garnet/config/instruments.py`). `scripts/data/gen_qres_reference.py` runs
-garnet-tools' own code, fetched at that commit and not included here, to make `fixtures/qres-garnet.json`.
-
-```text
-BSD 3-Clause License
-
-Copyright (c) 2024, Zachary Morgan
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-1. Redistributions of source code must retain the above copyright notice, this
-   list of conditions and the following disclaimer.
-
-2. Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
-
-3. Neither the name of the copyright holder nor the names of its
-   contributors may be used to endorse or promote products derived from
-   this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-```
-
 ### Mantid PyChop (GPL-3.0-or-later)
 
 `src/core/instrument/pychop.ts` is a TypeScript port of the chopper-spectrometer resolution model in Mantid's PyChop
@@ -90,16 +52,19 @@ same author, same licence) at the commit pinned in `src/materia/UPSTREAM.json`.
 - **ORNL instrument data**: NOMAD's measured resolution per bank (ORNL NOMAD overview, 2014), the NOMAD 2023A and
   POWGEN 2026B GSAS-II instrument parameter files (neutrons.ornl.gov) and POWGEN characterisation files (Mantid test
   data): numerical parameters, cited where they are used in `src/core/ub/instrumentCatalog.ts`.
-- **Fetched for tests only**, never committed or redistributed: Mantid's TOPAZ_3007 test data and garnet-tools'
-  `corelli_YAG_ub.mat`.
+- **Instrument settings**: goniometer axes and motor logs, and wavelength bands, checked against the instrument
+  configurations of ORNL garnet-tools (`4eb3206`, BSD-3-Clause) and NeuXtalViz (`655afa3`, GPL-3.0); cited in
+  `src/core/ub/instrumentCatalog.ts` and `instruments.ts`. Only these facts are used, not their code.
+- **Fetched for tests only**, never committed or redistributed: Mantid's TOPAZ_3007 test data and ORNL garnet-tools'
+  `corelli_YAG_ub.mat` (BSD-3-Clause).
 
 ## Methods
 
 - **NeuXtalViz** (Morgan, Z. et al. (2026), "NeuXtalViz: Interactive Three-Dimensional Visualization and Analysis for
   Single-Crystal Neutron Diffraction", arXiv:2606.25414;
-  [neutrons/NeuXtalViz-tools](https://github.com/neutrons/NeuXtalViz-tools), GPL-3.0): the stepped sweep behind *Find a setting* (`reflectionCoverage` in `src/core/instrument/simulate.ts`)
-  follows the "individual peak" planner of NeuXtalViz. The implementation is NEXPLAN's own; no NeuXtalViz code is
-  included.
+  [neutrons/NeuXtalViz-tools](https://github.com/neutrons/NeuXtalViz-tools), GPL-3.0): the stepped sweep behind *Find a
+  setting* (`reflectionCoverage` in `src/core/instrument/simulate.ts`) follows the "individual peak" planner of
+  NeuXtalViz. The implementation is NEXPLAN's own; no NeuXtalViz code is included.
 - Formulas from the literature are cited where they are used and listed in
   [CONVENTIONS §12](docs/CONVENTIONS.md#12-references).
 

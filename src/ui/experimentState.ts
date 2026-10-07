@@ -2,6 +2,7 @@
  * Instrument and simulation state, kept in App so it survives page switches.
  * It holds no detector geometry: that loads with the simulation pages.
  */
+import { Q_STEPS } from "../core/instrument/binning.ts";
 import { neutronWavelengthA } from "../core/physics/energy.ts";
 import type { GoniometerModel } from "../core/ub/goniometer.ts";
 import { GENERIC_INSTRUMENT, SNS_CATALOG, type CatalogEntry } from "../core/ub/instrumentCatalog.ts";
@@ -54,7 +55,7 @@ export interface ExperimentState {
   readonly masks: Readonly<Record<string, MaskSettings>>;
   /** Sample-environment shadows per instrument id. */
   readonly shadows: Readonly<Record<string, readonly ShadowShape[]>>;
-  /** Suggested binning: projection axes (r.l.u., rows), bins per resolution FWHM in Q and in energy, the sample's mosaic (FWHM, deg), and the d down to which it bins (Å; absent: the calculation's d_min). */
+  /** Suggested binning: projection axes (r.l.u., rows), about how many bins per axis, and the d down to which it bins (Å; absent: the calculation's d_min). */
   readonly binning: Binning;
   /** Chopper spectrometers, per instrument id: the chopper setting for the energy resolution, and the binning inputs. */
   readonly dgs: Readonly<Record<string, DgsSettings>>;
@@ -62,12 +63,11 @@ export interface ExperimentState {
 
 export interface Binning {
   readonly axes: readonly (readonly number[])[];
-  readonly perFwhmQ: number;
-  readonly perFwhmE: number;
-  readonly mosaicDeg: number;
+  /** Q step (r.l.u.) for every binned axis; absent: per axis, the round step giving about 200–400 bins. */
+  readonly step?: number;
   readonly dMin?: number;
-  /** A slice: this axis is integrated over a slab about `centre` (r.l.u.) instead of binned. */
-  readonly slab?: { readonly axis: number; readonly centre: number };
+  /** A slice: this axis is integrated over a slab `thickness` thick (r.l.u.) about `centre` instead of binned. */
+  readonly slab?: { readonly axis: number; readonly centre: number; readonly thickness: number };
   /**
    * Mantid's Q.convention for the MDNorm call (absent: "inelastic", Mantid's default). NEXPLAN's indices are
    * crystallographic (q = k_f − k_i = UB·h); with the same UB, Mantid's default labels that reflection −h.
@@ -77,16 +77,13 @@ export interface Binning {
 
 /**
  * A chopper spectrometer's chopper (a Fermi package and its frequency, or a CNCS mode and the double-disk frequency),
- * its energy-transfer range (meV; absent: −0.2 Ei to 0.95 Ei, SNS autoreduction's default), and for the Q estimate
- * the sample size (mm) and the incident divergence (FWHM, mrad).
+ * and its energy-transfer range (meV; absent: −0.5 Ei to 0.99 Ei, Mantid's default for direct geometry).
  */
 export interface DgsSettings {
   readonly chopper: string;
   readonly frequency: number;
   readonly eMin?: number;
   readonly eMax?: number;
-  readonly sampleMm: number;
-  readonly divergenceMrad: number;
 }
 
 export const DEFAULT_EXPERIMENT: ExperimentState = {
@@ -109,7 +106,7 @@ export const DEFAULT_EXPERIMENT: ExperimentState = {
   eRes: 0.04,
   masks: {},
   shadows: {},
-  binning: { axes: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], perFwhmQ: 2, perFwhmE: 3, mosaicDeg: 0 },
+  binning: { axes: [[1, 0, 0], [0, 1, 0], [0, 0, 1]] },
   dgs: {},
 };
 
@@ -226,11 +223,9 @@ export function binningOf(exp: ExperimentState): Binning {
   const axes = Array.isArray(b?.axes) && b.axes.length === 3 && b.axes.every((r) => Array.isArray(r) && r.length === 3 && r.every((v) => finite(v, -100, 100))) ? b.axes : DEFAULT_EXPERIMENT.binning.axes;
   return {
     axes,
-    perFwhmQ: finite(b?.perFwhmQ, 1, 10) ? b.perFwhmQ : 2,
-    perFwhmE: finite(b?.perFwhmE, 1, 10) ? b.perFwhmE : 3,
-    mosaicDeg: finite(b?.mosaicDeg, 0, 20) ? b.mosaicDeg : 0,
+    ...(Q_STEPS.includes(b?.step as number) ? { step: b!.step! } : {}),
     ...(finite(b?.dMin, 0.05, 100) ? { dMin: b.dMin } : {}),
-    ...(b?.slab && [0, 1, 2].includes(b.slab.axis) && finite(b.slab.centre, -1000, 1000) ? { slab: { axis: b.slab.axis, centre: b.slab.centre } } : {}),
+    ...(b?.slab && [0, 1, 2].includes(b.slab.axis) && finite(b.slab.centre, -1000, 1000) ? { slab: { axis: b.slab.axis, centre: b.slab.centre, thickness: finite(b.slab.thickness, 1e-4, 100) ? b.slab.thickness : 0.1 } } : {}),
     ...(b?.qConvention === "crystallography" ? { qConvention: "crystallography" as const } : {}),
   };
 }
@@ -262,8 +257,6 @@ export function dgsOf(exp: ExperimentState, defaults: { chopper: string; frequen
     frequency: finite(d?.frequency, 1, 1000) ? d.frequency : defaults.frequency,
     ...(finite(d?.eMin, -1e5, 1e5) ? { eMin: d.eMin } : {}),
     ...(finite(d?.eMax, -1e5, 1e5) ? { eMax: d.eMax } : {}),
-    sampleMm: finite(d?.sampleMm, 0, 1000) ? d.sampleMm : 5,
-    divergenceMrad: finite(d?.divergenceMrad, 0, 1000) ? d.divergenceMrad : 0,
   };
 }
 

@@ -38,8 +38,10 @@ Also:
 - UB matrices in the ISAW format, read and written. A UB for a supercell or a smaller cell of the CIF cell (e.g.
   2 × 2 × 2) is recognised and written in the CIF cell; any UB can be re-indexed to another cell.
 - Every detector pixel a reflection can reach over the goniometer range.
-- The recorded HKL range and bin widths from the resolution, as Mantid MDNorm parameters (Mantid's default Q
-  convention or the crystallographic one).
+- The recorded HKL range along chosen axes, as Mantid MDNorm parameters (Mantid's default Q convention or the
+  crystallographic one), with practical bins: a round step giving about 200–400 bins per axis, or one you choose, and
+  energy steps of 1 % of Ei for chopper spectrometers (Mantid's default). The best bin depends on your counts: try a
+  few.
 - Detector masks (including Mantid mask files) and sample-environment shadows, used in every hit test.
 - Scattering power relative to a reference material (V, diamond, Si, CeO₂, corundum).
 
@@ -56,8 +58,6 @@ Geometry and relative Bragg intensities only: |F|² with Lorentz (and, for X-ray
   NOMAD banks 1–5 use calibrated DIFC.
 - Masks and shadows apply only as you set them; there are no defaults.
 - Anisotropic ADPs enter as U_eq. Complex b are the 2200 m/s values.
-- Q resolution for TOPAZ and CORELLI comes from garnet-tools' fitted model, which is not published. NEXPLAN has no
-  Q-resolution model for ARCS, SEQUOIA and CNCS; their Q bins are a geometric estimate.
 - CIF 1.1 only. Ambiguous settings (origin choice, rhombohedral axes, monoclinic cell choice) are asked, not guessed.
 
 ## Checks
@@ -73,8 +73,7 @@ tested (`npm test`):
 - Constants, DIFC, TOF, E ↔ λ, the B matrix and goniometers follow Mantid
   ([report](docs/data-verification/MANTID_CONSISTENCY.md)).
 - The energy resolution is a port of Mantid PyChop's model (`67c2f43`; ARCS and SEQUOIA parameters tuned to ORNL
-  vanadium data, Mantid PR #38591), tested to reproduce its output to 1e-6. The Q resolution is a port of
-  garnet-tools' model (`4eb3206`), tested to 1e-9.
+  vanadium data, Mantid PR #38591), tested to reproduce its output to 1e-6.
 - POWGEN peak widths (0.8 Å frame) are within 25 % of the LaB₆ widths in Huq et al., J. Appl. Cryst. 52, 1189
   (2019).
 - Each correction from the 2026-10-06 review has a test that fails on the code before it.
@@ -132,7 +131,6 @@ The gemmi references are committed; regenerate them with
 
 - Mantid (commit `67c2f43`): detector geometry extracted from its instrument definitions (numbers only), and the
   chopper-spectrometer resolution, ported from PyChop.
-- ORNL garnet-tools (commit `4eb3206`, Z. Morgan): the TOPAZ and CORELLI Q-resolution model and parameters, ported.
 - NeuXtalViz (Morgan et al., arXiv:2606.25414): *Find a setting* follows the stepped sweep of its "individual peak"
   planner (NEXPLAN's own implementation).
 - Data: Sears (1992) neutron scattering lengths, via the NIST Center for Neutron Research; Waasmaier & Kirfel (1995)
@@ -145,6 +143,5 @@ The notices these licences require, and what each part is used for, are in
 ## License
 
 [AGPL-3.0-only](LICENSE), the same as MATERIA, whose code it includes. © 2026 Tsung-Han Yang. Parts derived from
-other projects keep their licences: `src/core/instrument/pychop.ts` (from Mantid PyChop) is GPL-3.0-or-later, and
-the garnet-tools model in `src/core/instrument/qResolution.ts` is BSD-3-Clause; see
+other projects keep their licences: `src/core/instrument/pychop.ts` (from Mantid PyChop) is GPL-3.0-or-later; see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

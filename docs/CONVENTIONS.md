@@ -416,38 +416,35 @@ neutron scattering); code in
     `observeAt` with masks and shadows, coverage never in a shadow and solvable wherever the stepped sweep lands,
     and mask files mapping each ID to its own pixel (monitor IDs and unknown components reported, not placed).
 
-- **Binning** (`src/core/instrument/hklRange.ts`, `binning.ts`, `qResolution.ts`, `pychop.ts`):
+- **Binning** (`src/core/instrument/hklRange.ts`, `binning.ts`): the recorded HKL range, with practical bins.
   - Range: a pixel along u records q = (u − ẑ)/λ (white beam) or q = k_f·u − k_i·ẑ (chopper spectrometer, energy
     transfer E, k = √(E/81.8042)); in the crystal x = (UB·W)⁻¹·Rᵀ·q along the projection axes W. Along a pixel q is
     linear in 1/λ or k_f, so the box over settings, recording pixels (masks and shadows applied) and band ends is the
     recorded extent; each segment is clipped exactly to |q| ≤ 1/d_min. Pixels are sampled on a grid per panel that
     includes its edges; the pixel direction is not linear in the position on a flat panel, so the extent is exact to
     second order in the grid spacing.
-  - Q resolution, TOPAZ and CORELLI: Σ = k²[σ_γi(λ)²·x̂x̂ᵀ + σ_νi(λ)²·ŷŷᵀ + σ_γf²·γ̂fγ̂fᵀ + σ_νf²·ν̂fν̂fᵀ +
-    (σ_dl² + σ_dlb²/λ²)·qqᵀ] + η²(Q²I − QQᵀ) (Stoica 1975; Forsyth 1988), as ORNL garnet-tools models peak shapes
-    (`resolution.py` `_model_design_lab` @ 4eb3206), with its fitted DivergenceParams. These are in degrees on a
-    99.7 % containment scale, so a Gaussian σ is the value / √χ²₃(0.997) = value / 3.7325 (χ²₃(0.997) = 13.93142).
-    The mosaic term is the small-rotation result δQ = δω × Q, η a Gaussian σ (the card takes its FWHM). The
-    calibration crystal's mosaic is dropped and the sample's η is an input. Tested against garnet's own code on the
-    pinned file.
-  - Energy resolution, ARCS, SEQUOIA, CNCS: Mantid PyChop's closed-form model at 67c2f43 (moderator, choppers, aperture,
-    sample and ³He-tube depth propagated to the detector; Carlile, Taylor & Williams 1985; Perring 1991, 1993; the
-    Ikeda–Carpenter moderator pulse, Ikeda & Carpenter 1985), with its arcs/sequoia/cncs.yaml parameters; tested against
-    PyChop's output. The chopper setting in the header gives the elastic width ΔE/E = FWHM(0)/Ei for the simulations'
-    band (Δλ/λ = ΔE/2E) as well. Defaults are PyChop's 300 Hz with ARCS-100-1.5, SEQ-100-2.0 or CNCS High Flux. A typed
-    ΔE/E ("Custom") is kept, and so is the last width where a chopper does not transmit.
-  - Q for chopper spectrometers (a geometric estimate; NEXPLAN has no Q-resolution model for them): outgoing angular
-    σ from the median pixel and the sample size over L2 (uniform widths, σ = w/√12), physical angles along unit
-    directions across k̂_f, the incident divergence if given, and σ_E as a spread 0.482596·σ_E/(2k_f) of |k_f| along
-    k̂_f (dk/dE for k² = 0.482596·E).
-  - Bins: FWHM along axis i is 2.3548·√C_ii, C = M·Σ·Mᵀ/(2π)², M = (UB·W)⁻¹·Rᵀ. These are sampled at up to 24
-    settings, the pixel grid and 5 wavelengths (or energy transfers) where the plan records within d_min. The bin is
-    the 25th percentile over the bins per FWHM (2 by default; 3 for energy, from the elastic FWHM), rounded to the
-    nearest of 1, 2, 2.5, 5 × 10ⁿ (on a log scale, so the bins per FWHM are effectively within a factor √2 of the
-    choice), and the range is rounded out to whole bins. A slice integrates one axis over 2 × its median FWHM.
+  - Q bins: a round step (1, 2, 2.5, 4 or 5 × 10ⁿ r.l.u.), by default per axis the one that puts the recorded range in
+    201–401 bins (nearest 301), as TOPAZ and CORELLI volumes are usually binned; or a step chosen for every axis. Bins
+    are centred on zero, the limits at (k ± ½)·step, so integer hkl are bin centres when 1/step is an integer
+    (±5 in 0.05 gives −5.025, 0.05, 5.025: 201 bins). A slice integrates one axis over a slab of a given thickness.
+  - No resolution or counting-statistics optimum is attempted: the useful bin depends on the counts a measurement
+    collects, and is found by trying. (An earlier version sized bins from ORNL garnet-tools' Q-resolution model and
+    PyChop's energy width; at 2 bins per FWHM over the whole recorded volume that gave thousands of bins per axis.)
+  - Energy transfer (chopper spectrometers): steps of 1 % of Ei over −0.5 Ei to 0.99 Ei by default, Mantid's default
+    for direct geometry (`DgsConvertToEnergyTransfer.cpp` @ 67c2f43: −0.5 Ei, 0.01 Ei, 0.99 Ei); the range is
+    editable and rounded out to whole steps. The Q range of a chopper spectrometer grows with k_i, so its Q bins follow
+    Ei; expect to try a few.
   - MDNorm parameters (Mantid MDNorm v1: "min,step,max", or "min,max" to integrate) are written for the Mantid Q
     convention chosen in the card. For "Inelastic", Mantid's default, every limit is mirrored (−max … −min, the slab
     centre negated), since Mantid labels NEXPLAN's (h k l) as (−h −k −l) with the same UB (§8).
+
+- **Energy resolution** (ARCS, SEQUOIA, CNCS; `src/core/instrument/pychop.ts`): Mantid PyChop's closed-form model at
+  67c2f43 (moderator, choppers, aperture, sample and ³He-tube depth propagated to the detector; Carlile, Taylor &
+  Williams 1985; Perring 1991, 1993; the Ikeda–Carpenter moderator pulse, Ikeda & Carpenter 1985), with its
+  arcs/sequoia/cncs.yaml parameters; tested against PyChop's output. The chopper setting in the header gives the elastic
+  width ΔE/E = FWHM(0)/Ei for the simulations' band (Δλ/λ = ΔE/2E). Defaults are PyChop's 300 Hz with ARCS-100-1.5,
+  SEQ-100-2.0 or CNCS High Flux. A typed ΔE/E ("Custom") is kept, and so is the last width where a chopper does not
+  transmit.
 
 ## 11. Scattering power (comparing materials)
 
@@ -518,8 +515,6 @@ Scattering data and constants
 
 Time of flight, resolution and instruments
 
-- Forsyth, J. B. (1988). Single crystal pulsed neutron diffraction. In *Chemical Crystallography with Pulsed Neutrons
-  and Synchrotron X-rays*, eds. M. A. Carrondo & G. A. Jeffrey, pp. 117–135. Dordrecht: Springer Netherlands.
 - Huq, A. et al. (2019). POWGEN: rebuild of a third-generation powder diffractometer at the Spallation
   Neutron Source. *J. Appl. Cryst.* 52, 1189–1201.
 - Ikeda, S. & Carpenter, J. M. (1985). Wide-energy-range, high-resolution measurements of neutron pulse shapes of
@@ -533,9 +528,6 @@ Time of flight, resolution and instruments
 - Perring, T. G. (1993). The resolution function of the chopper spectrometer HET at ISIS. Proceedings of ICANS XII,
   report RAL-94-025.
   (These three are the references of PyChop's Chop.py, which implements the CHOP model.)
-- Stoica, A. D. (1975). On the resolution of slow-neutron spectrometers. II. The resolution function for
-  time-of-flight diffractometry. *Acta Cryst.* A31, 193–196.
-  (Forsyth and Stoica are the references garnet-tools gives for its model, resolution.py.)
 - Von Dreele, R. B., Jorgensen, J. D. & Windsor, C. G. (1982). Rietveld refinement with spallation neutron powder
   diffraction data. *J. Appl. Cryst.* 15, 581–589.
 
@@ -556,7 +548,7 @@ Software (pinned commits in `data-sources/sources.json`)
   software package. *J. Appl. Cryst.* 46, 544–549.
 - Wojdyr, M. (2022). GEMMI: a library for structural biology. *J. Open Source Softw.* 7(73), 4200. Version 0.7.3 for
   space groups, absences and structure factors.
-- ORNL garnet-tools `4eb3206` (Q-resolution model) and NeuXtalViz `655afa3` (coverage planner).
+- NeuXtalViz `655afa3` (coverage planner).
 
 ## 13. Changes from the 2026-10-06 audit
 
@@ -574,8 +566,13 @@ written. These were corrected, each with a test that fails on the code before th
 - **Symmetry** (§3, §4): a reverse-setting R operation list was given a second centring; near-coincident atom images
   were merged in an order-dependent way. Both fixed.
 - **Smaller:** the CW Lorentz factor at exact backscattering; the planner's nearest-panel test with overlapping
-  panels; the outgoing-angle term of the chopper-spectrometer Q estimate (shrunk by cos ν); the axis of a 180°
-  rotation (display); IDF parser defaults, now Mantid's (no change to the shipped geometry).
+  panels; the outgoing-angle term of the chopper-spectrometer Q estimate (shrunk by cos ν; the estimate was later
+  removed, below); the axis of a 180° rotation (display); IDF parser defaults, now Mantid's (no change to the shipped
+  geometry).
+- **Binning simplified** (2026-10-07): bins sized from the resolution (garnet-tools' Q model for TOPAZ and CORELLI, a
+  geometric estimate for the chopper spectrometers, PyChop's energy width) gave thousands of bins per axis, more than
+  is practical and with no regard to counts. Bins now follow common practice: a round Q step giving about 200–400 bins
+  per axis, and energy steps of 1 % of Ei (Mantid's default). The garnet-tools port, used for nothing else, was removed.
 - **Tests strengthened** (they pass on the old code too): every complex b, isotopes included, gets a positive
   imaginary amplitude; the printed b gives exactly I(−h).
 - **Claims removed:** "PyChop is within about 10 % of ORNL's vanadium widths", which had no source in the repository;
