@@ -290,7 +290,7 @@ export function InstrumentPowder(props: SimPageProps) {
         </Card>
         <div className="ui-stack">
           {fb ? (
-            <Card title="Focused bank" meta={`${fb.spec.name} · ${fb.idx.length} panels`} info={`The pattern above is for this bank. Groupings: ${instrument.banks!.source}`}>
+            <Card title="Focused bank" meta={`${fb.spec.name} · ${fb.idx.length} panels`} info={`The pattern above is for this bank. ${instrument.banks!.source}`}>
               <div className="form-rows">
                 <label className="form-row">
                   <span className="ui-control-label">Bank</span>

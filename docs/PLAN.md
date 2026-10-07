@@ -48,7 +48,7 @@ research release waits on print certification of the scattering tables. Nothing 
 | Pages grouped Sample · Setup · Instrument · Simulation; instrument chosen in the header; Detectors, Powder (per panel) and Single-crystal pages; exact per-pixel coverage; orientation lists (TOPAZ), interleaved scans (CORELLI); reciprocal slices with plan coverage | done |
 | TOPAZ planner: wanted reflections, Find a setting, Suggest settings (Full coverage or Fewest settings, greedy, fine-tuned off the grid), user goniometer limits, plan CSV export with provenance | done |
 | Focused banks as the data are reduced (NOMAD six, POWGEN one); powder export per bank; TOF, d and Q axes; warning where d_min cuts the pattern, with a one-click fix | done |
-| Calibrated banks | partly: NOMAD banks 1–5 use calibrated DIFC (ORNL 2023A GSAS-II file), POWGEN's DIFC comes from the characterisation file's effective L2 and 2θ; NOMAD bank 6 and the other instruments use geometric DIFC |
+| Calibrated banks | partly: NOMAD banks 0–4 use calibrated DIFC (ORNL 2023A GSAS-II file, its banks 1–5), POWGEN's DIFC comes from the characterisation file's effective L2 and 2θ; NOMAD bank 5 and the other instruments use geometric DIFC |
 | Instrument peak widths: NOMAD measured Δd/d per bank; POWGEN GSAS-II profile for each of seven standard chopper frames; resolved-line check (≥ 1 FWHM apart) | done; POWGEN 0.8 Å frame within 25 % of the LaB₆ widths in Huq et al. (2019) |
 | Forbidden reflections (absent, \|F\| ≈ 0 or below d_min) simulated, wanted and planned on request, with a notice | done |
 | Scattering power against a reference material (V, diamond, Si, CeO₂, corundum or a demo structure) | done; relative, no counting time |

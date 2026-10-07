@@ -366,11 +366,15 @@ neutron scattering); code in
     geometry. They also check that the cone power at fixed λ is ∝ 1/sin θ, and that the time-integrated TOF line is
     ∝ sin θ.
 - **Focused banks** (NOMAD, POWGEN; `src/core/instrument/focus.ts`), as the data are reduced:
+  - Numbering: NOMAD's banks are 0–5, as Mantid numbers the focused spectra (workspace index) and as the
+    autoreduction names its TOPAS files (SaveFocusedXYE with StartAtBankNumber = 0: …-0.xye to …-5.xye). GSAS files
+    (SaveGSS, `.prm`, `.instprm`), ADDIE and ORNL's tables number the same banks 1–6 in the same order, so GSAS bank n
+    is bank n − 1 here: bank 0 is at 15°, bank 4 is backscattering (150°) and bank 5 is the forward bank (7°).
   - Groupings: NOMAD's six physical banks are the IDF assemblies Group1–Group6 (bank1–14, 15–37, 38–51, 52–63,
-    64–81, 82–99), the groups CreateGroupingWorkspace builds with GroupDetectorsBy = 'Group'. POWGEN is focused to one
-    bank of all 40 panels (every pixel is group 1 in the PG3 calibration of Mantid's test data). Mantid ships no
-    grouping file for either: the site calibration files carry the groups, and they can exclude packs, which is not
-    modelled.
+    64–81, 82–99: IDF eight-pack names, not bank numbers), the groups CreateGroupingWorkspace builds with
+    GroupDetectorsBy = 'Group'. POWGEN is focused to one bank of all 40 panels (every pixel is group 1 in the PG3
+    calibration of Mantid's test data). Mantid ships no grouping file for either: the site calibration files carry the
+    groups, and they can exclude packs, which is not modelled.
   - Each panel is split into 4 × 8 cells, each with its own 2θ, L2 and solid angle Ω = A·|cos α|/L2². Cell c records
     a line at d (at λ_c = 2d sin θ_c) with N_c ∝ φ(λ_c)·λ_c⁴·Ω_c·Σ|F|²/sin³θ_c counts (φ the incident spectrum), and
     vanadium, an isotropic scatterer, gives φ(λ_c)·Ω_c·2 sin θ_c per unit d. Focusing sums both over the cells and
@@ -379,16 +383,16 @@ neutron scattering); code in
     angle, as GSAS-II fits focused data. A line is drawn when some cell records it.
   - Tested: a one-cell bank reduces to the single-panel formula above, and the focused intensities equal
     sample-over-vanadium sums done count by count for an arbitrary spectrum.
-  - Lines are drawn at t = DIFC_f·d. NOMAD: the calibrated DIFC of ORNL's 2023A GSAS-II instrument file for banks 1–5
-    (banks 2–5 at 2θ 31, 65, 120.4, 150.1° and flight paths 21.18, 20.66, 20.61, 20.29 m; bank 1's angle and path there
-    are placeholders, so 15° is nominal); bank 6 (7°) is not in that file and uses the geometric DIFC. POWGEN: L2 3.18 m
-    and 90° with L1 = 60 m (characterisation file), DIFC = 22585.7 µs/Å, as the 2024–25 autoreduction's FinalDIFC
-    22585.8.
+  - Lines are drawn at t = DIFC_f·d. NOMAD: the calibrated DIFC of ORNL's 2023A GSAS-II instrument file for banks 0–4
+    (the file's banks 1–5; banks 1–4 at 2θ 31, 65, 120.4, 150.1° and flight paths 21.18, 20.66, 20.61, 20.29 m; bank 0's
+    angle and path there are placeholders, so 15° is nominal); bank 5 (7°) is not in that file and uses the geometric
+    DIFC. POWGEN: L2 3.18 m and 90° with L1 = 60 m (characterisation file), DIFC = 22585.7 µs/Å, as the 2024–25
+    autoreduction's FinalDIFC 22585.8.
   - **Peak widths** from the instrument where ORNL publishes them (or the bar's Δd/d, by choice):
     - NOMAD: the measured Δd/d (FWHM) per bank of ORNL's NOMAD overview (slide 5, 2014, when 50 of the 99 eight-packs
-      were installed, slide 3): 2.9, 1.9, 1.37, 0.69, 0.36, 3.9 % for banks 1–6, as constant-width Gaussians. The 2023A
-      GSAS-II profiles give similar widths (within 10–25 %) but include Lorentzian terms that the app's TOF profile does
-      not.
+      were installed, slide 3): 2.9, 1.9, 1.37, 0.69, 0.36, 3.9 % for banks 0–5 (its banks 1–6), as constant-width
+      Gaussians. The 2023A GSAS-II profiles give similar widths (within 10–25 %) but include Lorentzian terms that the
+      app's TOF profile does not.
     - POWGEN: ORNL's 2026B GSAS-II instrument files (high-resolution guide, 60 Hz) for the 0.8, 1.5 and 2.665 Å
       frames, as GSAS-II's TOF profile: back-to-back exponentials, α = alpha/d and β = beta-0 + beta-1/d⁴ +
       beta-q/d², convolved with a Gaussian of σ² = sig-0 + sig-1·d² + sig-2·d⁴ + sig-q·d (GSASIIpwd.py getFWHM; the

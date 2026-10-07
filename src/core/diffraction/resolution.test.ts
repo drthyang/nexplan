@@ -75,7 +75,7 @@ describe("NOMAD banks (ORNL 2023A GSAS-II file, ORNL measured resolution)", () =
     expect(nomad.banks!.list.map((b) => b.dOverD)).toEqual([0.029, 0.019, 0.0137, 0.0069, 0.0036, 0.039]);
   });
 
-  it("the calibrated DIFC of banks 2–5 agrees with the file's own 2θ and flight path within 0.5 %", () => {
+  it("the calibrated DIFC of banks 1–4 (the file's banks 2–5) agrees with the file's own 2θ and flight path within 0.5 %", () => {
     for (const b of nomad.banks!.list.slice(1, 5)) {
       const geometric = difcFromGeometry(nomad.l1! + b.l2!, b.twoThetaDeg!);
       expect(Math.abs(b.difc! / geometric - 1)).toBeLessThan(0.005);

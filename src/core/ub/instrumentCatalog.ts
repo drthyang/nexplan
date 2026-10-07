@@ -102,14 +102,14 @@ export const SNS_CATALOG: readonly CatalogEntry[] = [
     source: `ORNL NOMAD page (0.1–3 Å, 19.5 m).`,
     banks: {
       source:
-        "Groups: the six physical banks, the IDF assemblies Group1–Group6 (Mantid NOMAD_Definition.xml @ 67c2f43; CreateGroupingWorkspace GroupDetectorsBy='Group'; mantid utils/nomad/diagnostics.py: PANEL_COUNT = 6). Geometry: ORNL's NOMAD GSAS-II instrument file for 2023A (NOMAD_2023A_five_banks_Shifter_Si_640e_instrument_file.instprm, sha256 78b6a260…ee3d3, from neutrons.ornl.gov/nomad/users): banks 2–5 at 2θ 31, 65, 120.4, 150.1° with flight paths 21.18, 20.66, 20.61, 20.29 m (L1 19.5 m) and their calibrated DIFC; bank 1's DIFC 1439.6 (its angle and path in the file are placeholders, so 15° is nominal); bank 6 is not in the file (left out for poor resolution), so its 7° and L2 are nominal and geometric. Resolution: the measured Δd/d (FWHM) per bank in ORNL's NOMAD overview (neutrons.ornl.gov/sites/default/files/NOMAD-Overview.pdf, slide 5, 2014: 0.029, 0.019, 0.0137, 0.0069, 0.0036, 0.039; slide 3 notes that 50 of the 99 eight-packs were installed then), consistent with the 2023A GSAS-II profiles. Calibrations can also exclude packs, which is not modelled.",
+        "Numbering: banks 0–5, as Mantid numbers the focused spectra (workspace index) and as the autoreduction's TOPAS files are named (SaveFocusedXYE, StartAtBankNumber = 0: …-0.xye to …-5.xye; mantid_total_scattering @ 1b93684). GSAS files, ADDIE and ORNL's tables number the same banks 1–6, in the same order: GSAS bank n is bank n − 1 here. Groups: banks 0–5 are the IDF assemblies Group1–Group6 (Mantid NOMAD_Definition.xml @ 67c2f43; CreateGroupingWorkspace GroupDetectorsBy='Group'; mantid utils/nomad/diagnostics.py: PANEL_COUNT = 6). Geometry: ORNL's NOMAD GSAS-II instrument file for 2023A (NOMAD_2023A_five_banks_Shifter_Si_640e_instrument_file.instprm, sha256 78b6a260…ee3d3, from neutrons.ornl.gov/nomad/users), whose banks 1–5 are banks 0–4 here: banks 1–4 at 2θ 31, 65, 120.4, 150.1° with flight paths 21.18, 20.66, 20.61, 20.29 m (L1 19.5 m) and their calibrated DIFC; bank 0's DIFC 1439.6 (its angle and path in the file are placeholders, so 15° is nominal); bank 5 is not in the file (left out for poor resolution), so its 7° and L2 are nominal and geometric. Resolution: the measured Δd/d (FWHM) per bank in ORNL's NOMAD overview (neutrons.ornl.gov/sites/default/files/NOMAD-Overview.pdf, slide 5, 2014, its banks 1–6: 0.029, 0.019, 0.0137, 0.0069, 0.0036, 0.039; slide 3 notes that 50 of the 99 eight-packs were installed then), consistent with the 2023A GSAS-II profiles. Calibrations can also exclude packs, which is not modelled.",
       list: [
-        { name: "Bank 1", panels: range(1, 14), twoThetaDeg: 15, difc: 1439.612, dOverD: 0.029 },
-        { name: "Bank 2", panels: range(15, 37), twoThetaDeg: 31, l2: 1.68, difc: 2851.105, dOverD: 0.019 },
-        { name: "Bank 3", panels: range(38, 51), twoThetaDeg: 65, l2: 1.16, difc: 5612.385, dOverD: 0.0137 },
-        { name: "Bank 4", panels: range(52, 63), twoThetaDeg: 120.4, l2: 1.11, difc: 9068.553, dOverD: 0.0069 },
-        { name: "Bank 5", panels: range(64, 81), twoThetaDeg: 150.1, l2: 0.79, difc: 9912.083, dOverD: 0.0036 },
-        { name: "Bank 6", panels: range(82, 99), twoThetaDeg: 7, dOverD: 0.039 },
+        { name: "Bank 0", panels: range(1, 14), twoThetaDeg: 15, difc: 1439.612, dOverD: 0.029 },
+        { name: "Bank 1", panels: range(15, 37), twoThetaDeg: 31, l2: 1.68, difc: 2851.105, dOverD: 0.019 },
+        { name: "Bank 2", panels: range(38, 51), twoThetaDeg: 65, l2: 1.16, difc: 5612.385, dOverD: 0.0137 },
+        { name: "Bank 3", panels: range(52, 63), twoThetaDeg: 120.4, l2: 1.11, difc: 9068.553, dOverD: 0.0069 },
+        { name: "Bank 4", panels: range(64, 81), twoThetaDeg: 150.1, l2: 0.79, difc: 9912.083, dOverD: 0.0036 },
+        { name: "Bank 5", panels: range(82, 99), twoThetaDeg: 7, dOverD: 0.039 },
       ],
     },
   },

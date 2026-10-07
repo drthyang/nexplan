@@ -5,11 +5,11 @@ import { SNS_INSTRUMENTS } from "./instrumentsSns.ts";
 const ins = (id: string) => SNS_INSTRUMENTS.find((i) => i.id === id)!;
 
 describe("focused banks in the catalog (NOMAD, POWGEN)", () => {
-  it("NOMAD: six banks covering every one of the IDF's 99 eight-packs exactly once (IDF Group1–Group6)", () => {
+  it("NOMAD: banks 0–5 (Mantid's numbering) covering every one of the IDF's 99 eight-packs exactly once (IDF Group1–Group6)", () => {
     const nomad = ins("nomad");
     const names = nomad.detectors!.map((p) => p.name);
     const members = nomad.banks!.list.flatMap((b) => b.panels);
-    expect(nomad.banks!.list).toHaveLength(6);
+    expect(nomad.banks!.list.map((b) => b.name)).toEqual(["Bank 0", "Bank 1", "Bank 2", "Bank 3", "Bank 4", "Bank 5"]);
     expect(members).toHaveLength(99);
     expect(new Set(members).size).toBe(99);
     expect([...members].sort()).toEqual([...names].sort());
