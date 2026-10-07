@@ -31,7 +31,8 @@ import { AcceptanceCard } from "./AcceptanceCard.tsx";
 import type { Shadows } from "../core/instrument/acceptance.ts";
 import type { Blocked, DetectorPanel } from "../core/instrument/detectors.ts";
 import { DMinNote, DOverDField, defaultPanel, findHkl, GoniometerLimits, HklField, HklNotice, InstrumentRequired, lam, useHklPick, useObservations, usePowderGroups, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
-import { familyMembers, PRESENT_CAP } from "./ubShared.ts";
+import { familyMembers, orientationText, planeOf, PRESENT_CAP } from "./ubShared.ts";
+import { PLANE_PRESETS, planeGeometry, planeTrace, zoneAxis } from "../core/ub/mount.ts";
 import type { GoniometerModel } from "../core/ub/goniometer.ts";
 import { GoniometerControls } from "./UbPage.tsx";
 
@@ -91,7 +92,14 @@ export function DetectorsPage(props: SimPageProps) {
 /* ------------------------------------------------------------------ single crystal */
 
 function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrientation, instrument, catalogGoniometer, panels, geometry, info, shadows, blocked }: ModeProps) {
-  const { viewUB, fileUB, points, sim, tofOf } = useObservations(result, ub, exp, instrument, blocked);
+  const { viewUB, fileUB, points, sim, tofOf, R } = useObservations(result, ub, exp, instrument, blocked);
+  // The scattering plane (Orientation page): where it is at this setting, and where its reflections land.
+  const plane = planeOf(ub);
+  const [showPlane, setShowPlane] = useState(true);
+  const planeGeo = useMemo(() => (plane ? planeGeometry(viewUB, R, plane) : undefined), [plane, viewUB, R]);
+  const planeName = plane ? (PLANE_PRESETS.find((p) => p.plane.u.every((x, i) => x === plane.u[i]) && p.plane.v.every((x, i) => x === plane.v[i]))?.label ?? `u (${hklText(plane.u)}), v (${hklText(plane.v)})`) : "";
+  const plane3d = useMemo(() => (plane && planeGeo && showPlane ? { normal: planeGeo.normal, uDir: planeGeo.uDir, vDir: planeGeo.vDir, uLabel: `(${hklText(plane.u)})`, vLabel: `(${hklText(plane.v)})` } : undefined), [plane, planeGeo, showPlane]);
+  const planeDirs = useMemo(() => (planeGeo && showPlane ? planeTrace(planeGeo.normal) : undefined), [planeGeo, showPlane]);
   const [selected, setSelected] = useState<number | null>(null);
   const [panelFilter, setPanelFilter] = useState<number | null>(null);
   useEffect(() => {
@@ -280,6 +288,7 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
               {...(on ? { highlight: on } : {})}
               legend={lambdaLegend}
               {...(covImages ? { panelImages: covImages, summary: `coverage of (${hklText(target!.h)})${equivalents ? " and equivalents" : ""} over the goniometer range` } : {})}
+              plane={plane3d}
             />
           </Suspense>
           <div className="ring-controls">
@@ -295,6 +304,11 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
                 { value: "coverage", label: "Coverage" },
               ]}
             />
+            {plane && (
+              <label className="ui-check" title="The scattering plane chosen on the Orientation page: a disc at the sample with its u and v directions, and on the detector map the dashed curve along which its reflections are scattered">
+                <input type="checkbox" checked={showPlane} onChange={(e) => setShowPlane(e.target.checked)} /> Scattering plane
+              </label>
+            )}
             {show === "coverage" && (
               <>
                 <HklField {...hkl.field(sel ? sel.h : null)} />
@@ -345,12 +359,17 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
               </div>
             </dl>
             <p className="empty-note">
-              {fileUB ? `Orientation from ${ub.fileName ?? "the loaded UB"}. ` : "No UB loaded: U = I with the CIF cell. "}
+              Orientation {orientationText(ub, !!fileUB)}.{" "}
               <button type="button" className="ui-link" onClick={onOpenOrientation}>
                 {fileUB ? "Change it on the Orientation page" : "Load an orientation on the Orientation page"}
               </button>
               . The {points.length.toLocaleString()} strongest present reflections with d ≥ d_min are simulated.
             </p>
+            {plane && planeGeo && (
+              <p className="dim-note" style={{ margin: "0.4rem 0 0" }}>
+                Scattering plane {planeName}, zone axis [{hklText(zoneAxis(plane))}]: {fmt(planeGeo.tiltDeg, 1)}° from horizontal, the beam {planeGeo.beamDeg < 0.05 ? "in it" : `${fmt(planeGeo.beamDeg, 1)}° out of it`}. Its reflections are scattered along the dashed violet curve on the detector map.
+              </p>
+            )}
             <DMinNote result={result} info={info} lambdaMin={exp.lambdaMin} onDMin={onDMin} />
           </Card>
           <AcceptanceCard exp={exp} onExp={onExp} geometry={geometry} panels={panels} goniometer={instrument.goniometer} />
@@ -366,7 +385,7 @@ function CrystalDetectors({ result, theme, ub, exp, onExp, onDMin, onOpenOrienta
             : "Every panel projected onto a cylinder around the sample with its axis vertical: γ is the horizontal angle from the beam (positive towards +x), ν the elevation. Dashed curves are cones of constant 2θ (Debye–Scherrer rings). Hover a spot or panel for details; click a spot to select it, a panel to filter the table."
         }
       >
-        <DetectorMap {...(covOn ? { raster: covRaster, rings: covRings } : {})} overlay={overlay} panels={panels} spots={covOn ? [] : mapSpots} lambdaMin={exp.lambdaMin} lambdaMax={exp.lambdaMax} selected={selected} onSelect={setSelected} selectedPanel={covOn ? null : (selObs?.hit.panel ?? panelFilter)} onPanelClick={togglePanel} />
+        <DetectorMap {...(covOn ? { raster: covRaster, rings: covRings } : {})} overlay={overlay} planeTrace={planeDirs} panels={panels} spots={covOn ? [] : mapSpots} lambdaMin={exp.lambdaMin} lambdaMax={exp.lambdaMax} selected={selected} onSelect={setSelected} selectedPanel={covOn ? null : (selObs?.hit.panel ?? panelFilter)} onPanelClick={togglePanel} />
         <p className="plot-hint">{lambdaLegend}</p>
       </Card>
 

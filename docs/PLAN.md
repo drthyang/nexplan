@@ -57,6 +57,7 @@ research release waits on print certification of the scattering tables. Nothing 
 | License: AGPL-3.0-only, full text in `LICENSE` | done |
 | Detector masks (edge pixels, panels, Mantid mask files by detector ID) and sample-environment shadows (lab or stage frame), in every hit test | done; gaps between the tubes of a pack are not modelled |
 | Counting time (flux) | not started |
+| Mount: scattering plane from u, v (Mantid SetUB) sets U without a UB file; plane drawn at the sample, its tilt and beam angle, and the detector curve where its reflections land | done (2026-10-07); tested against Mantid's SetUB example and by diffracting in-plane reflections |
 | Binning: recorded HKL range along chosen axes, as MDNorm parameters | done; practical bins (a round step giving about 200–400 bins per axis; energy steps of 1 % of Ei, Mantid's DGS default) since 2026-10-07, replacing resolution-sized bins; limits for Mantid's default Q convention or the crystallographic one |
 | Code review of the formulas against the literature and pinned upstream code (2026-10-06; not the domain-expert review of M5) | done: corrections and their tests in CONVENTIONS §13 (focused banks, TOF on Q, exact coverage, MDNorm Q convention, centring completion, coincident images, smaller ones); references in CONVENTIONS §12 |
 | UI review (2026-10-06) | done: pages in three groups (Sample · Setup · Simulation); Δd/d set where it acts (powder views) rather than in the bar; one d_min note per page; structure viewer without the light and finish knobs |

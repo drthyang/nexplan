@@ -35,6 +35,9 @@ Also:
 
 - Reflections with d, Q and complex F, folded into symmetry families, with absences flagged. Absent or weak
   reflections can still be simulated and planned.
+- The mount: choose the scattering plane, (H K 0), (H H L) or any u and v, and without a UB file the crystal is
+  oriented as Mantid's SetUB would (u along the beam, v horizontal); the Detectors page shows the plane at the sample,
+  its tilt and the curve on the detectors where its reflections land.
 - UB matrices in the ISAW format, read and written. A UB for a supercell or a smaller cell of the CIF cell (e.g.
   2 × 2 × 2) is recognised and written in the CIF cell; any UB can be re-indexed to another cell.
 - Every detector pixel a reflection can reach over the goniometer range.

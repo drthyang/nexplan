@@ -190,6 +190,28 @@ F(h) = Σⱼ oⱼ · aⱼ(s) · exp(−Bⱼ s²) · exp(+2πi h·xⱼ)
   - R = R(axis0)·R(axis1)·…, with axis 0 outermost.
   - q_lab = R·UB·h.
   - Mantid "Universal" is ω about +y, χ about +z, φ about +y.
+- **Mount and scattering plane** (`src/core/ub/mount.ts`). A crystal mounted to measure a plane such as (H K 0) or
+  (H H L) is described by two reciprocal-lattice vectors u and v, as Mantid's SetUB takes them (also MSlice and Horace):
+  with every goniometer angle at zero, UB·u lies along the beam (+z), the part of UB·v perpendicular to it along +x, and
+  UB·u × UB·v along +y (up). U is the rotation that does this, transcribed from Mantid
+  `OrientedLattice::setUFromVectors` (`OrientedLattice.cpp:215-255` @ 67c2f43; SetUB calls it, `SetUB.cpp:98`), and
+  UB = U·B. Without a UB file the chosen plane sets the orientation this way; with one, the plane is only shown. The UB
+  is the same in Mantid's default (Inelastic) convention, where SetUB's "u along k_i" means the Q = k_i − k_f of the
+  reflection Mantid labels u; NEXPLAN labels that reflection −u (above). The plane, zone axis and directions are
+  unchanged. u and v are refused when Mantid's test finds them parallel in the cell.
+  - The plane's zone axis is [uvw] = u × v (Weiss zone law: h·[uvw] = 0 for every h of the plane), reduced to coprime
+    integers when u and v are integer. On a goniometer whose free axis is vertical (TOPAZ cryogenic, CORELLI, a chopper
+    spectrometer's ψ) the mounted plane stays horizontal as the crystal turns; a fixed tilt at zero (TOPAZ ambient, χ =
+    135°) tilts it.
+  - At setting R the plane's lab normal is n = R·(UB·u × UB·v)/|…|: its tilt from horizontal is acos|n_y| and the beam's
+    angle to it asin|n_z|.
+  - Its reflections are scattered along the directions with n·û = n·ẑ: with k_i = ẑ/λ and |k_f| = |k_i| (elastic), q =
+    (û − ẑ)/λ lies in the plane exactly then, for any λ. These directions form a circle on the unit sphere through the
+    forward direction (centre (n·ẑ)·n, radius √(1 − (n·ẑ)²)); for a horizontal plane it is ν = 0 on the detector map.
+  - Tests: Mantid's SetUB documentation example (a 5, b 6, c 7, u = 1,1,0, v = 0,0,1) to its printed three decimals; for
+    cubic, hexagonal and triclinic cells U is a proper rotation with UB·u ∥ +z, v horizontal and u × v up; the plane
+    stays horizontal under ω and tilts 45° under χ = 135°; every in-plane reflection that diffracts at three settings is
+    scattered along the trace.
 - **TOPAZ.**
   - Cryogenic goniometer: ω only.
   - Ambient goniometer: ω and φ, with χ fixed at 135°.

@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { dSpacing } from "@materia/core/crystal/unitCell";
 import type { Mat3 } from "@materia/core/math/types";
 import type { CalcSuccess } from "../app/compute.ts";
+import { isPlane, mountable, mountUB, type ScatteringPlane } from "../core/ub/mount.ts";
 import { findCellMatches, ubFromU, type BasisMatch } from "../core/ub/ub.ts";
 import { fmt, hklText } from "./format.ts";
 
@@ -13,7 +14,15 @@ export interface UbState {
   readonly warnings: readonly string[];
   /** The chosen cell match's P when several fit; the best match is used when it is unset or no longer fits (another CIF). */
   readonly choice?: Mat3;
+  /**
+   * The scattering plane (u, v in r.l.u.). Without a UB file it sets the mount: U from u and v as Mantid's SetUB
+   * (mount.ts). With a file it is only shown, where the file's UB puts it.
+   */
+  readonly plane?: ScatteringPlane;
 }
+
+/** The scattering plane, if the state holds a valid one (it may come from browser storage). */
+export const planeOf = (ub: UbState): ScatteringPlane | undefined => (isPlane(ub.plane) ? ub.plane : undefined);
 
 const IDENTITY: Mat3 = [
   [1, 0, 0],
@@ -23,8 +32,8 @@ const IDENTITY: Mat3 = [
 
 /**
  * UB for CIF indices: the file UB in the CIF cell when the cells match (the same cell in another setting, a
- * supercell or a smaller cell; the chosen match when several fit), else the file UB as loaded; U = I with the CIF
- * cell without a file.
+ * supercell or a smaller cell; the chosen match when several fit), else the file UB as loaded. Without a file: the
+ * CIF cell mounted in the chosen scattering plane (Mantid SetUB), or U = I when none is chosen.
  */
 export function useViewUB(result: CalcSuccess, ub: UbState): { viewUB: Mat3; match?: BasisMatch; matches: readonly BasisMatch[]; fileUB?: Mat3 } {
   const cifCell = result.structure.cell;
@@ -35,8 +44,23 @@ export function useViewUB(result: CalcSuccess, ub: UbState): { viewUB: Mat3; mat
   const chosen = ub.choice;
   const valid = Array.isArray(chosen) && chosen.length === 3 && chosen.every((r) => Array.isArray(r) && r.length === 3 && r.every((v) => typeof v === "number"));
   const match = (valid && matches.find((m) => m.P.every((r, i) => r.every((v, j) => Math.abs(v - chosen[i]![j]!) < 1e-9)))) || matches[0];
-  const viewUB = useMemo(() => (fileUB ? (match ? match.ubForCif : fileUB) : ubFromU(IDENTITY, cifCell)), [fileUB, match, cifCell]);
+  // A plane the cell cannot mount (u and v parallel there) falls back to U = I rather than throwing.
+  const planeIn = planeOf(ub);
+  const plane = planeIn && mountable(cifCell, planeIn) ? planeIn : undefined;
+  const planeKey = plane ? `${plane.u.join(",")};${plane.v.join(",")}` : "";
+  const viewUB = useMemo(
+    () => (fileUB ? (match ? match.ubForCif : fileUB) : plane ? mountUB(cifCell, plane) : ubFromU(IDENTITY, cifCell)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- planeKey is the plane's value
+    [fileUB, match, cifCell, planeKey],
+  );
   return { viewUB, matches, ...(match ? { match } : {}), ...(fileUB ? { fileUB } : {}) };
+}
+
+/** How the orientation in use was set, for notes and exported files: a UB file, a mount, or U = I. */
+export function orientationText(ub: UbState, fromFile: boolean): string {
+  if (fromFile) return `from ${ub.fileName ?? "the loaded UB"}`;
+  const plane = planeOf(ub);
+  return plane ? `no UB loaded: the CIF cell mounted with u (${hklText(plane.u)}) along the beam and v (${hklText(plane.v)}) horizontal at zero angles (Mantid SetUB)` : "no UB loaded: U = I with the CIF cell";
 }
 
 /** How many present reflections the single-crystal pages simulate (strongest first). */

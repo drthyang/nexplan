@@ -30,7 +30,7 @@ import { SliceChart, type SlicePoint } from "./SliceChart.tsx";
 import { BinningCard } from "./BinningCard.tsx";
 import { masksOf, shadowsOf } from "./experimentState.ts";
 import { AcceptanceNote, DMinNote, findHkl, GoniometerLimits, HklField, HklNotice, InstrumentRequired, lam, useHklPick, useObservations, useSnsInstrument, type SimPageProps } from "./snsShared.tsx";
-import { hklMiss, PRESENT_CAP } from "./ubShared.ts";
+import { hklMiss, orientationText, PRESENT_CAP } from "./ubShared.ts";
 import { GoniometerControls } from "./UbPage.tsx";
 
 const I3: Mat3 = [
@@ -416,7 +416,7 @@ function CrystalPlan({
     const lines = [
       `# NEXPLAN measurement plan (${planKind === "list" ? "orientation list" : "rotation scan"}); ${instrument.label}; ${new Date().toISOString()}`,
       `# structure ${result.structure.name || result.blockName} (data_${result.blockName}), input sha256 ${result.provenance.inputSha256}; d_min ${result.provenance.dMin} A`,
-      `# orientation: ${fileUB ? (ub.fileName ?? "loaded UB") : "no UB loaded (U = I with the CIF cell)"}; lambda band ${lam(exp.lambdaMin)}-${lam(exp.lambdaMax)} A`,
+      `# orientation: ${orientationText(ub, !!fileUB)}; lambda band ${lam(exp.lambdaMin)}-${lam(exp.lambdaMax)} A`,
       `# goniometer: ${axes.map((ax) => (ax.fixed !== undefined ? `${col(ax.name)} fixed at ${ax.fixed}` : `${col(ax.name)} ${ax.min} to ${ax.max} deg`)).join("; ")}`,
       "# a reflection is recorded when its Laue wavelength is in the band and k_f hits a panel; completeness over symmetry families",
       ["setting", ...axes.map((ax) => `${col(ax.name)}_deg`), "reflections_on_detectors", "families_cumulative", "completeness_pct"].join(","),
@@ -698,7 +698,7 @@ function CrystalPlan({
               </button>
             )}
             <p className="empty-note">
-              {fileUB ? `Orientation from ${ub.fileName ?? "the loaded UB"}. ` : "No UB loaded: U = I with the CIF cell. "}
+              Orientation {orientationText(ub, !!fileUB)}.{" "}
               <button type="button" className="ui-link" onClick={onOpenOrientation}>
                 {fileUB ? "Change it on the Orientation page" : "Load an orientation on the Orientation page"}
               </button>

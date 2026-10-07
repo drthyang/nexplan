@@ -22,6 +22,17 @@ export interface InstrumentSpot {
 }
 
 const PANEL_COLOR = 0x5b8def;
+/** The crystal's scattering plane at the sample. */
+const PLANE_COLOR = 0x8b5cf6;
+
+/** The scattering plane at the sample: lab normal and the in-plane directions of u and v (unit), with labels. */
+export interface InstrumentPlane {
+  readonly normal: Vec3;
+  readonly uDir: Vec3;
+  readonly vDir: Vec3;
+  readonly uLabel: string;
+  readonly vLabel: string;
+}
 const SELECT_COLOR = 0xff3b5c;
 
 export function InstrumentView({
@@ -42,6 +53,7 @@ export function InstrumentView({
   legend,
   panelImages,
   traces,
+  plane,
 }: {
   panels: readonly DetectorPanel[];
   spots?: readonly InstrumentSpot[];
@@ -64,11 +76,13 @@ export function InstrumentView({
   panelImages?: readonly { readonly width: number; readonly height: number; readonly data: Uint8Array }[];
   /** Polylines on the detectors (lab frame, m), drawn in the selection colour (e.g. a ray-traced powder ring). */
   traces?: readonly (readonly Vec3[])[];
+  /** The crystal's scattering plane, drawn at the sample as a disc with u and v arrows. */
+  plane?: InstrumentPlane | undefined;
 }) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const [showLabels, setShowLabels] = useState(false);
   const [resetToken, setResetToken] = useState(0);
-  const live = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; spots: THREE.InstancedMesh; selection: THREE.Group; traces: THREE.Group; faces: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>[]; edges: THREE.LineLoop<THREE.BufferGeometry, THREE.LineBasicMaterial>[]; R: number } | null>(null);
+  const live = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; spots: THREE.InstancedMesh; selection: THREE.Group; traces: THREE.Group; plane: THREE.Group; faces: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>[]; edges: THREE.LineLoop<THREE.BufferGeometry, THREE.LineBasicMaterial>[]; R: number } | null>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
   const onPanelRef = useRef(onPanelClick);
@@ -148,12 +162,14 @@ export function InstrumentView({
     scene.add(selection);
     const traceGroup = new THREE.Group();
     scene.add(traceGroup);
+    const planeGroup = new THREE.Group();
+    scene.add(planeGroup);
 
     camera.position.set(R * 1.4, R * 1.1, R * 0.9);
     controls.target.set(0, 0, 0);
     camera.lookAt(0, 0, 0);
     controls.update();
-    live.current = { renderer, scene, camera, spots: spotMesh, selection, traces: traceGroup, faces, edges, R };
+    live.current = { renderer, scene, camera, spots: spotMesh, selection, traces: traceGroup, plane: planeGroup, faces, edges, R };
 
     const ray = new THREE.Raycaster();
     let down: { x: number; y: number } | null = null;
@@ -259,6 +275,35 @@ export function InstrumentView({
       s.traces.add(l);
     }
   }, [traces, theme, showLabels, panels, resetToken]);
+
+  // The scattering plane at the sample: a translucent disc, its edge, and arrows along u and v.
+  const planeKey = plane ? [...plane.normal, ...plane.uDir, ...plane.vDir].map((x) => x.toFixed(6)).join(",") + plane.uLabel + plane.vLabel : "";
+  useEffect(() => {
+    const s = live.current;
+    if (!s) return;
+    disposeTree(s.plane);
+    s.plane.clear();
+    if (!plane) return;
+    const r = s.R * 0.22;
+    const basis = new THREE.Matrix4().makeBasis(new THREE.Vector3(...plane.uDir), new THREE.Vector3(...plane.vDir), new THREE.Vector3(...plane.normal));
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(r, 64), new THREE.MeshBasicMaterial({ color: PLANE_COLOR, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }));
+    disc.applyMatrix4(basis);
+    s.plane.add(disc);
+    const rim = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(Array.from({ length: 96 }, (_, k) => new THREE.Vector3(r * Math.cos((2 * Math.PI * k) / 96), r * Math.sin((2 * Math.PI * k) / 96), 0))), new THREE.LineBasicMaterial({ color: PLANE_COLOR, transparent: true, opacity: 0.7 }));
+    rim.applyMatrix4(basis);
+    s.plane.add(rim);
+    const arrow = arrowBuilder({ color: PLANE_COLOR, shaftRadius: s.R * 0.0035, headRadius: s.R * 0.011, headLength: s.R * 0.035 });
+    for (const [dir, label] of [
+      [plane.uDir, plane.uLabel],
+      [plane.vDir, plane.vLabel],
+    ] as const) {
+      s.plane.add(arrow(new THREE.Vector3(...dir), new THREE.Vector3(), r * 1.05));
+      const sprite = makeLabelSprite(label, s.R * 0.032, "#8b5cf6");
+      sprite.position.set(dir[0] * r * 1.28, dir[1] * r * 1.28, dir[2] * r * 1.28);
+      s.plane.add(sprite);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- planeKey is the plane's value
+  }, [planeKey, theme, showLabels, panels, resetToken]);
 
   // Spots and selection, updated in place.
   useEffect(() => {

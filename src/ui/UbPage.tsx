@@ -20,7 +20,8 @@ import { Card, cx, Segmented, UnitField } from "./components.tsx";
 import { downloadText, fmt, hklText } from "./format.ts";
 import { byHkl, byNumber, byText, SortTh, useSort } from "./sortable.tsx";
 import type { GonioState } from "./experimentState.ts";
-import { presentReflections, useViewUB, type UbState } from "./ubShared.ts";
+import { planeOf, presentReflections, useViewUB, type UbState } from "./ubShared.ts";
+import { mountable, PLANE_PRESETS, planeGeometry, setUBCall, zoneAxis, type ScatteringPlane } from "../core/ub/mount.ts";
 
 export type { UbState } from "./ubShared.ts";
 
@@ -214,7 +215,7 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
     setLoadError(null);
     try {
       const parsed = parseIsawUB(await f.text());
-      onUb({ UB: parsed.UB, fileName: f.name, warnings: parsed.warnings });
+      onUb({ UB: parsed.UB, fileName: f.name, warnings: parsed.warnings, ...(ub.plane ? { plane: ub.plane } : {}) });
     } catch (e) {
       setLoadError(e instanceof IsawParseError ? e.message : `Could not read ${f.name}: ${(e as Error).message}`);
     }
@@ -246,7 +247,7 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
       <div className="ui-grid ui-grid--split">
           <Card
             title="UB matrix"
-            meta={ub.fileName ?? "from the CIF cell, U = I"}
+            meta={ub.fileName ?? (planeOf(ub) ? `the CIF cell mounted in u (${hklText(planeOf(ub)!.u)}), v (${hklText(planeOf(ub)!.v)}) · Mantid SetUB` : "from the CIF cell, U = I")}
             info="q = UB·h in Mantid's sample frame (1/Å, no 2π), as Mantid stores it and ISAW files carry it (transposed, IPNS axes). For the crystallographic indices used here q is k_f − k_i (checked against Mantid's TOPAZ_3007 peaks)."
             actions={
               <>
@@ -257,7 +258,7 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
                   Export ISAW
                 </button>
                 {fileUB && (
-                  <button type="button" className="ui-pill" onClick={() => onUb({ warnings: [] })}>
+                  <button type="button" className="ui-pill" onClick={() => onUb({ warnings: [], ...(ub.plane ? { plane: ub.plane } : {}) })}>
                     Clear
                   </button>
                 )}
@@ -401,6 +402,11 @@ export function UbPage({ result, theme, ub, onUb, gonio, onGonio, instrument }: 
             <p className="empty-note">Lab frame: beam +z, up +y. q_lab = R·UB·h{instrument ? `, R from the ${instrument.name} goniometer.` : " with R = R_y(ω)·R_z(χ)·R_y(φ) (Mantid Universal)."}</p>
           </Card>
       </div>
+
+        <PlaneCard plane={planeOf(ub)} onPlane={(plane) => {
+          const { plane: _, ...rest } = ub;
+          onUb(plane ? { ...rest, plane } : rest);
+        }} viewUB={viewUB} R={R} fromFile={!!fileUB} cell={cifCell} goniometerName={instrument?.name} />
 
         <Card
           title="Re-index for another cell"
@@ -683,5 +689,115 @@ function RatioCell({ label, value, onCommit, positive = false }: { label: string
         if (e.key === "Escape") setText(shown);
       }}
     />
+  );
+}
+
+/**
+ * The scattering plane: two reciprocal vectors u, v. Without a UB file they set the mount (Mantid SetUB: u along the
+ * beam and v horizontal with every goniometer angle at zero); with one, the card shows where the file's UB puts the
+ * plane. Either way it reports the zone axis and, at the current setting, the plane's tilt and its angle to the beam.
+ */
+function PlaneCard({ plane, onPlane, viewUB, R, fromFile, cell, goniometerName }: { plane: ScatteringPlane | undefined; onPlane: (p: ScatteringPlane | undefined) => void; viewUB: Mat3; R: Mat3; fromFile: boolean; cell: CalcSuccess["structure"]["cell"]; goniometerName?: string | undefined }) {
+  const preset = plane ? PLANE_PRESETS.find((p) => p.plane.u.every((x, i) => x === plane.u[i]) && p.plane.v.every((x, i) => x === plane.v[i])) : undefined;
+  const geo = useMemo(() => (plane ? planeGeometry(viewUB, R, plane) : undefined), [plane, viewUB, R]);
+  const zone = plane ? zoneAxis(plane) : undefined;
+  const call = plane && !fromFile ? setUBCall(cell, plane) : "";
+  // Refused (the field reverts) when u and v are parallel in this cell, by Mantid's own test.
+  const setVec = (which: "u" | "v", vec: Vec3): boolean => {
+    const next = { ...(plane ?? PLANE_PRESETS[0]!.plane), [which]: vec };
+    if (!mountable(cell, next)) return false;
+    onPlane(next);
+    return true;
+  };
+  return (
+    <Card
+      title="Scattering plane"
+      meta={!plane ? (fromFile ? "choose one to see where the UB puts it" : "none: U = I with the CIF cell") : fromFile ? "where the loaded UB puts it" : "sets the mount (Mantid SetUB)"}
+      info="The plane spanned by two reciprocal-lattice vectors u and v, as a crystal is mounted to measure, say, (H K 0) or (H H L). Without a UB file it sets the orientation the way Mantid's SetUB does with u and v (also MSlice and Horace): with every goniometer angle at zero, u lies along the beam, v in the horizontal plane, and u × v points up. On a goniometer whose free axis is vertical (TOPAZ cryogenic, CORELLI, the ψ stage of a chopper spectrometer) the plane then stays horizontal as the crystal turns, about the plane's zone axis [uvw] = u × v (Weiss zone law). Where a goniometer has a fixed tilt at zero (TOPAZ ambient, χ = 135°), the plane is tilted by it. With a UB file loaded the plane is only shown: the tilt and beam angle say where the loaded orientation puts it. The Detectors page draws the plane at the sample and, on the detector map, the curve along which its reflections are scattered."
+    >
+      <div className="form-rows">
+        <div className="form-row">
+          <span className="ui-control-label">Plane</span>
+          <span className="supercell">
+            <select
+              className="ui-select"
+              aria-label="Scattering plane"
+              value={!plane ? "" : (preset?.id ?? "custom")}
+              onChange={(e) => {
+                if (e.target.value === "") return onPlane(undefined);
+                const p = PLANE_PRESETS.find((x) => x.id === e.target.value);
+                if (p) onPlane(p.plane);
+              }}
+            >
+              <option value="">{fromFile ? "None" : "None (U = I)"}</option>
+              {PLANE_PRESETS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+              {plane && !preset && <option value="custom">Custom</option>}
+            </select>
+            {plane && (
+              <>
+                <span className="dim-note">u</span>
+                <VecField label="u: along the beam at zero angles" value={plane.u} onCommit={(v) => setVec("u", v)} />
+                <span className="dim-note">v</span>
+                <VecField label="v: horizontal at zero angles" value={plane.v} onCommit={(v) => setVec("v", v)} />
+              </>
+            )}
+          </span>
+        </div>
+      </div>
+      {plane && geo && zone && (
+        <>
+          <dl className="ui-stats ui-stats--three" style={{ marginTop: "0.75rem" }}>
+            <div>
+              <dt>Zone axis (normal)</dt>
+              <dd>[{hklText(zone)}]</dd>
+            </div>
+            <div>
+              <dt>Tilt from horizontal</dt>
+              <dd>
+                {fmt(geo.tiltDeg, 1)}° <small>{goniometerName ? "at this setting" : "at these angles"}</small>
+              </dd>
+            </div>
+            <div>
+              <dt>Beam to plane</dt>
+              <dd>
+                {fmt(geo.beamDeg, 1)}° <small>{geo.beamDeg < 0.05 ? "the beam lies in it" : "out of the plane"}</small>
+              </dd>
+            </div>
+          </dl>
+          {call && (
+            <div className="mantid-call" style={{ marginTop: "0.6rem" }}>
+              <pre>{call}</pre>
+              <button type="button" className="ui-pill" onClick={() => void navigator.clipboard?.writeText(call)}>
+                Copy
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
+/** Three numbers (r.l.u.), committed on Enter or blur. */
+function VecField({ label, value, onCommit }: { label: string; value: readonly number[]; onCommit: (v: Vec3) => boolean }) {
+  const shown = value.join(" ");
+  const [text, setText] = useState(shown);
+  useEffect(() => setText(shown), [shown]);
+  const v = text.trim().split(/[\s,]+/).map(Number);
+  const ok = v.length === 3 && v.every(Number.isFinite) && v.some((x) => x !== 0);
+  const commit = () => {
+    if (ok && v.join(" ") !== shown) {
+      if (!onCommit(v as unknown as Vec3)) setText(shown);
+    } else if (!ok) setText(shown);
+  };
+  return (
+    <span className={`ui-unit-field${ok ? "" : " is-invalid"}`} title={label}>
+      <input className="ui-unit-field__input" aria-label={label} value={text} style={{ width: `${Math.max(6, text.length + 1)}ch` }} onChange={(e) => setText(e.target.value)} onBlur={commit} onKeyDown={(e) => e.key === "Enter" && commit()} />
+      <span className="ui-unit-field__unit">hkl</span>
+    </span>
   );
 }

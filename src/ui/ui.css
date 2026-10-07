@@ -1678,6 +1678,15 @@ input.ui-range {
   pointer-events: none;
 }
 
+/* Where the scattering plane's reflections land (the plane's colour in the 3D view). */
+.map-plane {
+  fill: none;
+  stroke: #8b5cf6;
+  stroke-width: 1.8;
+  stroke-dasharray: 7 4;
+  pointer-events: none;
+}
+
 /* A button that reads as an inline link (navigation within the app). */
 .ui-link {
   padding: 0;

@@ -37,7 +37,7 @@ function projectPolyline(dirs: readonly Vec3[]): Pt[][] {
   let last: number | undefined;
   for (const u of dirs) {
     const { gamma, nu } = cylinderAngles(u);
-    if (last !== undefined && Math.abs(gamma - last) > 180) {
+    if (last !== undefined && Math.abs(gamma - last) >= 180) {
       if (cur.length > 1) out.push(cur);
       cur = [];
     }
@@ -63,6 +63,7 @@ export function DetectorMap({
   raster,
   overlay,
   traces = [],
+  planeTrace,
 }: {
   panels: readonly DetectorPanel[];
   /** Per-panel CSS fill; default the accent colour. */
@@ -83,6 +84,8 @@ export function DetectorMap({
   overlay?: (width: number, height: number, nuMax: number) => string | undefined;
   /** Polylines on the detectors (lab frame), drawn in the selection colour. */
   traces?: readonly (readonly Vec3[])[];
+  /** Directions along which the scattering plane's reflections are scattered (mount.ts planeTrace), dashed. */
+  planeTrace?: readonly Vec3[] | undefined;
 }) {
   const { ref: wrapRef, width } = useMeasuredWidth(800, 320);
 
@@ -96,6 +99,7 @@ export function DetectorMap({
   const grid = useMemo(() => [30, 60, 90, 120, 150].map((t) => ({ t, lines: projectPolyline(coneDirections(t, 360)) })), []);
   const extra = useMemo(() => rings.map((r) => ({ ...r, lines: projectPolyline(coneDirections(r.twoTheta, 360)) })), [rings]);
   const traceLines = useMemo(() => traces.flatMap((t) => projectPolyline(t)), [traces]);
+  const planeLines = useMemo(() => (planeTrace ? projectPolyline(planeTrace) : []), [planeTrace]);
 
   const m = { l: 46, r: 12, t: 10, b: 40 };
   const W = width - m.l - m.r;
@@ -163,6 +167,9 @@ export function DetectorMap({
           {extra.map((r, j) =>
             r.lines.map((l, k) => <path key={`r${j}-${k}`} className={`map-ring${r.emphasis ? " is-emphasis" : ""}`} d={pathOf(l, false)} />),
           )}
+          {planeLines.map((l, k) => (
+            <path key={`p${k}`} className="map-plane" d={pathOf(l, false)} />
+          ))}
           {traceLines.map((l, k) => (
             <path key={`t${k}`} className="map-trace" d={pathOf(l, false)} />
           ))}
