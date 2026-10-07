@@ -130,12 +130,21 @@ The gemmi references are committed; regenerate them with
 
 ## Credits
 
-- Mantid instrument definitions (GPL-3.0-or-later, commit `67c2f43`; numerical geometry only) and Mantid PyChop.
-- ORNL garnet-tools (Q resolution).
-- NeuXtalViz (Morgan et al., arXiv:2606.25414): *Find a setting* uses the stepped sweep of its "individual peak"
-  planner.
-- gemmi; demo structures from the Crystallography Open Database.
+- Mantid (commit `67c2f43`): detector geometry extracted from its instrument definitions (numbers only), and the
+  chopper-spectrometer resolution, ported from PyChop.
+- ORNL garnet-tools (commit `4eb3206`, Z. Morgan): the TOPAZ and CORELLI Q-resolution model and parameters, ported.
+- NeuXtalViz (Morgan et al., arXiv:2606.25414): *Find a setting* follows the stepped sweep of its "individual peak"
+  planner (NEXPLAN's own implementation).
+- Data: Sears (1992) neutron scattering lengths, via the NIST Center for Neutron Research; Waasmaier & Kirfel (1995)
+  form factors, via DABAX (ESRF); space-group tables generated with gemmi; ORNL's NOMAD and POWGEN instrument files;
+  demo and reference structures from the Crystallography Open Database (Gražulis et al. 2009, 2012).
+
+The notices these licences require, and what each part is used for, are in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## License
 
-[AGPL-3.0-only](LICENSE), the same as MATERIA, whose code it includes. © 2026 Tsung-Han Yang.
+[AGPL-3.0-only](LICENSE), the same as MATERIA, whose code it includes. © 2026 Tsung-Han Yang. Parts derived from
+other projects keep their licences: `src/core/instrument/pychop.ts` (from Mantid PyChop) is GPL-3.0-or-later, and
+the garnet-tools model in `src/core/instrument/qResolution.ts` is BSD-3-Clause; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

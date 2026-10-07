@@ -8,6 +8,11 @@
  * (sample). Instrument parameters are those of arcs.yaml, sequoia.yaml (tuned to ORNL vanadium data, mantid
  * PR #38591) and cncs.yaml at that commit.
  *
+ * This file is a derivative of PyChop and stays under GPL-3.0-or-later (combined with NEXPLAN's AGPL-3.0 code as
+ * GPL v3 section 13 permits): Copyright © 2018 ISIS Rutherford Appleton Laboratory UKRI, NScD Oak Ridge National
+ * Laboratory, European Spallation Source, Institut Laue - Langevin & CSNS, Institute of High Energy Physics, CAS.
+ * See THIRD_PARTY_NOTICES.md.
+ *
  * The result is the Gaussian-equivalent FWHM (meV) of the incoherent elastic line at energy transfer E: time
  * widths at the moderator, the chopper(s), the aperture, the sample and the detector, propagated to the
  * detector (PyChop's Theory section). Tested against PyChop's own output over a grid of settings

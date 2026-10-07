@@ -2,10 +2,10 @@
  * Instrumental Q resolution as a covariance (Å⁻², Q = 2π|q|) for a detector direction and wavelength.
  *
  * Form (A. D. Stoica, Acta Cryst. A31, 193–196 (1975); J. B. Forsyth, in Chemical Crystallography with Pulsed
- * Neutrons and Synchrotron X-rays, eds. Carrondo & Jeffrey, Springer Netherlands (1988), pp. 117–135; the mosaic term is the
- * small-rotation result δQ = δω × Q), as ORNL's garnet-tools models single-crystal
- * peak shapes (neutrons/garnet-tools @ 4eb3206, src/garnet/reduction/resolution.py `_model_design_lab`,
- * BSD-3-Clause):
+ * Neutrons and Synchrotron X-rays, eds. Carrondo & Jeffrey, Springer Netherlands (1988), pp. 117–135; the mosaic
+ * term is the small-rotation result δQ = δω × Q), as ORNL's garnet-tools models single-crystal peak shapes
+ * (neutrons/garnet-tools @ 4eb3206, src/garnet/reduction/resolution.py `_model_design_lab`; BSD-3-Clause,
+ * Copyright (c) 2024, Zachary Morgan; licence text in THIRD_PARTY_NOTICES.md):
  *
  *   Σ = k²·[σ_γi(λ)²·γ̂iγ̂iᵀ + σ_νi(λ)²·ν̂iν̂iᵀ + σ_γf²·γ̂fγ̂fᵀ + σ_νf²·ν̂fν̂fᵀ + (σ_dl² + σ_dlb²/λ²)·qqᵀ] + η²·(Q²I − QQᵀ)
  *
