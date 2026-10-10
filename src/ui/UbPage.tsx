@@ -20,7 +20,8 @@ import { Card, cx, Segmented, UnitField } from "./components.tsx";
 import { downloadText, fmt, hklText } from "./format.ts";
 import { byHkl, byNumber, byText, SortTh, useSort } from "./sortable.tsx";
 import type { GonioState } from "./experimentState.ts";
-import { planeOf, presentReflections, useViewUB, type UbState } from "./ubShared.ts";
+import { planeOf, presentReflections, type UbState } from "./ubShared.ts";
+import { useViewUB } from "./useViewUB.ts";
 import { mountable, PLANE_PRESETS, planeGeometry, setUBCall, zoneAxis, type ScatteringPlane } from "../core/ub/mount.ts";
 
 export type { UbState } from "./ubShared.ts";

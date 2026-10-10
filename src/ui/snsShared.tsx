@@ -18,7 +18,8 @@ import type { GoniometerModel } from "../core/ub/goniometer.ts";
 import { UnitField } from "./components.tsx";
 import { chooseInstrument, limitedGoniometer, masksOf, sampleKind, shadowsOf, withLimits, type ExperimentState } from "./experimentState.ts";
 import { fmt } from "./format.ts";
-import { hklMiss, presentReflections, simulatable, useViewUB, type HklMiss, type UbState } from "./ubShared.ts";
+import { hklMiss, presentReflections, simulatable, type HklMiss, type UbState } from "./ubShared.ts";
+import { useViewUB } from "./useViewUB.ts";
 
 export interface SimPageProps {
   readonly result: CalcSuccess;
