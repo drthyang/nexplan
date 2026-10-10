@@ -48,6 +48,15 @@ Also:
 - Detector masks (including Mantid mask files) and sample-environment shadows, used in every hit test.
 - Scattering power relative to a reference material (V, diamond, Si, CeO₂, corundum).
 
+## Agent tools
+
+The calculations are also tools for AI agents, served by an MCP server: load a CIF, explain reflections, simulate
+powder patterns, plan a TOPAZ or CORELLI measurement, get MDNorm binning, and ask what each instrument can and cannot
+measure, from Claude Code, Claude Desktop or another MCP client. Some tools write inputs for MATERIA (GSAS-II
+instrument parameters), NEBULA3D and the NeXus Viewer (Laue operations, Bragg nodes and coverage masks on a volume's
+grid). In this repository Claude Code finds the server in `.mcp.json` (`npm run mcp`). Setup and the tools:
+[docs/MCP.md](docs/MCP.md).
+
 ## Limits
 
 Geometry and relative Bragg intensities only: |F|² with Lorentz (and, for X-rays, polarization) factors.
@@ -114,15 +123,17 @@ npm run dev          # http://localhost:5173/nexplan/
 npm test             # tests that read the pinned sources are skipped until data:fetch has run
 npm run typecheck
 npm run data:build   # regenerate src/data/*.json and the reports
+npm run mcp:build    # the MCP server, dist-mcp/nexplan-mcp.mjs (npm run mcp builds and starts it on stdio)
 ```
 
 ```text
 src/core/   science, no UI: symmetry, structure, reflections, powder and TOF, UB, goniometers, instruments
 src/io/     CIF 1.1 reader, ISAW UB files
 src/ui/     pages and cards (React); src/views/ 3D views; src/workers/ the calculation worker
+src/agent/  the features as agent tools; src/mcp/ the MCP server that serves them
 src/data/   generated tables; src/materia/ the pinned MATERIA copy
 scripts/    fetch and cross-check the pinned sources; generate tables and reports
-docs/       CONVENTIONS (formulas and references), PLAN, data-verification reports
+docs/       CONVENTIONS (formulas and references), PLAN, MCP (agent tools), data-verification reports
 ```
 
 The gemmi references are committed; regenerate them with
