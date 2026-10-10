@@ -10,6 +10,48 @@ printed sources. The formulas, with their literature sources, are in [CONVENTION
 review on 2026-10-06, not a domain-expert review, re-derived them and corrected a few
 ([§13](docs/CONVENTIONS.md#13-changes-from-the-2026-10-06-audit)). Check anything you publish.
 
+## For AI agents: 26 tools over MCP
+
+NEXPLAN is also an MCP server: 26 tools on stdio that run the same code as the web app, so an agent (Claude Code,
+Claude Desktop or another MCP client) gets the app's numbers. Load a structure once with `load_structure` and pass its
+id to the other tools. Results are JSON with their units; a failure says what to change.
+
+What an agent can ask:
+
+| Question | Tools |
+|---|---|
+| What can this instrument measure, and where does it stop? Coverage, d and Q reach, resolution, Ei and \|Q\| limits, what NEXPLAN does not model for it. | `instrument_limits`; `configure_instrument` sets goniometer limits, masks and shadows for the session |
+| How much of reciprocal space does it reach, and what is never measured? | `reciprocal_coverage` |
+| Which instrument suits my goal (d range, Δd/d, line pairs to resolve, wanted reflections), and why not the others? | `compare_instruments` |
+| Which goniometer settings record my reflections, and how complete is the plan? | `find_setting`, `simulate_setting`, `suggest_settings` (the TOPAZ planner), `simulate_plan` |
+| How do I bin the volume in Mantid? | `suggest_binning` (the MDNorm call) |
+| Reflections and absences, powder patterns, UB matrices, chopper resolution, units | `list_reflections`, `reflection_info`, `powder_pattern`, `instrument_powder_pattern`, `analyze_ub`, `mount_crystal`, `transform_ub`, `chopper_resolution`, `scattering_power`, `convert_units` and more |
+
+Hand-offs to my other tools, written in their own formats:
+
+- **MATERIA** (refinement): `instrument_parameters` writes a GSAS-II `.instprm` and MATERIA's JSON for a NOMAD bank
+  or a POWGEN frame, with the d and TOF range it records.
+- **NEBULA3D** and the **NeXus Viewer** (HKL volumes): `laue_symmetry` gives the operations in their `h,k,l; …` syntax
+  and the viewer preset; `bragg_positions` the allowed, forbidden and satellite nodes on a volume's grid;
+  `coverage_map` what a plan records on that grid, as a `.npy` array.
+
+Register it with Claude Code. In this repository, run `npm install`; Claude Code reads `.mcp.json` and offers to
+enable `nexplan`, which `npm run mcp` builds and starts:
+
+```json
+{ "mcpServers": { "nexplan": { "type": "stdio", "command": "npm", "args": ["run", "--silent", "mcp"] } } }
+```
+
+For other projects, build once and register the bundle:
+
+```bash
+npm run mcp:build
+claude mcp add --scope user nexplan -- node /path/to/nexplan/dist-mcp/nexplan-mcp.mjs
+```
+
+The tools have the app's limits ([below](#limits)), and an agent can still misread a result. Setup, conventions and
+examples: [docs/MCP.md](docs/MCP.md).
+
 ## Quick start
 
 1. Load a CIF (or a demo structure). **Structure** and **Reflections** show what was read and every reflection
@@ -47,15 +89,6 @@ Also:
   few.
 - Detector masks (including Mantid mask files) and sample-environment shadows, used in every hit test.
 - Scattering power relative to a reference material (V, diamond, Si, CeO₂, corundum).
-
-## Agent tools
-
-The calculations are also tools for AI agents, served by an MCP server: load a CIF, explain reflections, simulate
-powder patterns, plan a TOPAZ or CORELLI measurement, get MDNorm binning, and ask what each instrument can and cannot
-measure, from Claude Code, Claude Desktop or another MCP client. Some tools write inputs for MATERIA (GSAS-II
-instrument parameters), NEBULA3D and the NeXus Viewer (Laue operations, Bragg nodes and coverage masks on a volume's
-grid). In this repository Claude Code finds the server in `.mcp.json` (`npm run mcp`). Setup and the tools:
-[docs/MCP.md](docs/MCP.md).
 
 ## Limits
 
