@@ -192,3 +192,5 @@ The notices these licences require, and what each part is used for, are in
 [AGPL-3.0-only](LICENSE), the same as MATERIA, whose code it includes. © 2026 Tsung-Han Yang. Parts derived from
 other projects keep their licences: `src/core/instrument/pychop.ts` (from Mantid PyChop) is GPL-3.0-or-later; see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+*This project is personal work, developed and maintained in my personal capacity.*
