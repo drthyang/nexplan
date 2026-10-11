@@ -35,3 +35,5 @@ jobs:
       # Generated tables and reports, the MATERIA audit included, must match what the pinned sources produce.
       - run: npm run data:check
       - run: npm run build
+      # The MCP server bundle (docs/MCP.md).
+      - run: npm run mcp:build

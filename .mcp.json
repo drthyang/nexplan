@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "nexplan": {
+      "type": "stdio",
+      "command": "npm",
+      "args": ["run", "--silent", "mcp"]
+    }
+  }
+}

@@ -52,6 +52,8 @@ same author, same licence) at the commit pinned in `src/materia/UPSTREAM.json`.
 - **ORNL instrument data**: NOMAD's measured resolution per bank (ORNL NOMAD overview, 2014), the NOMAD 2023A and
   POWGEN 2026B GSAS-II instrument parameter files (neutrons.ornl.gov) and POWGEN characterisation files (Mantid test
   data): numerical parameters, cited where they are used in `src/core/ub/instrumentCatalog.ts`.
+- **NeXus Viewer Laue presets**: the generators of its symmetry presets (neutron-nexus-viewer `js/symmetry.js`, same
+  author, AGPL-3.0-or-later), in `src/core/symmetry/laue.ts`, so that `laue_symmetry` can name the matching preset.
 - **Instrument settings**: goniometer axes and motor logs, and wavelength bands, checked against the instrument
   configurations of ORNL garnet-tools (`4eb3206`, BSD-3-Clause) and NeuXtalViz (`655afa3`, GPL-3.0); cited in
   `src/core/ub/instrumentCatalog.ts` and `instruments.ts`. Only these facts are used, not their code.

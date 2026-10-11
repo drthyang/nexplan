@@ -19,5 +19,5 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true
   },
-  "include": ["scripts", "vite.config.ts"]
+  "include": ["scripts", "vite.config.ts", "vite.mcp.config.ts"]
 }

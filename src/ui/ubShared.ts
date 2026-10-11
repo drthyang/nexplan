@@ -1,6 +1,9 @@
-/** Orientation shared by the UB and Instrument pages: the loaded UB mapped to the CIF setting. */
-import { useMemo } from "react";
+/**
+ * Orientation shared by the UB and Instrument pages: the loaded UB mapped to the CIF setting. Pure (no React), so
+ * the agent tools (src/agent/) use it too; the pages memoise it in useViewUB.ts.
+ */
 import { dSpacing } from "@materia/core/crystal/unitCell";
+import type { UnitCell } from "@materia/core/crystal/types";
 import type { Mat3 } from "@materia/core/math/types";
 import type { CalcSuccess } from "../app/compute.ts";
 import { isPlane, mountable, mountUB, type ScatteringPlane } from "../core/ub/mount.ts";
@@ -30,30 +33,40 @@ const IDENTITY: Mat3 = [
   [0, 0, 1],
 ];
 
-/**
- * UB for CIF indices: the file UB in the CIF cell when the cells match (the same cell in another setting, a
- * supercell or a smaller cell; the chosen match when several fit), else the file UB as loaded. Without a file: the
- * CIF cell mounted in the chosen scattering plane (Mantid SetUB), or U = I when none is chosen.
- */
-export function useViewUB(result: CalcSuccess, ub: UbState): { viewUB: Mat3; match?: BasisMatch; matches: readonly BasisMatch[]; fileUB?: Mat3 } {
-  const cifCell = result.structure.cell;
-  const rotations = result.structure.rotations;
-  const fileUB = ub.UB;
-  const matches = useMemo(() => (fileUB ? findCellMatches(cifCell, fileUB, { rotations }) : []), [fileUB, cifCell, rotations]);
+/** The cells a file UB can be read in: the CIF cell in another setting, a supercell or a smaller cell (best first). */
+export const cellMatches = (cifCell: UnitCell, fileUB: Mat3 | undefined, rotations: CalcSuccess["structure"]["rotations"]): BasisMatch[] =>
+  fileUB ? findCellMatches(cifCell, fileUB, { rotations }) : [];
+
+/** The chosen cell match, or the best when none is chosen or the choice no longer fits. */
+export function chosenMatch(matches: readonly BasisMatch[], ub: UbState): BasisMatch | undefined {
   // A saved session's value is checked: anything but a 3 × 3 array of numbers means the best match.
   const chosen = ub.choice;
   const valid = Array.isArray(chosen) && chosen.length === 3 && chosen.every((r) => Array.isArray(r) && r.length === 3 && r.every((v) => typeof v === "number"));
-  const match = (valid && matches.find((m) => m.P.every((r, i) => r.every((v, j) => Math.abs(v - chosen[i]![j]!) < 1e-9)))) || matches[0];
-  // A plane the cell cannot mount (u and v parallel there) falls back to U = I rather than throwing.
-  const planeIn = planeOf(ub);
-  const plane = planeIn && mountable(cifCell, planeIn) ? planeIn : undefined;
-  const planeKey = plane ? `${plane.u.join(",")};${plane.v.join(",")}` : "";
-  const viewUB = useMemo(
-    () => (fileUB ? (match ? match.ubForCif : fileUB) : plane ? mountUB(cifCell, plane) : ubFromU(IDENTITY, cifCell)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- planeKey is the plane's value
-    [fileUB, match, cifCell, planeKey],
-  );
-  return { viewUB, matches, ...(match ? { match } : {}), ...(fileUB ? { fileUB } : {}) };
+  return (valid && matches.find((m) => m.P.every((r, i) => r.every((v, j) => Math.abs(v - chosen[i]![j]!) < 1e-9)))) || matches[0];
+}
+
+/** The plane that sets the mount: the chosen one, unless the cell cannot mount it (u and v parallel there). */
+export function mountPlane(cifCell: UnitCell, ub: UbState): ScatteringPlane | undefined {
+  const plane = planeOf(ub);
+  return plane && mountable(cifCell, plane) ? plane : undefined;
+}
+
+/**
+ * UB for CIF indices: the file UB in the CIF cell when the cells match (the same cell in another setting, a
+ * supercell or a smaller cell; the chosen match when several fit), else the file UB as loaded. Without a file: the
+ * CIF cell mounted in the chosen scattering plane (Mantid SetUB), or U = I when none is chosen (or the plane cannot
+ * be mounted, rather than throwing).
+ */
+export const orientationUB = (cifCell: UnitCell, fileUB: Mat3 | undefined, match: BasisMatch | undefined, plane: ScatteringPlane | undefined): Mat3 =>
+  fileUB ? (match ? match.ubForCif : fileUB) : plane ? mountUB(cifCell, plane) : ubFromU(IDENTITY, cifCell);
+
+/** The orientation in use for a calculation and UB state (useViewUB.ts memoises the same steps for the pages). */
+export function viewOrientation(result: CalcSuccess, ub: UbState): { viewUB: Mat3; match?: BasisMatch; matches: readonly BasisMatch[]; fileUB?: Mat3 } {
+  const cifCell = result.structure.cell;
+  const fileUB = ub.UB;
+  const matches = cellMatches(cifCell, fileUB, result.structure.rotations);
+  const match = chosenMatch(matches, ub);
+  return { viewUB: orientationUB(cifCell, fileUB, match, mountPlane(cifCell, ub)), matches, ...(match ? { match } : {}), ...(fileUB ? { fileUB } : {}) };
 }
 
 /** How the orientation in use was set, for notes and exported files: a UB file, a mount, or U = I. */

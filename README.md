@@ -10,6 +10,48 @@ printed sources. The formulas, with their literature sources, are in [CONVENTION
 review on 2026-10-06, not a domain-expert review, re-derived them and corrected a few
 ([§13](docs/CONVENTIONS.md#13-changes-from-the-2026-10-06-audit)). Check anything you publish.
 
+## For AI agents: 26 tools over MCP
+
+NEXPLAN is also an MCP server: 26 tools on stdio that run the same code as the web app, so an agent (Claude Code,
+Claude Desktop or another MCP client) gets the app's numbers. Load a structure once with `load_structure` and pass its
+id to the other tools. Results are JSON with their units; a failure says what to change.
+
+What an agent can ask:
+
+| Question | Tools |
+|---|---|
+| What can this instrument measure, and where does it stop? Coverage, d and Q reach, resolution, Ei and \|Q\| limits, what NEXPLAN does not model for it. | `instrument_limits`; `configure_instrument` sets goniometer limits, masks and shadows for the session |
+| How much of reciprocal space does it reach, and what is never measured? | `reciprocal_coverage` |
+| Which instrument suits my goal (d range, Δd/d, line pairs to resolve, wanted reflections), and why not the others? | `compare_instruments` |
+| Which goniometer settings record my reflections, and how complete is the plan? | `find_setting`, `simulate_setting`, `suggest_settings` (the TOPAZ planner), `simulate_plan` |
+| How do I bin the volume in Mantid? | `suggest_binning` (the MDNorm call) |
+| Reflections and absences, powder patterns, UB matrices, chopper resolution, units | `list_reflections`, `reflection_info`, `powder_pattern`, `instrument_powder_pattern`, `analyze_ub`, `mount_crystal`, `transform_ub`, `chopper_resolution`, `scattering_power`, `convert_units` and more |
+
+Hand-offs to my other tools, written in their own formats:
+
+- **MATERIA** (refinement): `instrument_parameters` writes a GSAS-II `.instprm` and MATERIA's JSON for a NOMAD bank
+  or a POWGEN frame, with the d and TOF range it records.
+- **NEBULA3D** and the **NeXus Viewer** (HKL volumes): `laue_symmetry` gives the operations in their `h,k,l; …` syntax
+  and the viewer preset; `bragg_positions` the allowed, forbidden and satellite nodes on a volume's grid;
+  `coverage_map` what a plan records on that grid, as a `.npy` array.
+
+Register it with Claude Code. In this repository, run `npm install`; Claude Code reads `.mcp.json` and offers to
+enable `nexplan`, which `npm run mcp` builds and starts:
+
+```json
+{ "mcpServers": { "nexplan": { "type": "stdio", "command": "npm", "args": ["run", "--silent", "mcp"] } } }
+```
+
+For other projects, build once and register the bundle:
+
+```bash
+npm run mcp:build
+claude mcp add --scope user nexplan -- node /path/to/nexplan/dist-mcp/nexplan-mcp.mjs
+```
+
+The tools have the app's limits ([below](#limits)), and an agent can still misread a result. Setup, conventions and
+examples: [docs/MCP.md](docs/MCP.md).
+
 ## Quick start
 
 1. Load a CIF (or a demo structure). **Structure** and **Reflections** show what was read and every reflection
@@ -114,15 +156,17 @@ npm run dev          # http://localhost:5173/nexplan/
 npm test             # tests that read the pinned sources are skipped until data:fetch has run
 npm run typecheck
 npm run data:build   # regenerate src/data/*.json and the reports
+npm run mcp:build    # the MCP server, dist-mcp/nexplan-mcp.mjs (npm run mcp builds and starts it on stdio)
 ```
 
 ```text
 src/core/   science, no UI: symmetry, structure, reflections, powder and TOF, UB, goniometers, instruments
 src/io/     CIF 1.1 reader, ISAW UB files
 src/ui/     pages and cards (React); src/views/ 3D views; src/workers/ the calculation worker
+src/agent/  the features as agent tools; src/mcp/ the MCP server that serves them
 src/data/   generated tables; src/materia/ the pinned MATERIA copy
 scripts/    fetch and cross-check the pinned sources; generate tables and reports
-docs/       CONVENTIONS (formulas and references), PLAN, data-verification reports
+docs/       CONVENTIONS (formulas and references), PLAN, MCP (agent tools), data-verification reports
 ```
 
 The gemmi references are committed; regenerate them with
