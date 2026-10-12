@@ -241,7 +241,7 @@ export function resolvePlan(ins: ResolvedInstrument, args: { angles?: z.infer<ty
       first = Math.max(first, 0);
       last = Math.min(last, Math.floor((end - start) / step + 1e-9));
     }
-    if (last < first) throw new ToolError(`${preset.label}'s usual scan (${name} ${start}–${end}°) lies outside the ${name} limits ${ax.min}–${ax.max}°: give a scan.`);
+    if (last < first) throw new ToolError(`${preset.label}'s usual scan (${name} ${start}–${end}° in ${step}° steps) has no step inside the ${name} limits ${ax.min}–${ax.max}°: give a scan.`);
     scan = { start: start + first * step, end: start + last * step, step, interleave: false };
     if (scan.start !== start || scan.end !== end) note = `${preset.label}'s usual scan, ${name} ${start}–${end}° in ${step}° steps, runs ${scan.start}–${scan.end}° inside the ${name} limits ${ax.min}–${ax.max}°.`;
   }

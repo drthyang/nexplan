@@ -244,7 +244,7 @@ describe("single crystals", () => {
     await ok("configure_instrument", { instrument: "sequoia", goniometer_limits: [{ axis: "psi", min: 0, max: 60 }] });
     expect((await ok("simulate_plan", { structure_id: "si", instrument: "sequoia" })).plan).toMatchObject({ start: 0, end: 60, step: 1, settings: 61 });
     await ok("configure_instrument", { instrument: "sequoia", goniometer_limits: [{ axis: "psi", min: 100, max: 200 }] });
-    expect(await fails("simulate_plan", { structure_id: "si", instrument: "sequoia" })).toMatch(/usual scan.*outside the psi limits 100–200°/);
+    expect(await fails("simulate_plan", { structure_id: "si", instrument: "sequoia" })).toMatch(/usual scan.*has no step inside the psi limits 100–200°/);
     await ok("configure_instrument", { instrument: "sequoia", clear: true });
   });
 
