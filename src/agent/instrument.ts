@@ -88,11 +88,15 @@ export function resolveAngles(model: GoniometerModel, given: readonly number[] |
   return out;
 }
 
-/** Notes for angles outside a free axis's range (a full turn wraps, a narrower range is a limit). */
+/**
+ * Notes for angles outside a free axis's range (a full turn wraps, a narrower range is a limit). Angles a turn apart
+ * are one orientation, so 350° is inside −30° to 30°.
+ */
 export function angleWarnings(model: GoniometerModel, angles: readonly number[]): string[] {
   return model.axes.flatMap((ax, i) => {
     const v = angles[i]!;
-    if (ax.fixed !== undefined || ax.max - ax.min >= 360 || (v >= ax.min - 1e-9 && v <= ax.max + 1e-9)) return [];
+    const above = (((v - ax.min) % 360) + 360) % 360;
+    if (ax.fixed !== undefined || ax.max - ax.min >= 360 || above <= ax.max - ax.min + 1e-9 || above >= 360 - 1e-9) return [];
     return [`${axisName(ax.name)} = ${v}° is outside its range ${ax.min}° to ${ax.max}°.`];
   });
 }

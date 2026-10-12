@@ -104,7 +104,7 @@ export const acceptanceFields = {
   goniometer_limits: z
     .array(z.strictObject({ axis: axisRef, min: z.number(), max: z.number() }))
     .optional()
-    .describe("Narrower ranges (deg) for free goniometer axes, e.g. for collisions or a sample environment; min ≤ max, so a range through 0° is e.g. -30 to 30. Every search and scan respects them."),
+    .describe("Narrower ranges (deg) for free goniometer axes, e.g. for collisions or a sample environment; min ≤ max, so a range through 0° is e.g. -30 to 30. The searches and the instruments' usual scans stay inside them; settings or scans given outside them are flagged."),
   masks: maskField,
   shadows: shadowField,
 };
@@ -112,7 +112,7 @@ export const acceptanceFields = {
 export type InstrumentArgs = z.infer<z.ZodObject<typeof instrumentFields>> & Partial<z.infer<z.ZodObject<typeof acceptanceFields>>>;
 export type AcceptanceArgs = z.infer<z.ZodObject<typeof acceptanceFields>>;
 
-/** A plan: an orientation list, or a rotation scan of one axis; with neither, the instrument's usual scan. */
+/** A plan: an orientation list, or a rotation scan of one axis; with neither, the instrument's usual scan inside the goniometer limits. */
 export const planFields = {
   angles: anglesField,
   settings: z
@@ -128,7 +128,7 @@ export const planFields = {
       interleave: z.boolean().optional().describe("Add the half-way steps (a second pass offset by step/2)."),
     })
     .optional()
-    .describe("Rotation scan of one free axis (deg), the others at `angles`; default axis the first free one. CORELLI scans 0–357° in 3° steps; chopper spectrometers scan ψ."),
+    .describe("Rotation scan of one free axis (deg), the others at `angles`; default axis the first free one. Without settings or scan, the instrument's usual scan inside the goniometer limits: CORELLI 0–357° in 3° steps, the chopper spectrometers ψ −90–90° in 1° steps."),
 };
 
 // ---------------------------------------------------------------- files

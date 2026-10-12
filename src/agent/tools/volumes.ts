@@ -25,7 +25,7 @@ import { resolveOrientation } from "../orientation.ts";
 import { dMinField, instrumentFields, limitField, orientationField, outputPath, planFields, structureId, vec3, writeBinary, writeText } from "../shared.ts";
 import { defineTool, ToolError, type ToolContext } from "../tool.ts";
 import { DEFAULT_D_MIN, DEFAULT_WAVELENGTH } from "../workspace.ts";
-import { resolvePlan } from "./crystal.ts";
+import { planNotes, resolvePlan } from "./crystal.ts";
 
 const TWO_PI = 2 * Math.PI;
 
@@ -389,6 +389,7 @@ export const coverageMap = defineTool({
     const written = args.output_path ? await writeBinary(args.output_path, npyBytes(out, shape)) : undefined;
     let maxCount = 0;
     for (const c of counts) maxCount = Math.max(maxCount, c);
+    const notes = [...ins.notes, ...o.warnings, ...planNotes(model, plan)];
     return {
       instrument: ins.preset.label,
       beam: beamSummary(ins),
@@ -401,7 +402,7 @@ export const coverageMap = defineTool({
       most_recordings: maxCount,
       array: { values: mask ? "uint8, 1 = recorded" : "uint16, settings recording the voxel", order, shape },
       ...(written ? { written } : { note: "Give output_path to write the array." }),
-      ...([...ins.notes, ...o.warnings].length ? { notes: [...ins.notes, ...o.warnings] } : {}),
+      ...(notes.length ? { notes } : {}),
     };
   },
 });

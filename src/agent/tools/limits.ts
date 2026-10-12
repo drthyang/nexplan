@@ -25,7 +25,7 @@ import { resolveOrientation } from "../orientation.ts";
 import { hklField, instrumentFields, orientationField, planFields, structureId } from "../shared.ts";
 import { defineTool, ToolError } from "../tool.ts";
 import { DEFAULT_D_MIN, DEFAULT_WAVELENGTH } from "../workspace.ts";
-import { resolvePlan } from "./crystal.ts";
+import { planNotes, resolvePlan } from "./crystal.ts";
 
 const TWO_PI = 2 * Math.PI;
 const I3: Mat3 = [
@@ -290,6 +290,7 @@ export const reciprocalCoverage = defineTool({
     const base = resolveAngles(ins.model, args.angles);
     const r = reach(ins, { dMin, dMax, shells: args.shells ?? 6, directions: args.directions ?? 600, ...(plan ? { plan } : {}), maxSettings: 4000, base });
     const tt = coveredOf(ins);
+    const notes = [...ins.notes, ...(plan ? planNotes(ins.model, plan) : [])];
     return {
       instrument: ins.preset.label,
       beam: beamSummary(ins),
@@ -299,7 +300,7 @@ export const reciprocalCoverage = defineTool({
       shells: r.shells,
       shortest_d_recordable: reachOf(tt, ins.exp.lambdaMin, ins.exp.lambdaMax).d_min,
       units: { d: "Å", q: "1/Å, with 2π" },
-      ...(ins.notes.length ? { notes: ins.notes } : {}),
+      ...(notes.length ? { notes } : {}),
     };
   },
 });

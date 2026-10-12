@@ -205,7 +205,11 @@ export const findSetting = defineTool({
   },
 });
 
-/** The plan: an orientation list, or a scan of one free axis (the instrument's usual one when none is given). */
+/**
+ * The plan: an orientation list, or a scan of one free axis. Without one, the instrument's usual scan, inside the
+ * axis's range (the goniometer limits): a scan of a full turn takes the whole range, on its own grid of steps; a
+ * shorter one is cut to it.
+ */
 export function resolvePlan(ins: ResolvedInstrument, args: { angles?: z.infer<typeof anglesField>; settings?: z.infer<typeof planFields.settings>; scan?: z.infer<typeof planFields.scan> }) {
   const { model, preset } = ins;
   const mono = preset.incident !== undefined;
@@ -220,9 +224,34 @@ export function resolvePlan(ins: ResolvedInstrument, args: { angles?: z.infer<ty
   if (!args.scan && !usual) throw new ToolError(`${preset.label} is planned as an orientation list: give settings (suggest_settings proposes them), or a scan.`);
   const axis = args.scan?.axis !== undefined ? axisIndex(model, args.scan.axis) : free[0]!;
   if (model.axes[axis]!.fixed !== undefined) throw new ToolError(`${axisName(model.axes[axis]!.name)} is fixed on ${preset.label}; scan a free axis.`);
-  const scan = { start: args.scan?.start ?? usual!.start, end: args.scan?.end ?? usual!.end, step: args.scan?.step ?? usual!.step, interleave: args.scan?.interleave ?? false };
+  let note: string | undefined;
+  let scan: { start: number; end: number; step: number; interleave: boolean };
+  if (args.scan) scan = { start: args.scan.start, end: args.scan.end, step: args.scan.step, interleave: args.scan.interleave ?? false };
+  else {
+    const ax = model.axes[axis]!;
+    const { start, end, step } = usual!;
+    const name = axisName(ax.name);
+    const fullTurn = end - start + step >= 360 - 1e-9;
+    // Steps n of the usual grid start + n·step inside [min, max]: any n for a full turn (one turn at most), else those of the scan.
+    let first = Math.ceil((ax.min - start) / step - 1e-9);
+    let last = Math.floor((ax.max - start) / step + 1e-9);
+    if (fullTurn) last = Math.min(last, first + Math.round(360 / step) - 1);
+    else {
+      first = Math.max(first, 0);
+      last = Math.min(last, Math.floor((end - start) / step + 1e-9));
+    }
+    if (last < first) throw new ToolError(`${preset.label}'s usual scan (${name} ${start}–${end}°) lies outside the ${name} limits ${ax.min}–${ax.max}°: give a scan.`);
+    scan = { start: start + first * step, end: start + last * step, step, interleave: false };
+    if (scan.start !== start || scan.end !== end) note = `${preset.label}'s usual scan, ${name} ${start}–${end}° in ${step}° steps, runs ${scan.start}–${scan.end}° inside the ${name} limits ${ax.min}–${ax.max}°.`;
+  }
   if (!(scan.end >= scan.start)) throw new ToolError("A scan needs end ≥ start.");
-  return { kind: "scan" as const, base, axis, scan, settings: scanSettings(axis, base, scan, scan.interleave && !mono) };
+  return { kind: "scan" as const, base, axis, scan, settings: scanSettings(axis, base, scan, scan.interleave && !mono), ...(note ? { note } : {}) };
+}
+
+/** What a plan's result should say: how the usual scan was fitted to the limits, and settings outside the axis ranges (the first five). */
+export function planNotes(model: ResolvedInstrument["model"], plan: Plan): string[] {
+  const outside = [...new Set(plan.settings.flatMap((a) => angleWarnings(model, a)))].slice(0, 5);
+  return [...("note" in plan && plan.note ? [plan.note] : []), ...outside];
 }
 
 export type Plan = ReturnType<typeof resolvePlan>;
@@ -247,7 +276,7 @@ export const simulatePlan = defineTool({
   title: "Simulate a measurement plan",
   description:
     "What a single-crystal measurement plan records: an orientation list (TOPAZ: about ten settings) or a rotation scan (CORELLI: 0–357° in 3° steps; chopper spectrometers: ψ, with the Bragg crossings solved exactly). For each setting or step, the reflections on the detectors and the cumulative completeness (fraction of symmetry families recorded); the step where 90 % is reached; families recorded twice or more (redundancy); and, for wanted reflections, how many settings record them and place them well (mid band, away from panel edges). " +
-    "Without settings or scan, the instrument's usual scan. Optionally writes the plan as CSV.",
+    "Without settings or scan, the instrument's usual scan, inside the goniometer limits. Settings outside the limits are flagged. Optionally writes the plan as CSV.",
   input: z.strictObject({
     ...crystalFields,
     ...planFields,
@@ -309,7 +338,7 @@ export const simulatePlan = defineTool({
       written = await writeText(args.output_path, lines.join("\n") + "\n");
     }
     return {
-      ...context(s, plan.settings.flatMap((a) => angleWarnings(model, a)).filter((w, i, all) => all.indexOf(w) === i).slice(0, 5)),
+      ...context(s, planNotes(model, plan)),
       plan: plan.kind === "list" ? { kind: "orientation list", settings: plan.settings.length } : { kind: "rotation scan", axis: axisName(model.axes[plan.axis]!.name), ...plan.scan, settings: plan.settings.length },
       families: res.families,
       families_recorded: res.observedFamilies,
@@ -436,7 +465,7 @@ export const suggestBinningTool = defineTool({
     if (!s.mono && (args.e_min !== undefined || args.e_max !== undefined)) throw new ToolError("e_min and e_max apply to the chopper spectrometers.");
     const beam: Beam = s.mono ? { kind: "direct", eiMeV: ei, eMin, eMax: Math.min(eMax, 0.999 * ei) } : { kind: "white", lambdaMin: exp.lambdaMin, lambdaMax: exp.lambdaMax };
     const bins = suggestBinning(plan.settings.map((a) => goniometerMatrix(model, a)), plan.settings.map((a) => blockedAt(shadows, a)), panelSamples(panels, 6), beam, s.o.UB, W, args.step, { qMax: 1 / dMin });
-    if (!bins) return { ...context(s), message: "The plan records nothing with these masks, shadows and band." };
+    if (!bins) return { ...context(s, planNotes(model, plan)), message: "The plan records nothing with these masks, shadows and band." };
     const energy = s.mono ? energyBinning(ei, eMin, eMax) : undefined;
     const inelastic = (args.q_convention ?? "inelastic") === "inelastic";
     const slab = args.slab;
@@ -452,7 +481,7 @@ export const suggestBinningTool = defineTool({
       `       OutputWorkspace="result", OutputDataWorkspace="dataMD", OutputNormalizationWorkspace="normMD")`,
     ].join("\n");
     return {
-      ...context(s),
+      ...context(s, planNotes(model, plan)),
       plan: plan.kind === "list" ? `orientation list of ${plan.settings.length}` : `scan of ${axisName(model.axes[plan.axis]!.name)} ${plan.scan.start}–${plan.scan.end}° in ${plan.scan.step}° steps`,
       q_convention: inelastic ? "inelastic (Mantid's default): limits mirrored" : "crystallography",
       axes: bins.axes.map((a, i) => ({ axis: rows[i], recorded: [bins.extent.min[i], bins.extent.max[i]], min: a.min, max: a.max, step: a.step, bins: slab?.axis === i ? 1 : a.bins, mdnorm_binning: binning(i), ...(slab?.axis === i ? { slab } : {}) })),

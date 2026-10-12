@@ -213,6 +213,33 @@ describe("single crystals", () => {
     await ok("configure_instrument", { instrument: "corelli", clear: true });
   });
 
+  it("keeps the usual scan inside the goniometer limits, and warns about plans outside them", async () => {
+    const grid = { binning: ["-6.1,0.2,6.1", "-6.1,0.2,6.1", "-0.05,0.05"] };
+    await ok("configure_instrument", { instrument: "corelli", goniometer_limits: [{ axis: "omega", min: 0, max: 90 }] });
+    const plan = await ok("simulate_plan", { structure_id: "si", instrument: "corelli" });
+    expect(plan.plan).toMatchObject({ kind: "rotation scan", start: 0, end: 90, step: 3, settings: 31 });
+    expect(plan.notes.join(" ")).toMatch(/usual scan.*0–357°.*omega limits 0–90°/);
+    const bins = await ok("suggest_binning", { structure_id: "si", instrument: "corelli" });
+    expect(bins.plan).toBe("scan of omega 0–90° in 3° steps");
+    expect((await ok("coverage_map", { structure_id: "si", instrument: "corelli", grid })).plan).toBe("scan of omega 0–90° in 3° steps");
+    // A plan given outside the limits is kept, with a warning, as simulate_plan does.
+    const scan = { start: 120, end: 180, step: 10 };
+    expect((await ok("suggest_binning", { structure_id: "si", instrument: "corelli", scan })).notes.join(" ")).toMatch(/omega = 120° is outside its range 0° to 90°/);
+    expect((await ok("coverage_map", { structure_id: "si", instrument: "corelli", scan, grid })).notes.join(" ")).toMatch(/outside its range/);
+    // A range through 0°: a full-turn scan takes the whole of it, on its own 3° grid.
+    await ok("configure_instrument", { instrument: "corelli", goniometer_limits: [{ axis: "omega", min: -30, max: 30 }] });
+    expect((await ok("simulate_plan", { structure_id: "si", instrument: "corelli" })).plan).toMatchObject({ start: -30, end: 30, settings: 21 });
+    // ω = 350° is ω = −10°, inside −30° to 30°.
+    expect(((await ok("simulate_setting", { structure_id: "si", instrument: "corelli", angles: [350] })).notes ?? []).join(" ")).not.toMatch(/outside its range/);
+    await ok("configure_instrument", { instrument: "corelli", clear: true });
+    // A partial scan (the chopper spectrometers' ψ, −90° to 90°) is cut to the limits, and refused when none of it is inside.
+    await ok("configure_instrument", { instrument: "sequoia", goniometer_limits: [{ axis: "psi", min: 0, max: 60 }] });
+    expect((await ok("simulate_plan", { structure_id: "si", instrument: "sequoia" })).plan).toMatchObject({ start: 0, end: 60, step: 1, settings: 61 });
+    await ok("configure_instrument", { instrument: "sequoia", goniometer_limits: [{ axis: "psi", min: 100, max: 200 }] });
+    expect(await fails("simulate_plan", { structure_id: "si", instrument: "sequoia" })).toMatch(/usual scan.*outside the psi limits 100–200°/);
+    await ok("configure_instrument", { instrument: "sequoia", clear: true });
+  });
+
   it("refuses arguments it does not know, rather than ignoring them", async () => {
     expect(await fails("simulate_setting", { structure_id: "si", instrument: "corelli", masks: { panels_off: [] } })).toMatch(/masks/);
     expect(await fails("simulate_setting", { structure_id: "si", instrument: "corelli", orientation: { ub_file: "x.mat" } })).toMatch(/ub_file/);
