@@ -171,7 +171,8 @@ export const findSetting = defineTool({
       for (const c of braggCrossings(model, k, base, { start: ax.min, end: Math.min(ax.max, ax.min + 360) - 1e-9 }, s.o.UB, hs.map((h) => ({ h, family: 0 })), panels, lambdaMid, s.ins.shadows))
         if (c.hit) consider(base.map((v, i) => (i === k ? c.angle : v)), lambdaMid, c.hit, hs[c.index]!);
     } else {
-      const cov = reflectionCoverage(model, base, s.o.UB, hs.map((h) => ({ h })), panels, exp.lambdaMin, exp.lambdaMax, free.length > 1 ? 2 : 1, undefined, s.ins.shadows);
+      // A 1° base: reflectionCoverage doubles it for each extra free axis.
+      const cov = reflectionCoverage(model, base, s.o.UB, hs.map((h) => ({ h })), panels, exp.lambdaMin, exp.lambdaMax, 1, undefined, s.ins.shadows);
       settings = cov.settings;
       step = cov.step;
       for (const p of cov.points) consider(p.angles, p.lambda, p.hit, hs[p.index]!);

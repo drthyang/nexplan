@@ -419,7 +419,7 @@ export const compareInstruments = defineTool({
               const ax = model.axes[free[0]!]!;
               return braggCrossings(model, free[0]!, exp.angles, { start: ax.min, end: Math.min(ax.max, ax.min + 360) - 1e-9 }, o.UB, hs.map((x) => ({ h: x, family: 0 })), panels, (exp.lambdaMin + exp.lambdaMax) / 2, shadows).some((c) => c.hit);
             }
-            return reflectionCoverage(model, exp.angles, o.UB, hs.map((x) => ({ h: x })), panels, exp.lambdaMin, exp.lambdaMax, free.length > 1 ? 4 : 1, undefined, shadows).points.length > 0;
+            return reflectionCoverage(model, exp.angles, o.UB, hs.map((x) => ({ h: x })), panels, exp.lambdaMin, exp.lambdaMax, 1, undefined, shadows).points.length > 0;
           });
           row.wanted = { recordable: recordable.length, of: args.wanted.length, missed: args.wanted.filter((h) => !recordable.includes(h)).map((h) => `(${hklText(h)})`), orientation: o.description };
           met.wanted = recordable.length === args.wanted.length;

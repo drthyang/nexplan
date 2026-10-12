@@ -146,6 +146,14 @@ describe("single crystals", () => {
     expect(at.checked[0].panel).toBe(found.best.panel);
   });
 
+  it("searches a 2° grid with two free axes and 1° with one, as its description says", async () => {
+    // A 1° base doubled once for the second free axis: 180 × 180 settings on TOPAZ ambient, 360 on TOPAZ cryogenic.
+    const two = await ok("find_setting", { structure_id: "si", instrument: "topaz-ambient", hkl: [2, 2, 0] });
+    expect(two.reach).toMatchObject({ grid_step_deg: 2, settings_searched: 180 * 180 });
+    const one = await ok("find_setting", { structure_id: "si", instrument: "topaz-cryo", hkl: [2, 2, 0] });
+    expect(one.reach).toMatchObject({ grid_step_deg: 1, settings_searched: 360 });
+  });
+
   it("says why an unreachable reflection cannot be recorded", async () => {
     const r = await ok("find_setting", { structure_id: "si", instrument: "topaz-cryo", hkl: [28, 0, 0] });
     expect(r.found).toBe(false);

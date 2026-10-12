@@ -286,8 +286,8 @@ neutron scattering); code in
   reflection can be recorded, optionally with its symmetry equivalents, as the free goniometer axes sweep their
   ranges.
   - Each point is coloured by its wavelength, λ = 2d sin θ at that pixel.
-  - White-beam instruments use a grid of settings, each axis at most one turn: 1° steps with one free axis, 4° on
-    TOPAZ ambient's two (a 2° base, doubled for the extra axis). A setting counts when λ = −2q_z/|q|² is in the band and k_f hits a panel.
+  - White-beam instruments use a grid of settings, each axis at most one turn: 1° steps with one free axis, 2° on
+    TOPAZ ambient's two (the 1° base, doubled for the extra axis). A setting counts when λ = −2q_z/|q|² is in the band and k_f hits a panel.
   - Chopper spectrometers use the exact Bragg crossings instead.
   - Tested: every point satisfies λ = 2d sin θ at the pixel it hits, and lies in the band.
 - **Exact coverage** (`src/core/instrument/coverage.ts`): per detector pixel, the pixel fixes q̂ ∝ u − ẑ and

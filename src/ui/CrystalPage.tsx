@@ -273,7 +273,7 @@ function CrystalPlan({
         const ax = axes[k]!;
         for (const c of braggCrossings(model, k, exp.angles, { start: ax.min, end: Math.min(ax.max, ax.min + 360) - 1e-9 }, viewUB, [{ h, family: 0 }], panels, lambdaMid, shadows))
           if (c.hit) consider(exp.angles.map((v, i) => (i === k ? c.angle : v)), lambdaMid, c.hit);
-      } else for (const p of reflectionCoverage(model, exp.angles, viewUB, [{ h }], panels, exp.lambdaMin, exp.lambdaMax, free.length > 1 ? 2 : 1, undefined, shadows).points) consider(p.angles, p.lambda, p.hit);
+      } else for (const p of reflectionCoverage(model, exp.angles, viewUB, [{ h }], panels, exp.lambdaMin, exp.lambdaMax, 1, undefined, shadows).points) consider(p.angles, p.lambda, p.hit);
     } catch (e) {
       setFindNote((e as Error).message);
       return;
