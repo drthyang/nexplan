@@ -197,6 +197,22 @@ describe("single crystals", () => {
     await ok("configure_instrument", { instrument: "corelli", clear: true });
   });
 
+  it("refuses a goniometer limit with min above max, rather than taking the opposite range", async () => {
+    // 330° to 30° meant through 0°, not 30° to 330°: the caller writes it as -30 to 30.
+    const msg = await fails("configure_instrument", { instrument: "corelli", goniometer_limits: [{ axis: "omega", min: 330, max: 30 }] });
+    expect(msg).toMatch(/min 330° is above max 30°/);
+    expect(msg).toMatch(/-30 to 30/);
+    expect((await ok("configure_instrument", { instrument: "corelli" })).set).toMatch(/^nothing/);
+    // The range through 0° itself is accepted, and the searches stay inside it.
+    await ok("configure_instrument", { instrument: "corelli", goniometer_limits: [{ axis: "omega", min: -30, max: 30 }] });
+    const r = await ok("find_setting", { structure_id: "si", instrument: "corelli", hkl: [2, 2, 0] });
+    expect(Math.abs(r.best.angles.omega)).toBeLessThanOrEqual(30);
+    // A shadow turning with ω is reported where it is evaluated: ω at its nearest limit, not at zero.
+    const sh = await ok("configure_instrument", { instrument: "corelli", goniometer_limits: [{ axis: "omega", min: 30, max: 90 }], shadows: [{ kind: "sector", gamma: 90, half_width: 10, turns_with: 0 }] });
+    expect(sh.shadows_at).toMatch(/omega 30°/);
+    await ok("configure_instrument", { instrument: "corelli", clear: true });
+  });
+
   it("refuses arguments it does not know, rather than ignoring them", async () => {
     expect(await fails("simulate_setting", { structure_id: "si", instrument: "corelli", masks: { panels_off: [] } })).toMatch(/masks/);
     expect(await fails("simulate_setting", { structure_id: "si", instrument: "corelli", orientation: { ub_file: "x.mat" } })).toMatch(/ub_file/);

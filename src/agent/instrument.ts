@@ -157,7 +157,11 @@ export async function resolveInstrument(given: InstrumentArgs, workspace?: Works
   const catalog = SNS_INSTRUMENTS.find((i) => i.id === id)!;
   for (const lim of args.goniometer_limits ?? []) {
     const k = axisIndex(catalog.goniometer, lim.axis);
-    if (catalog.goniometer.axes[k]!.fixed !== undefined) throw new ToolError(`${axisName(catalog.goniometer.axes[k]!.name)} is fixed on ${entry.label}; only free axes take limits.`);
+    const name = axisName(catalog.goniometer.axes[k]!.name);
+    if (catalog.goniometer.axes[k]!.fixed !== undefined) throw new ToolError(`${name} is fixed on ${entry.label}; only free axes take limits.`);
+    // Not swapped: 330° to 30° more likely means the range through 0° than 30° to 330°.
+    if (!(lim.min <= lim.max))
+      throw new ToolError(`${name} limits: min ${lim.min}° is above max ${lim.max}°. Give min ≤ max; a range through 0° takes a negative min (${lim.min - 360} to ${lim.max} for ${lim.min}° round to ${lim.max}°).`);
     exp = withLimits(exp, k, [lim.min, lim.max]);
   }
 

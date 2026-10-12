@@ -104,7 +104,7 @@ export const acceptanceFields = {
   goniometer_limits: z
     .array(z.strictObject({ axis: axisRef, min: z.number(), max: z.number() }))
     .optional()
-    .describe("Narrower ranges (deg) for free goniometer axes, e.g. for collisions or a sample environment; every search and scan respects them."),
+    .describe("Narrower ranges (deg) for free goniometer axes, e.g. for collisions or a sample environment; min ≤ max, so a range through 0° is e.g. -30 to 30. Every search and scan respects them."),
   masks: maskField,
   shadows: shadowField,
 };
