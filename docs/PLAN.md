@@ -19,7 +19,7 @@ research release waits on print certification of the scattering tables. Nothing 
 | UI unspecified. | Match the MATERIA / NEBULA3D / RMCProfile Workbench design system (§11). | User requirement. |
 | — | Deployment origin `https://drthyang.github.io/nexplan/`; license AGPL-3.0-only (§13). | COD CORS must be tested at the real origin. Copied MATERIA code is AGPL. |
 
-## Progress (2026-10-05)
+## Progress (2026-10-09)
 
 | Item | State |
 |---|---|
@@ -41,15 +41,15 @@ research release waits on print certification of the scattering tables. Nothing 
 | UB workbench: ISAW I/O, lattice/orientation, setting match, basis change, TOPAZ cryo/ambient + Universal goniometers, 3D Laue view | done; validated on Mantid TOPAZ_3007 peaks |
 | Re-indexing: any integer supercell, primitive cell or ITA transformation (fractional P); exported as a UB or as Mantid's TransformHKL call | done |
 | Detector geometry from Mantid IDFs (TOPAZ, CORELLI, NOMAD, POWGEN, ARCS, SEQUOIA, CNCS) + real-space instrument view | done; pixel mapping validated on TOPAZ_3007 |
-| Instrument page: single crystal (3D detectors, unrolled detector map, rotation scan with family completeness, reflections on panels) and powder (sample fixed: 2θ–d coverage, panels per reflection, per-panel TOF pattern) | done; UB page is now orientation-only |
+| Instrument page (later split into Detectors, Powder and Single crystal): single crystal (3D detectors, unrolled detector map, rotation scan with family completeness, reflections on panels) and powder (sample fixed: 2θ–d coverage, panels per reflection, per-panel TOF pattern) | done; UB page is now orientation-only |
 | CI and Pages workflows | done; every push to `main` fetches the pinned sources, runs CI and deploys `https://drthyang.github.io/nexplan/` |
 | Anisotropic Debye–Waller, anomalous X-ray terms | not started; anisotropic ADPs enter as U_eq |
-| Powder rings on the detectors (TOF slices, ray-traced check); ARCS, SEQUOIA, CNCS (elastic, exact monochromatic scans); Instrument page neutron-only | done |
-| Pages grouped Sample · Setup · Instrument · Simulation; instrument chosen in the header; Detectors, Powder (per panel) and Single-crystal pages; exact per-pixel coverage; orientation lists (TOPAZ), interleaved scans (CORELLI); reciprocal slices with plan coverage | done |
+| Powder rings on the detectors (TOF slices, ray-traced check); ARCS, SEQUOIA, CNCS (elastic, exact monochromatic scans); simulation pages neutron-only | done |
+| Pages grouped Sample · Setup · Instrument · Simulation (now Sample · Setup · Simulation, from the UI review below); instrument chosen in the header; Detectors, Powder (per panel) and Single-crystal pages; exact per-pixel coverage; orientation lists (TOPAZ), interleaved scans (CORELLI); reciprocal slices with plan coverage | done |
 | TOPAZ planner: wanted reflections, Find a setting, Suggest settings (Full coverage or Fewest settings, greedy, fine-tuned off the grid), user goniometer limits, plan CSV export with provenance | done |
 | Focused banks as the data are reduced (NOMAD six, POWGEN one); powder export per bank; TOF, d and Q axes; warning where d_min cuts the pattern, with a one-click fix | done |
 | Calibrated banks | partly: NOMAD banks 0–4 use calibrated DIFC (ORNL 2023A GSAS-II file, its banks 1–5), POWGEN's DIFC comes from the characterisation file's effective L2 and 2θ; NOMAD bank 5 and the other instruments use geometric DIFC |
-| Instrument peak widths: NOMAD measured Δd/d per bank; POWGEN GSAS-II profile for each of seven standard chopper frames; resolved-line check (≥ 1 FWHM apart) | done; POWGEN 0.8 Å frame within 25 % of the LaB₆ widths in Huq et al. (2019) |
+| Instrument peak widths: NOMAD measured Δd/d per bank; POWGEN GSAS-II profiles for the 0.8, 1.5 and 2.665 Å frames (a fixed Δd/d for the other four of its seven standard frames); resolved-line check (≥ 1 FWHM apart) | done; POWGEN 0.8 Å frame within 25 % of the LaB₆ widths in Huq et al. (2019) |
 | Forbidden reflections (absent, \|F\| ≈ 0 or below d_min) simulated, wanted and planned on request, with a notice | done |
 | Scattering power against a reference material (V, diamond, Si, CeO₂, corundum or a demo structure) | done; relative, no counting time |
 | Consistency with Mantid: constants, DIFC and TOF, E ↔ λ, B matrix, goniometer, Laue wavelength | done (`docs/data-verification/MANTID_CONSISTENCY.md`) |
@@ -60,7 +60,7 @@ research release waits on print certification of the scattering tables. Nothing 
 | Mount: scattering plane from u, v (Mantid SetUB) sets U without a UB file; plane drawn at the sample, its tilt and beam angle, and the detector curve where its reflections land | done (2026-10-07); tested against Mantid's SetUB example and by diffracting in-plane reflections |
 | Binning: recorded HKL range along chosen axes, as MDNorm parameters | done; practical bins (a round step giving about 200–400 bins per axis; energy steps of 1 % of Ei, Mantid's DGS default) since 2026-10-07, replacing resolution-sized bins; limits for Mantid's default Q convention or the crystallographic one |
 | Code review of the formulas against the literature and pinned upstream code (2026-10-06; not the domain-expert review of M5) | done: corrections and their tests in CONVENTIONS §13 (focused banks, TOF on Q, exact coverage, MDNorm Q convention, centring completion, coincident images, smaller ones); references in CONVENTIONS §12 |
-| Agent tools and MCP server (2026-10-09): the features as 26 tools (src/agent/) for any tool-use API, served over MCP on stdio (src/mcp/, docs/MCP.md); instrument limits (coverage, reach, resolution, reciprocal-space coverage, comparison for a goal); inputs for MATERIA (.instprm), NEBULA3D and the NeXus Viewer (Laue operations, Bragg nodes, coverage masks as .npy) | done; the tools call the app's own core and state functions, tested end to end (find a setting, then record it; planner claims against simulate_plan; coverage maps against exact ray casts; .instprm read by MATERIA's parser) |
+| Agent tools and MCP server (2026-10-09): the features as 26 tools (src/agent/) for any tool-use API, served over MCP on stdio (src/mcp/, docs/MCP.md); instrument limits (coverage, reach, resolution, reciprocal-space coverage, comparison for a goal); inputs for MATERIA (.instprm), NEBULA3D and the NeXus Viewer (Laue operations, Bragg nodes, coverage masks as .npy) | done; the tools call the app's own core and state functions, tested end to end (find a setting, then record it; planner claims against simulate_plan; coverage maps against exact ray casts; the .instprm format; MATERIA's parser read the files in a one-off check, not a test) |
 | UI review (2026-10-06) | done: pages in three groups (Sample · Setup · Simulation); Δd/d set where it acts (powder views) rather than in the bar; one d_min note per page; structure viewer without the light and finish knobs |
 
 ## 1. Product objective
@@ -78,7 +78,7 @@ to published validation evidence.
 | Capability | Initial supported behavior | Explicit boundary |
 |---|---|---|
 | Database discovery | COD search URL builder and external lookup, then local upload. Direct COD import only after the deployed-origin CORS gate passes. | No backend, proxy or embedded credentials. No automatic phase selection. |
-| CIF import | CIF 1.1. User selects the data block. Reads lattice, atom sites, symmetry, occupancies, isotropic ADPs, su values and type symbols with charge. | CIF 2.0, DDLm-only names, superspace and magnetic CIFs are rejected with a message. Ambiguous symmetry blocks the calculation. |
+| CIF import | CIF 1.1. User selects the data block. Reads lattice, atom sites, symmetry, occupancies, isotropic ADPs, su values and type symbols with charge. | CIF 2.0 and DDLm-only names are rejected with a message; superspace and magnetic CIFs are not supported. Ambiguous symmetry blocks the calculation. |
 | Reflections | Full signed hkl list with d, Q, absence class and complex F. Unscaled \|F\|². | No absolute count prediction. |
 | X-ray scattering | Non-resonant WK1995 f0 for neutral atoms and tabulated ions. Optional ITC Cromer–Mann for matched comparisons. | No anomalous terms initially. Ions only from an explicit type symbol or user choice. |
 | Neutron scattering | Coherent nuclear b (Sears 1992) for natural elements and named isotopes, complex where tabulated. | No magnetic intensity. Complex b is valid near 2200 m/s only and is labeled as such. |
@@ -97,15 +97,17 @@ dialogs or browser state.
 ```text
 src/materia/   copied MATERIA modules, unmodified except import paths; UPSTREAM.json pins commit + per-file sha256
 src/core/      NEXPLAN science: species, complex SF, signed reflections, powder, UB, transforms, geometry
-src/io/        CIF 1.1 tokenizer/reader, ISAW UB, explicit matrix adapters
+src/io/        CIF 1.1 tokenizer/reader, ISAW UB, .npy and GSAS-II .instprm writers
+src/app/       one calculation request to one result, with its provenance (compute.ts)
 src/data/      generated, versioned scattering and symmetry tables + manifest.json
-src/workers/   reflection enumeration and simulation workers
-src/ui/        layout, panels, provenance/status, design tokens shared with MATERIA/NEBULA3D
-src/views/     powder and reciprocal-space visualization
+src/workers/   the calculation and planner workers
+src/ui/        pages, cards and plots (powder, scan, slice), provenance/status, design tokens shared with MATERIA/NEBULA3D
+src/views/     3D views: structure, instrument, reciprocal lattice
+src/agent/     the features as agent tools; src/mcp/ the MCP server that serves them
 scripts/data/  dev-only: fetch pinned sources, build tables, cross-check, write reports
 data-sources/  sources.json (URLs, sha256, license notes); snapshots/ for unpinnable pages
 fixtures/      redistributable inputs and frozen reference outputs
-docs/          PLAN, CONVENTIONS, data-verification/ reports, VALIDATION, LIMITATIONS
+docs/          PLAN, CONVENTIONS, GUIDE, LIMITATIONS, VALIDATION, DEVELOPMENT, MCP, data-verification/ reports
 ```
 
 Float64 throughout the core; WebGL precision is for display only. Workers run with cancellation, explicit resource
@@ -121,8 +123,8 @@ generate reference fixtures, never on the user's machine.
 | `core/crystal/unitCell` | metric G, G*, d, Q = 2π/d, volume | Analytic triclinic cases vs an independent metric implementation (rel. 1e-12) |
 | `core/crystal/symmetry` | `isReflectionAbsent` as an independent cross-check in the tests, and the 3D viewer's cell expansion; the core uses its own exact implementations (`src/core/symmetry`) | Absences vs gemmi for all 230 groups; multiplicities vs ITA |
 | `core/diffraction/profile` | unit-area Gaussian, Lorentzian, pseudo-Voigt, TCH | Area = 1 within 1e-6 by quadrature |
-| `core/diffraction/intensity` `lorentzPolarization` | CW Debye–Scherrer L and X-ray polarization | Formula vs ITC Vol. C §6.2.5; add monochromator term |
-| `core/scattering/cromerMannData` | ITC CM coefficients (comparison mode only) | Done: `docs/data-verification/MATERIA_TABLES.md` |
+| `core/diffraction/intensity` `lorentzPolarization` | Not copied: NEXPLAN has its own Lorentz and polarization factors (`src/core/diffraction/powder.ts`), checked against the same references | Formula vs ITC Vol. C §6.2.5; add monochromator term |
+| `core/scattering/cromerMannData` | Not copied: read by `scripts/data/build-tables.ts` for the table audit | Done: `docs/data-verification/MATERIA_TABLES.md` |
 
 ### 3.2 What is replaced, and why (from the 2026-10-02 audit)
 
@@ -140,7 +142,8 @@ confirms the tables. PR #32 closes gaps #27 left in the CIF reader, isotope inpu
 keeps its own implementations.
 
 Changes that would also fix MATERIA are made upstream in MATERIA first when practical. `npm run materia:sync`
-re-copies the pinned files and fails if any copied file was edited locally.
+re-copies the pinned files; `npm run materia:check` (run in CI) fails if a copy differs from them. The copies
+(23 files) are listed in `src/materia/UPSTREAM.json`.
 
 ## 4. Scientific conventions (frozen; full text in `docs/CONVENTIONS.md`)
 
@@ -243,9 +246,9 @@ f0(s) = Σ₁⁵ aᵢ exp(−bᵢ s²) + c, for 0 ≤ s ≤ 6 Å⁻¹. Outside t
 3. **GSAS-II Tl3+:** a2 is 18.3481 where the other three sources have 18.3841. It looks like a digit transposition,
    and gives f(0) − N = −0.041 e.
 4. **MATERIA neutron table** (at `0ee9a7e`; fixed in PR #27): In = 2.08 fm (Sears 4.065); imaginary parts dropped for B,
-   Cd, Sm, Eu, Gd, Dy, In; Pu and Cm take isotope values; Au = 7.9 fm is Rauch 2003, not Sears 1992. MATERIA's X-ray CM
-   table matches all four transcriptions for 96 of 97 rows. The 97th, Si, is absent from cctbx under that label and
-   identical to the other three.
+   Cd, Sm, Eu, Gd, Dy, In; Pu and Cm take isotope values; Au = 7.9 fm is Rauch 2003, not Sears 1992. At that commit
+   MATERIA's X-ray CM table matched all four transcriptions for 96 of 97 rows; the 97th, Si, was absent from cctbx
+   under that label and identical to the other three. (At `93eac17`: 97 of 98, `docs/data-verification/MATERIA_TABLES.md`.)
 5. **Dans_Diffraction Sears file:** the sign of the imaginary part is inconsistent (B +0.213, ³He −1.483).
 
 ### 5.5 Manifest and update policy
@@ -286,8 +289,8 @@ regression suite and a changelog entry.
 - **Site expansion.** Expand each asymmetric-unit site once. Merge images within that site's orbit closer than a
   distance tolerance in Å (0.02 Å), by connected groups so that the result stays symmetric. Keep distinct species that
   share a position (disorder). Cross-check against `_atom_site_symmetry_multiplicity` where it is given.
-- **Validation.** Volume > 0, metric positive-definite, 0 < occupancy ≤ 1, and the sum of occupancies at a shared
-  site ≤ 1 + 1e-3.
+- **Validation.** Volume > 0, metric positive-definite, 0 < occupancy ≤ 1, and a warning when the occupancies at a
+  shared site sum to more than 1 + 1e-3.
 - **Defaults.** Missing occupancy or ADP takes a visible, recorded default (1 and 0).
 - **Anisotropic ADPs.** Not supported in v1. They are reported and never silently discarded: the site uses the
   file's U_iso_or_equiv, or else U_eq computed from the U^ij (Fischer & Tillmanns 1988), a recorded assumption.
@@ -333,7 +336,8 @@ Unchanged from the draft.
   - The file stores UBᵀ in the IPNS frame: x is the beam, z is up, right-handed.
   - Q′ is normalized with |Q′| = 1/d, i.e. no 2π.
   - Mantid's frame relates to it by a cyclic permutation: z_M = x_I, x_M = y_I, y_M = z_I. Handedness is preserved.
-  - The fixtures are asymmetric, non-diagonal real files plus Mantid round trips at a pinned Mantid version.
+  - The fixtures are asymmetric, non-diagonal real files: Mantid's TOPAZ_3007.mat and garnet-tools' corelli_YAG_ub.mat,
+    read and checked against their lattice lines and Mantid's indexed peaks; writing is checked by reading back.
 - **Generic matrices.** A generic 3×3 text matrix needs a user-declared layout, transpose, 2π convention, axis map
   and handedness.
 - **Kinds of basis change:**
@@ -374,7 +378,7 @@ is recorded in the relevant report, as `XRAY_WK1995.md` does.
 | Enumeration | Brute force over a cube, triclinic cells | identical sets |
 | Complex-b sign | Im a > 0 for every absorber; physics-convention \|F\|²; printed b gives I(−h) | exact |
 | UB invariant | Synthetic P, R | rel ≤ 1e-12 |
-| ISAW round trip | Mantid fixtures | within serialized precision |
+| ISAW round trip | Mantid- and garnet-tools-written files; write and read back | within serialized precision |
 | Powder area | Quadrature, grid convergence | rel ≤ 1e-4 |
 | MATERIA modules | Their tests plus the checks in §3.1 | pass before use |
 
@@ -426,7 +430,7 @@ The draft's list stands, with these corrections and additions:
 - The DABAX WK file is at `https://ftp.esrf.fr/pub/scisoft/DabaxFiles/f0_WaasKirf.dat`. The `xop/` path returns 404.
 - cctbx `wk1995.cpp` and `it1992.cpp`; gemmi `it92.hpp` and `neutron92.hpp`; Mantid `NeutronAtom.cpp`,
   `LoadIsawUB.cpp` and `SaveIsawUB.cpp`; GSAS-II `atmdata.py`; periodictable `nsf.py`; Dans_Diffraction Sears file.
-  All are pinned by commit and sha256 in `data-sources/sources.json`.
+  All but the two ISAW files (read at Mantid `67c2f43`) are pinned by commit and sha256 in `data-sources/sources.json`.
 - Busing, W. R. & Levy, H. A. (1967). *Acta Cryst.* 22, 457–464 (UB convention).
 - Rauch, H. & Waschkowski, W. (2003). *Neutron Data Booklet* (GSAS-II and periodictable neutron values, used for
   comparison only).

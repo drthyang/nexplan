@@ -11,6 +11,18 @@ The tools call the same code as the web app (`src/core/`, `src/app/compute.ts`, 
 `src/ui/experimentState.ts` and `src/ui/ubShared.ts`), so for the same choices they give the app's numbers. The
 3D views, detector maps and reciprocal slices stay in the web app.
 
+## What an agent can ask
+
+| Question | Tools |
+|---|---|
+| What can this instrument measure, and where does it stop? Coverage, d and Q reach, resolution, Ei and \|Q\| limits, what NEXPLAN does not model for it. | `instrument_limits`; `configure_instrument` sets goniometer limits, masks and shadows for the session |
+| How much of reciprocal space does it reach, and what is never measured? | `reciprocal_coverage` |
+| Which instrument suits my goal (d range, Δd/d, line pairs to resolve, wanted reflections), and why not the others? | `compare_instruments` |
+| Which goniometer settings record my reflections, and how complete is the plan? | `find_setting`, `simulate_setting`, `suggest_settings` (the TOPAZ planner), `simulate_plan` |
+| How do I bin the volume in Mantid? | `suggest_binning` (the MDNorm call) |
+| Reflections and absences, powder patterns, UB matrices, chopper resolution, units | `list_reflections`, `reflection_info`, `powder_pattern`, `instrument_powder_pattern`, `analyze_ub`, `mount_crystal`, `transform_ub`, `chopper_resolution`, `scattering_power`, `convert_units` |
+| Inputs for MATERIA, NEBULA3D and the NeXus Viewer | `instrument_parameters`, `laue_symmetry`, `bragg_positions`, `coverage_map` ([below](#with-materia-nebula3d-and-the-nexus-viewer)) |
+
 ## Setup
 
 Install the dependencies first: `npm install`.
@@ -133,7 +145,7 @@ to MATERIA's. Refs do not cross servers, so the tools write self-contained files
 **MATERIA (powder refinement).**
 
 - `instrument_parameters` writes the `.instprm` that MATERIA's `parse_instrument {path}` reads, and returns the same
-  values as MATERIA's `InstrumentParameters` JSON. For POWGEN frames it uses ORNL's published GSAS-II profiles; for
+  values as MATERIA's `InstrumentParameters` JSON. For POWGEN's 0.8, 1.5 and 2.665 Å frames it uses ORNL's published GSAS-II profiles (other frames get none); for
   NOMAD banks it gives the calibrated DIFC and a Gaussian width from the measured Δd/d but no exponential terms:
   MATERIA's powder page starts them from its defaults (α 1.5, β₀ 0.02); GSAS-II needs them added, or ORNL's own file.
 - Its `d_range` and `tof_range_us` give the fit range.
@@ -205,7 +217,7 @@ To add a tool: write it with `defineTool` in `src/agent/tools/`, add it to `NEXP
 
 ## Limits
 
-The tools have the app's limits (see the README). They give geometry and relative Bragg intensities only. They do
+The tools have the app's limits ([LIMITATIONS](LIMITATIONS.md)). They give geometry and relative Bragg intensities only. They do
 not model counting time, absolute intensity, detector efficiency, background, absorption and extinction corrections,
 or diffuse, magnetic or inelastic scattering. Detector positions are nominal. A plan from `suggest_settings` is a
 starting point, not an optimum. An agent can still misread a result, so check what you publish against the formulas
