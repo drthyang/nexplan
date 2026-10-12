@@ -301,6 +301,25 @@ describe("beams and materials", () => {
     expect(r.velocity).toBeCloseTo(2200, 0);
   });
 
+  it("checks λ = 2d sinθ when λ, d and 2θ are all given, and keeps X-rays X-rays", async () => {
+    // λ = 1 Å, d = 2 Å and 2θ = 60° disagree (2d sinθ = 2 Å): refused, not answered with a 2θ and a TOF from different rules.
+    expect(await fails("convert_units", { wavelength: 1, d: 2, two_theta: 60, flight_path: 20 })).toMatch(/λ = 2d sinθ/);
+    // Agreeing values: 2θ, DIFC and TOF all at 60°, and the TOF is the one λ gives over the flight path.
+    const r = await ok("convert_units", { wavelength: 1, d: 1, two_theta: 60, flight_path: 20 });
+    expect(r.two_theta).toBe(60);
+    expect(r.tof).toBeCloseTo(5055.6, 1);
+    expect(r.tof).toBeCloseTo(r.tof_per_metre_us * 20, 6);
+    // Values rounded as typed (Si 111 with Cu Kα1) still agree.
+    expect((await ok("convert_units", { wavelength: 1.5406, d: 3.1356, two_theta: 28.44 })).two_theta).toBe(28.44);
+    // radiation applies to a λ derived from d and 2θ, and refuses neutron quantities.
+    const x = await ok("convert_units", { radiation: "xray", d: 2, two_theta: 60 });
+    expect(x.wavelength).toBeCloseTo(2, 12);
+    expect(x.energy_kev).toBeCloseTo(6.1992, 4);
+    expect(x.energy_mev).toBeUndefined();
+    expect(await fails("convert_units", { radiation: "xray", energy_mev: 25.3 })).toMatch(/do not apply to X-rays/);
+    expect(await fails("convert_units", { radiation: "neutron", energy_kev: 8 })).toMatch(/X-ray energy/);
+  });
+
   it("compares with vanadium: its incoherent and absorption Σ are both ≈ 0.367 cm⁻¹", async () => {
     const r = await ok("scattering_power", { structure_id: "si", reference: "vanadium" });
     expect(r.reference.incoherent_cm).toBeCloseTo(0.367, 2);
