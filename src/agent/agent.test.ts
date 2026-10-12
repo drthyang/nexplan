@@ -330,6 +330,12 @@ describe("beams and materials", () => {
     expect(r.tof).toBeCloseTo(r.tof_per_metre_us * 20, 6);
     // Values rounded as typed (Si 111 with Cu Kα1) still agree.
     expect((await ok("convert_units", { wavelength: 1.5406, d: 3.1356, two_theta: 28.44 })).two_theta).toBe(28.44);
+    // A time of flight and a d typed together: rounded values agree to 0.1 % and are kept as given; a real mismatch is refused.
+    // At L = 20 m and 2θ = 90°, DIFC = 7149.65 µs/Å, so d = 2 Å is at 14299.3 µs.
+    const t = await ok("convert_units", { tof: 14299, flight_path: 20, two_theta: 90, d: 2 });
+    expect([t.d, t.tof, t.two_theta]).toEqual([2, 14299, 90]);
+    expect(t.difc).toBeCloseTo(7149.65, 2);
+    expect(await fails("convert_units", { tof: 14299, flight_path: 20, two_theta: 90, d: 2.01 })).toMatch(/tof at this flight path and 2θ gives d = 1\.999957 Å, not 2\.01 Å/);
     // radiation applies to a λ derived from d and 2θ, and refuses neutron quantities.
     const x = await ok("convert_units", { radiation: "xray", d: 2, two_theta: 60 });
     expect(x.wavelength).toBeCloseTo(2, 12);

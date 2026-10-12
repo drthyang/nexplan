@@ -86,7 +86,7 @@ export const convertUnits = defineTool({
   name: "convert_units",
   title: "Convert energy, wavelength, d, Q, 2θ and time of flight",
   description:
-    "Unit conversions with CODATA 2018 constants: a neutron energy (meV), velocity (m/s) or wavelength, or an X-ray energy (keV), to wavelength, energy, k and velocity; and a spacing (d, Q = 2π/d, or 2θ at the wavelength, or time of flight at a flight path and 2θ) to the others, with DIFC = (m_n/h)·L·2 sinθ. Give one beam quantity and/or one spacing quantity; λ, d and 2θ given together must agree (λ = 2d sinθ to 0.1 %).",
+    "Unit conversions with CODATA 2018 constants: a neutron energy (meV), velocity (m/s) or wavelength, or an X-ray energy (keV), to wavelength, energy, k and velocity; and a spacing (d, Q = 2π/d, or 2θ at the wavelength, or time of flight at a flight path and 2θ) to the others, with DIFC = (m_n/h)·L·2 sinθ. Give one beam quantity and/or one spacing quantity; λ, d and 2θ given together must agree (λ = 2d sinθ to 0.1 %), as must a time of flight and d (t = DIFC·d).",
   input: z.strictObject({
     radiation: z.enum(["neutron", "xray"]).optional().describe("The radiation of a wavelength, given or from d and 2θ (default neutron; energy_kev means X-rays)."),
     wavelength: z.number().positive().optional().describe("Å"),
@@ -118,8 +118,10 @@ export const convertUnits = defineTool({
       lambda = args.tof / (NEUTRON_MASS_OVER_H * args.flight_path);
       if (args.two_theta !== undefined) {
         const tofD = args.tof / difcFromGeometry(args.flight_path, args.two_theta);
-        if (d !== undefined && Math.abs(d - tofD) > 1e-9 * d) throw new ToolError(`tof at this flight path and 2θ gives d = ${tofD}, not the d given.`);
-        d = tofD;
+        // A d given too must agree (to 0.1 % of the d the tof gives, so the λ = 2d sinθ check below agrees); it is then kept as given.
+        if (d !== undefined && Math.abs(d - tofD) > 1e-3 * tofD)
+          throw new ToolError(`tof at this flight path and 2θ gives d = ${Number(tofD.toPrecision(7))} Å, not ${d} Å (they must agree to 0.1 %): give tof or d.`);
+        d ??= tofD;
       }
     }
     if (args.two_theta !== undefined) {
@@ -154,7 +156,9 @@ export const convertUnits = defineTool({
     if (args.flight_path !== undefined && args.two_theta !== undefined && !xray) {
       const difc = difcFromGeometry(args.flight_path, args.two_theta);
       out.difc = difc;
-      if (d !== undefined) out.tof = difc * d;
+      // A given time of flight as given; else the one d gives.
+      if (args.tof !== undefined) out.tof = args.tof;
+      else if (d !== undefined) out.tof = difc * d;
     }
     if (!Object.keys(out).length) throw new ToolError("Nothing to convert: give a wavelength or energy, and/or d, q or 2θ with a wavelength.");
     return { ...out, units: { wavelength: "Å", k: "1/Å (2π/λ)", energy_mev: "meV", energy_kev: "keV", velocity: "m/s", d: "Å", q: "1/Å", two_theta: "deg", tof: "µs", difc: "µs/Å" } };
