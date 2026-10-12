@@ -128,8 +128,8 @@ export function groupByD(refl: ReflectionList, sf: StructureFactors, ops: readon
 }
 
 /**
- * CW peaks: groups with d ≥ λ/2, Lorentz 1/(sin²θ cosθ) and the polarization factor. A line within 0.02° of
- * 2θ = 180° (cos θ < 1e-4) is left out: its Debye–Scherrer cone closes onto the incident beam, where the Lorentz
+ * CW peaks: groups with d ≥ λ/2, Lorentz 1/(sin²θ cosθ) and the polarization factor. A line within about 0.011°
+ * of 2θ = 180° (cos θ < 1e-4) is left out: its Debye–Scherrer cone closes onto the incident beam, where the Lorentz
  * factor diverges and no detector records.
  */
 export function cwPeaks(groups: readonly PeakGroup[], settings: PowderSettings): PowderPeak[] {

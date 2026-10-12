@@ -38,4 +38,4 @@ instrument definitions are pinned to. The transcription tests are in `src/core/m
 Mantid does not simulate powder intensities. The TOF powder line intensity Σ|F|²·d⁴·sin θ per unit solid angle is
 GSAS-II's Lorentz factor (see CONVENTIONS §7b and §10). Focused banks follow what Mantid's focusing does, with the
 standard groupings (see the instrument catalog for sources): pixels summed in d, divided by vanadium, then put on
-the bank's DIFC from its effective L2 and 2θ.
+the bank's DIFC: calibrated for NOMAD banks 0–4, otherwise from the bank's effective L2 and 2θ.

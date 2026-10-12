@@ -4,8 +4,9 @@ Frozen for NEXPLAN 0.1. Changing anything here is a breaking change and needs a 
 regression suite. Each item names the code that implements it and the test that holds it, and cites the
 literature it follows; full references are in [§12](#12-references).
 
-Revised 2026-10-06 after a code review that re-derived the formulas against the literature and the pinned upstream code
-(Mantid, GSAS-II, garnet-tools, PyChop, gemmi). Its changes are listed in [§13](#13-changes-from-the-2026-10-06-audit).
+Revised after a code review on 2026-10-06 that re-derived the formulas against the literature and the pinned upstream
+code (Mantid, GSAS-II, garnet-tools, PyChop, gemmi). Its changes, and later ones, are listed in
+[§13](#13-changes-from-the-2026-10-06-audit).
 
 ## 1. Units
 
@@ -104,7 +105,7 @@ F(h) = Σⱼ oⱼ · aⱼ(s) · exp(−Bⱼ s²) · exp(+2πi h·xⱼ)
   factor enters the intensity. Families (orbits under the point group, merged with Friedel mates when amplitudes are
   real) supply labels and multiplicities only.
 - **Lorentz factor.** L = 1/(sin²θ cosθ), for Debye–Scherrer and Bragg–Brentano (Warren 1969, ch. 4; ITC Vol. C
-  ch. 6.2; GSAS-II uses the same up to a constant). A line within 0.02° of 2θ = 180° (cos θ < 10⁻⁴) is left out:
+  ch. 6.2; GSAS-II uses the same up to a constant). A line within about 0.011° of 2θ = 180° (cos θ < 10⁻⁴) is left out:
   its cone closes onto the incident beam, where L diverges and nothing is recorded.
 - **Polarization (X-rays only):**
   - unpolarized: (1 + cos²2θ)/2;
@@ -263,11 +264,11 @@ F(h) = Σⱼ oⱼ · aⱼ(s) · exp(−Bⱼ s²) · exp(+2πi h·xⱼ)
     (≤ 5.4 pixels).
 - **Instruments:** TOPAZ (2022-11-21), CORELLI (2017-04-04), NOMAD (2022-05-05), POWGEN (2018-05-05), ARCS (2012-10-11),
   SEQUOIA (2019-04-04) and CNCS (2026-02-02) definitions at Mantid commit 67c2f43, generated into
-  `src/data/instruments.json` and loaded with the Instrument page.
+  `src/data/instruments.json` and loaded with the Detectors, Powder and Single-crystal pages.
 
 ## 10. Instrument simulations
 
-On the simulation pages (Detectors, Powder, Single crystal) for the SNS instrument chosen in the header (always
+On the Detectors, Powder and Single-crystal pages for the SNS instrument chosen in the header (always
 neutron scattering); code in
 `src/core/instrument/simulate.ts` and `src/core/instrument/powderRings.ts`.
 
@@ -285,8 +286,8 @@ neutron scattering); code in
   reflection can be recorded, optionally with its symmetry equivalents, as the free goniometer axes sweep their
   ranges.
   - Each point is coloured by its wavelength, λ = 2d sin θ at that pixel.
-  - White-beam instruments use a grid of settings: 1° steps, doubled for each extra free axis, each axis at most one
-    turn. A setting counts when λ = −2q_z/|q|² is in the band and k_f hits a panel.
+  - White-beam instruments use a grid of settings, each axis at most one turn: 1° steps with one free axis, 4° on
+    TOPAZ ambient's two (a 2° base, doubled for the extra axis). A setting counts when λ = −2q_z/|q|² is in the band and k_f hits a panel.
   - Chopper spectrometers use the exact Bragg crossings instead.
   - Tested: every point satisfies λ = 2d sin θ at the pixel it hits, and lies in the band.
 - **Exact coverage** (`src/core/instrument/coverage.ts`): per detector pixel, the pixel fixes q̂ ∝ u − ẑ and
@@ -565,7 +566,7 @@ Experiment planning
 - Nemhauser, G. L., Wolsey, L. A. & Fisher, M. L. (1978). An analysis of approximations for maximizing submodular set
   functions—I. *Math. Program.* 14, 265–294.
 
-Software (pinned commits in `data-sources/sources.json`)
+Software (at the commits given; the files fetched from them are pinned in `data-sources/sources.json`)
 
 - Arnold, O. et al. (2014). Mantid—Data analysis and visualization package for neutron scattering and μSR
   experiments. *Nucl. Instrum. Methods* A764, 156–166. Sources at commit `67c2f43` (instrument definitions,
