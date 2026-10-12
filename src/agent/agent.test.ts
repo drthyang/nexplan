@@ -353,6 +353,30 @@ describe("tools for MATERIA, NEBULA3D and the NeXus Viewer", () => {
     expect(sat.counts["systematic absence"]).toBeUndefined();
   });
 
+  it("put satellites at G ± m·k for reciprocal-lattice vectors G only, the origin included", async () => {
+    type Node = { hkl: number[]; class: string; of?: number[] };
+    const satellites = (r: { nodes: Node[] }) =>
+      r.nodes
+        .filter((n) => n.class === "satellite")
+        .map((n) => n.hkl.map((v) => Number(v.toFixed(4)) + 0).join(","))
+        .sort();
+    // Si is F-centred: of the integer nodes near this slice only (0,0,0), (±2,0,0), (0,±2,0) and (±2,±2,0) are lattice
+    // vectors, so k = (0.3,0,0) puts satellites at (±0.3,0,0) here, and none around the F-forbidden (±1,0,0) or (±1,±1,0).
+    const grid = { binning: ["-1.05,0.1,1.05", "-1.05,0.1,1.05", "-0.05,0.05"], q_convention: "crystallography" };
+    const si = await ok("bragg_positions", { structure_id: "si", grid, propagation_vectors: [[0.3, 0, 0]], limit: 5000 });
+    expect(satellites(si)).toEqual(["-0.3,0,0", "0.3,0,0"]);
+    expect(si.nodes.find((n: Node) => n.hkl.join() === "0.3,0,0").of).toEqual([0, 0, 0]);
+    // Quartz is primitive: (0,0,±1) is absent by the screw axis, not by centring, so it is still a parent.
+    await ok("load_structure", { bundled: "quartz" });
+    const line = { binning: ["-0.05,0.05", "-0.05,0.05", "-1.05,0.05,1.05"], q_convention: "crystallography" };
+    const qz = await ok("bragg_positions", { structure_id: "quartz", grid: line, propagation_vectors: [[0, 0, 1 / 3]], limit: 5000 });
+    expect(satellites(qz)).toEqual(["0,0,-0.3333", "0,0,-0.6667", "0,0,0.3333", "0,0,0.6667"]);
+    // Order 3 of a commensurate k reaches the origin from (0,0,±1): the origin is not a satellite.
+    const third = await ok("bragg_positions", { structure_id: "quartz", grid: line, propagation_vectors: [[0, 0, 1 / 3]], satellite_orders: 3, limit: 5000 });
+    expect(satellites(third)).toContain("0,0,0.3333");
+    expect(satellites(third)).not.toContain("0,0,0");
+  });
+
   it("map what a CORELLI scan records on a slice as the exact simulation does, and write it as .npy", async () => {
     const binning = ["-6.1,0.2,6.1", "-6.1,0.2,6.1", "-0.05,0.05"];
     const r = await ok("coverage_map", { structure_id: "si", instrument: "corelli", grid: { binning, q_convention: "crystallography" }, output_path: join(tmp, "cov.npy") });

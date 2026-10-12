@@ -78,7 +78,7 @@ The bundle needs Node 22.18 or later and the repository's `node_modules` (the MC
 | `suggest_binning` | Recorded HKL range as Mantid MDNorm binning (energy axis for chopper spectrometers). | Binning |
 | `instrument_parameters` | GSAS-II `.instprm` and MATERIA JSON for a NOMAD bank or POWGEN frame, with the d and TOF range it records. | — |
 | `laue_symmetry` | The Laue group as hkl operations, the NeXus Viewer preset it equals, centring conditions; checks a volume grid against it. | — |
-| `bragg_positions` | Allowed, forbidden and satellite nodes on a volume's grid, with grid coordinates and voxels. | — |
+| `bragg_positions` | Allowed and forbidden nodes on a volume's grid, and satellites G ± m·k about the lattice vectors G the centring allows (the origin included), with grid coordinates and voxels. | — |
 | `coverage_map` | What a plan records on a volume's grid, as a NumPy `.npy` count or mask array. | Single crystal: slice coverage |
 | `chopper_resolution` | ARCS, SEQUOIA, CNCS energy resolution (PyChop port) at Ei and transfers, per frequency. | Chopper controls |
 | `scattering_power` | Σ_coh, Σ_inc, Σ_abs, attenuation length and Bragg strength against a reference material. | Scattering power |
@@ -167,7 +167,7 @@ to MATERIA's. Refs do not cross servers, so the tools write self-contained files
   attribute take. With a grid it also checks the condition `GridSymmetry.for_volume` imposes: equal bins on mixed
   axes, symmetric ranges, and a bin at 0 for hexagonal operations.
 - `bragg_positions` (JSON) is a node prior for the Bragg punch: forbidden nodes that hold intensity, and satellites
-  from propagation vectors.
+  G ± m·k of propagation vectors k, about the lattice vectors G the centring allows, the origin included.
 - `coverage_map` with `array_order: "hkl"` and `values: "mask"` gives a measured-region mask on the
   `(nh, nk, nl)` grid, which separates unmeasured from punched space for the backfill and the ΔPDF support.
 - `suggest_binning` suggests the grid.
