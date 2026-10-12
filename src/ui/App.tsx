@@ -73,6 +73,8 @@ function readTheme(): Theme {
 }
 
 const README = "https://github.com/drthyang/nexplan#readme";
+/** What the tables and formulas are checked against (the notice's "Data provenance"). */
+const VALIDATION = "https://github.com/drthyang/nexplan/blob/main/docs/VALIDATION.md";
 
 export function App() {
   const [theme, setTheme] = useState<Theme>(readTheme);
@@ -336,7 +338,7 @@ export function App() {
           <div className="disclaimer" role="note">
             <span>
               <b>Work in progress</b> · tables cross-checked, not yet against print; check before publishing · files stay in your browser ·{" "}
-              <a href={README} target="_blank" rel="noreferrer">Data provenance</a>
+              <a href={VALIDATION} target="_blank" rel="noreferrer">Data provenance</a>
             </span>
             <button type="button" className="disclaimer__close" aria-label="Hide this notice" title="Hide this notice" onClick={hideNotice}>
               ×
