@@ -446,8 +446,8 @@ export const suggestBinningTool = defineTool({
     bin_d_min: z.number().positive().optional().describe("Bin only d ≥ this (Å); default the calculation's d_min."),
     slab: z.strictObject({ axis: z.number().int().min(0).max(2), centre: z.number(), thickness: z.number().positive() }).optional().describe("Integrate this axis (0–2) over a slab instead of binning it, for a slice."),
     q_convention: z.enum(["inelastic", "crystallography"]).optional().describe("Mantid's Q.convention: inelastic (Mantid's default; limits mirrored, as it labels NEXPLAN's h as −h) or crystallography."),
-    e_min: z.number().optional().describe("Chopper spectrometers: lowest energy transfer (meV); default −0.5 Ei."),
-    e_max: z.number().optional().describe("Chopper spectrometers: highest energy transfer (meV); default 0.99 Ei."),
+    e_min: z.number().optional().describe("Chopper spectrometers: lowest energy transfer (meV), below e_max; default −0.5 Ei."),
+    e_max: z.number().optional().describe("Chopper spectrometers: highest energy transfer (meV), below Ei; default 0.99 Ei."),
   }),
   annotations: { readOnlyHint: true, openWorldHint: false },
   async run(args, ctx) {
@@ -464,6 +464,10 @@ export const suggestBinningTool = defineTool({
     const eMin = args.e_min ?? Number((DGS_DEFAULT_ENERGY.min * ei).toPrecision(4));
     const eMax = args.e_max ?? Number((DGS_DEFAULT_ENERGY.max * ei).toPrecision(4));
     if (!s.mono && (args.e_min !== undefined || args.e_max !== undefined)) throw new ToolError("e_min and e_max apply to the chopper spectrometers.");
+    if (s.mono) {
+      if (!(eMin < eMax)) throw new ToolError(`e_min (${eMin} meV) must be below e_max (${eMax} meV${args.e_max === undefined ? ", the default 0.99 Ei" : ""}).`);
+      if (!(eMax < ei)) throw new ToolError(`e_max (${eMax} meV) must be below Ei = ${ei} meV: the neutron cannot give the sample more than its energy.`);
+    }
     const beam: Beam = s.mono ? { kind: "direct", eiMeV: ei, eMin, eMax: Math.min(eMax, 0.999 * ei) } : { kind: "white", lambdaMin: exp.lambdaMin, lambdaMax: exp.lambdaMax };
     const bins = suggestBinning(plan.settings.map((a) => goniometerMatrix(model, a)), plan.settings.map((a) => blockedAt(shadows, a)), panelSamples(panels, 6), beam, s.o.UB, W, args.step, { qMax: 1 / dMin });
     if (!bins) return { ...context(s, planNotes(model, plan)), message: "The plan records nothing with these masks, shadows and band." };

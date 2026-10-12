@@ -277,6 +277,17 @@ describe("single crystals", () => {
     expect(r.mdnorm_call).toMatch(/Dimension3Name="DeltaE"/);
     for (const a of r.axes) expect(a.bins).toBeGreaterThanOrEqual(201);
   });
+
+  it("refuses an energy-transfer range that is empty or reaches Ei", async () => {
+    const args = { structure_id: "si", instrument: "sequoia", ei_mev: 60, scan: { start: -30, end: 30, step: 2 } };
+    expect(await fails("suggest_binning", { ...args, e_min: 10, e_max: 5 })).toMatch(/e_min \(10 meV\) must be below e_max \(5 meV\)/);
+    // The default e_max is 0.99 Ei = 59.4 meV.
+    expect(await fails("suggest_binning", { ...args, e_min: 70 })).toMatch(/must be below e_max \(59\.4 meV, the default 0\.99 Ei\)/);
+    expect(await fails("suggest_binning", { ...args, e_max: 60 })).toMatch(/below Ei = 60 meV/);
+    // Rounded out to whole 0.6 meV steps (1 % of Ei).
+    const e = (await ok("suggest_binning", { ...args, e_min: -10, e_max: 50 })).energy_transfer;
+    expect([e.min, e.max, e.step]).toEqual([-10.2, 50.4, 0.6]);
+  });
 });
 
 describe("orientation", () => {
