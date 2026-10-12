@@ -57,7 +57,7 @@ export const axisRef = z.union([z.number().int().min(0), z.string()]).describe("
 export const anglesField = z
   .union([z.array(z.number()), z.record(z.string(), z.number())])
   .optional()
-  .describe('Goniometer angles (deg): one per axis in order, or by axis name ({"omega": 30}). Fixed axes keep their value; omitted axes are 0.');
+  .describe('Goniometer angles (deg): by axis name ({"omega": 30}), one per axis in order, or one per free axis (TOPAZ ambient: [omega, phi]). A fixed axis keeps its value (giving it another is an error); omitted axes are 0.');
 
 const maskField = z
   .strictObject({

@@ -73,18 +73,25 @@ export const describeGoniometer = (model: GoniometerModel) => ({
 });
 
 /**
- * Goniometer angles from a list (axis order) or a map by axis name, on top of `base` (default zeros); fixed axes
- * always take their fixed value.
+ * Goniometer angles from a list or a map by axis name, on top of `base` (default zeros). A list is in axis order,
+ * or, with as many angles as free axes but fewer than all, the free axes in order. A fixed axis keeps its value: given
+ * another, it is an error, not ignored. `what` names the angles in a message (e.g. "settings[2]").
  */
-export function resolveAngles(model: GoniometerModel, given: readonly number[] | Readonly<Record<string, number>> | undefined, base?: readonly number[]): number[] {
+export function resolveAngles(model: GoniometerModel, given: readonly number[] | Readonly<Record<string, number>> | undefined, base?: readonly number[], what?: string): number[] {
   const out = model.axes.map((ax, i) => ax.fixed ?? base?.[i] ?? 0);
+  const free = model.axes.flatMap((ax, i) => (ax.fixed === undefined ? [i] : []));
+  const names = model.axes.map((ax) => axisName(ax.name));
+  const set = (k: number, v: number) => {
+    const fixed = model.axes[k]!.fixed;
+    if (fixed === undefined) out[k] = v;
+    else if (Math.abs(v - fixed) > 1e-6)
+      throw new ToolError(`${what ? `${what}: ` : ""}${names[k]} is fixed at ${fixed}° on ${model.label}, not ${v}°. Give the free axes (${free.map((i) => names[i]).join(", ")}) by name or as a list of ${free.length}, or all ${model.axes.length} axes with ${names[k]} at ${fixed}.`);
+  };
   if (Array.isArray(given)) {
-    if (given.length > model.axes.length) throw new ToolError(`${given.length} angles given, but ${model.label} has ${model.axes.length} axes (${model.axes.map((ax) => axisName(ax.name)).join(", ") || "none"}).`);
-    given.forEach((v, i) => model.axes[i]!.fixed === undefined && (out[i] = v));
-  } else if (given) for (const [name, v] of Object.entries(given)) {
-    const k = axisIndex(model, name);
-    if (model.axes[k]!.fixed === undefined) out[k] = v;
-  }
+    if (given.length > model.axes.length) throw new ToolError(`${what ? `${what}: ` : ""}${given.length} angles given, but ${model.label} has ${model.axes.length} axes (${names.join(", ") || "none"}).`);
+    if (given.length === free.length && given.length < model.axes.length) given.forEach((v, j) => set(free[j]!, v));
+    else given.forEach((v, i) => set(i, v));
+  } else if (given) for (const [name, v] of Object.entries(given)) set(axisIndex(model, name), v);
   return out;
 }
 

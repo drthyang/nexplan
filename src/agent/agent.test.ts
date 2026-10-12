@@ -240,6 +240,24 @@ describe("single crystals", () => {
     await ok("configure_instrument", { instrument: "sequoia", clear: true });
   });
 
+  it("takes angles for the free axes only, and refuses a fixed axis set to another value", async () => {
+    // TOPAZ ambient: ω, χ fixed at 135°, φ. Two angles are the two free axes.
+    const at = async (angles: unknown) => (await ok("simulate_setting", { structure_id: "si", instrument: "topaz-ambient", angles, limit: 1 })).angles;
+    expect(await at([30, 60])).toEqual({ omega: 30, chi: 135, phi: 60 });
+    expect(await at([30, 135, 60])).toEqual({ omega: 30, chi: 135, phi: 60 });
+    expect(await at([30])).toEqual({ omega: 30, chi: 135, phi: 0 });
+    expect(await at({ omega: 10, chi: 135 })).toEqual({ omega: 10, chi: 135, phi: 0 });
+    expect(await fails("simulate_setting", { structure_id: "si", instrument: "topaz-ambient", angles: { chi: 90 } })).toMatch(/chi is fixed at 135° on TOPAZ ambient/);
+    expect(await fails("simulate_setting", { structure_id: "si", instrument: "topaz-ambient", angles: [30, 90, 60] })).toMatch(/chi is fixed at 135°/);
+    expect(await fails("simulate_setting", { structure_id: "si", instrument: "topaz-ambient", angles: [1, 2, 3, 4] })).toMatch(/4 angles given/);
+    // The same rule for orientation lists, the settings already measured and a scan's other axes.
+    expect(await fails("simulate_plan", { structure_id: "si", instrument: "topaz-ambient", settings: [[30, 60], { chi: 0 }] })).toMatch(/settings\[1\]: chi is fixed/);
+    expect(await fails("suggest_settings", { structure_id: "si", instrument: "topaz-ambient", existing: [[0, 90, 0]], n: 1 })).toMatch(/existing\[0\]: chi is fixed/);
+    expect(await fails("simulate_plan", { structure_id: "si", instrument: "topaz-ambient", angles: { chi: 0 }, scan: { axis: "phi", start: 0, end: 30, step: 10 } })).toMatch(/chi is fixed/);
+    const plan = await ok("simulate_plan", { structure_id: "si", instrument: "topaz-ambient", settings: [[30, 60]] });
+    expect(plan.steps[0].angles).toEqual({ omega: 30, chi: 135, phi: 60 });
+  });
+
   it("refuses arguments it does not know, rather than ignoring them", async () => {
     expect(await fails("simulate_setting", { structure_id: "si", instrument: "corelli", masks: { panels_off: [] } })).toMatch(/masks/);
     expect(await fails("simulate_setting", { structure_id: "si", instrument: "corelli", orientation: { ub_file: "x.mat" } })).toMatch(/ub_file/);

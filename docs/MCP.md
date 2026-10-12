@@ -102,8 +102,8 @@ The server also gives `docs/CONVENTIONS.md` as the resource `nexplan://docs/conv
   `configure_instrument`, as the web app's Detectors page sets them for every page; results say when they apply. These
   are the app's own state functions, so they are validated the same way.
 - **Arguments.** Unknown arguments are refused, not ignored, so a misspelt field is an error.
-- **Angles.** Per axis in order (`[30, 135, 60]`) or by name (`{"omega": 30, "phi": 60}`); fixed axes keep their
-  value.
+- **Angles.** Per axis in order (`[30, 135, 60]`), per free axis (`[30, 60]` on TOPAZ ambient) or by name
+  (`{"omega": 30, "phi": 60}`). A fixed axis keeps its value; giving it another is an error.
 - **Files.** Inputs (CIF, ISAW UB, Mantid mask XML) are read from the local disk, up to 20 MB. `output_path` writes
   CSV, JSON, ISAW, `.instprm` or `.npy` files and overwrites an existing file. Relative paths start from the directory the client started the
   server in; `~` is the home directory.

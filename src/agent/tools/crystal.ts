@@ -217,7 +217,7 @@ export function resolvePlan(ins: ResolvedInstrument, args: { angles?: z.infer<ty
   const base = resolveAngles(model, args.angles);
   if (args.settings) {
     if (!args.settings.length) throw new ToolError("settings is empty.");
-    return { kind: "list" as const, base, settings: args.settings.map((a) => resolveAngles(model, a)) };
+    return { kind: "list" as const, base, settings: args.settings.map((a, k) => resolveAngles(model, a, undefined, `settings[${k}]`)) };
   }
   const free = model.axes.flatMap((ax, i) => (ax.fixed === undefined ? [i] : []));
   const usual = preset.plan?.kind === "scan" ? preset.plan : undefined;
@@ -380,7 +380,7 @@ export const suggestSettingsTool = defineTool({
     const targets = wantedTargets(s, args.wanted ?? []);
     const n = args.n ?? 10;
     const goal: PlanGoal = args.goal ?? "coverage";
-    const existing = (args.existing ?? []).map((a) => resolveAngles(model, a));
+    const existing = (args.existing ?? []).map((a, k) => resolveAngles(model, a, undefined, `existing[${k}]`));
     const placement = { bandFraction: args.placement?.band_fraction ?? DEFAULT_PLACEMENT.bandFraction, edgeFraction: args.placement?.edge_fraction ?? DEFAULT_PLACEMENT.edgeFraction };
     const res = suggestSettings({
       model,
