@@ -73,26 +73,37 @@ export const describeGoniometer = (model: GoniometerModel) => ({
 });
 
 /**
- * Goniometer angles from a list (axis order) or a map by axis name, on top of `base` (default zeros); fixed axes
- * always take their fixed value.
+ * Goniometer angles from a list or a map by axis name, on top of `base` (default zeros). A list is in axis order,
+ * or, with as many angles as free axes but fewer than all, the free axes in order. A fixed axis keeps its value: given
+ * another, it is an error, not ignored. `what` names the angles in a message (e.g. "settings[2]").
  */
-export function resolveAngles(model: GoniometerModel, given: readonly number[] | Readonly<Record<string, number>> | undefined, base?: readonly number[]): number[] {
+export function resolveAngles(model: GoniometerModel, given: readonly number[] | Readonly<Record<string, number>> | undefined, base?: readonly number[], what?: string): number[] {
   const out = model.axes.map((ax, i) => ax.fixed ?? base?.[i] ?? 0);
+  const free = model.axes.flatMap((ax, i) => (ax.fixed === undefined ? [i] : []));
+  const names = model.axes.map((ax) => axisName(ax.name));
+  const set = (k: number, v: number) => {
+    const fixed = model.axes[k]!.fixed;
+    if (fixed === undefined) out[k] = v;
+    else if (Math.abs(v - fixed) > 1e-6)
+      throw new ToolError(`${what ? `${what}: ` : ""}${names[k]} is fixed at ${fixed}° on ${model.label}, not ${v}°. Give the free axes (${free.map((i) => names[i]).join(", ")}) by name or as a list of ${free.length}, or all ${model.axes.length} axes with ${names[k]} at ${fixed}.`);
+  };
   if (Array.isArray(given)) {
-    if (given.length > model.axes.length) throw new ToolError(`${given.length} angles given, but ${model.label} has ${model.axes.length} axes (${model.axes.map((ax) => axisName(ax.name)).join(", ") || "none"}).`);
-    given.forEach((v, i) => model.axes[i]!.fixed === undefined && (out[i] = v));
-  } else if (given) for (const [name, v] of Object.entries(given)) {
-    const k = axisIndex(model, name);
-    if (model.axes[k]!.fixed === undefined) out[k] = v;
-  }
+    if (given.length > model.axes.length) throw new ToolError(`${what ? `${what}: ` : ""}${given.length} angles given, but ${model.label} has ${model.axes.length} axes (${names.join(", ") || "none"}).`);
+    if (given.length === free.length && given.length < model.axes.length) given.forEach((v, j) => set(free[j]!, v));
+    else given.forEach((v, i) => set(i, v));
+  } else if (given) for (const [name, v] of Object.entries(given)) set(axisIndex(model, name), v);
   return out;
 }
 
-/** Notes for angles outside a free axis's range (a full turn wraps, a narrower range is a limit). */
+/**
+ * Notes for angles outside a free axis's range (a full turn wraps, a narrower range is a limit). Angles a turn apart
+ * are one orientation, so 350° is inside −30° to 30°.
+ */
 export function angleWarnings(model: GoniometerModel, angles: readonly number[]): string[] {
   return model.axes.flatMap((ax, i) => {
     const v = angles[i]!;
-    if (ax.fixed !== undefined || ax.max - ax.min >= 360 || (v >= ax.min - 1e-9 && v <= ax.max + 1e-9)) return [];
+    const above = (((v - ax.min) % 360) + 360) % 360;
+    if (ax.fixed !== undefined || ax.max - ax.min >= 360 || above <= ax.max - ax.min + 1e-9 || above >= 360 - 1e-9) return [];
     return [`${axisName(ax.name)} = ${v}° is outside its range ${ax.min}° to ${ax.max}°.`];
   });
 }
@@ -157,7 +168,11 @@ export async function resolveInstrument(given: InstrumentArgs, workspace?: Works
   const catalog = SNS_INSTRUMENTS.find((i) => i.id === id)!;
   for (const lim of args.goniometer_limits ?? []) {
     const k = axisIndex(catalog.goniometer, lim.axis);
-    if (catalog.goniometer.axes[k]!.fixed !== undefined) throw new ToolError(`${axisName(catalog.goniometer.axes[k]!.name)} is fixed on ${entry.label}; only free axes take limits.`);
+    const name = axisName(catalog.goniometer.axes[k]!.name);
+    if (catalog.goniometer.axes[k]!.fixed !== undefined) throw new ToolError(`${name} is fixed on ${entry.label}; only free axes take limits.`);
+    // Not swapped: 330° to 30° more likely means the range through 0° than 30° to 330°.
+    if (!(lim.min <= lim.max))
+      throw new ToolError(`${name} limits: min ${lim.min}° is above max ${lim.max}°. Give min ≤ max; a range through 0° takes a negative min (${lim.min - 360} to ${lim.max} for ${lim.min}° round to ${lim.max}°).`);
     exp = withLimits(exp, k, [lim.min, lim.max]);
   }
 

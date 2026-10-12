@@ -146,6 +146,14 @@ describe("single crystals", () => {
     expect(at.checked[0].panel).toBe(found.best.panel);
   });
 
+  it("searches a 2° grid with two free axes and 1° with one, as its description says", async () => {
+    // A 1° base doubled once for the second free axis: 180 × 180 settings on TOPAZ ambient, 360 on TOPAZ cryogenic.
+    const two = await ok("find_setting", { structure_id: "si", instrument: "topaz-ambient", hkl: [2, 2, 0] });
+    expect(two.reach).toMatchObject({ grid_step_deg: 2, settings_searched: 180 * 180 });
+    const one = await ok("find_setting", { structure_id: "si", instrument: "topaz-cryo", hkl: [2, 2, 0] });
+    expect(one.reach).toMatchObject({ grid_step_deg: 1, settings_searched: 360 });
+  });
+
   it("says why an unreachable reflection cannot be recorded", async () => {
     const r = await ok("find_setting", { structure_id: "si", instrument: "topaz-cryo", hkl: [28, 0, 0] });
     expect(r.found).toBe(false);
@@ -197,6 +205,67 @@ describe("single crystals", () => {
     await ok("configure_instrument", { instrument: "corelli", clear: true });
   });
 
+  it("refuses a goniometer limit with min above max, rather than taking the opposite range", async () => {
+    // 330° to 30° meant through 0°, not 30° to 330°: the caller writes it as -30 to 30.
+    const msg = await fails("configure_instrument", { instrument: "corelli", goniometer_limits: [{ axis: "omega", min: 330, max: 30 }] });
+    expect(msg).toMatch(/min 330° is above max 30°/);
+    expect(msg).toMatch(/-30 to 30/);
+    expect((await ok("configure_instrument", { instrument: "corelli" })).set).toMatch(/^nothing/);
+    // The range through 0° itself is accepted, and the searches stay inside it.
+    await ok("configure_instrument", { instrument: "corelli", goniometer_limits: [{ axis: "omega", min: -30, max: 30 }] });
+    const r = await ok("find_setting", { structure_id: "si", instrument: "corelli", hkl: [2, 2, 0] });
+    expect(Math.abs(r.best.angles.omega)).toBeLessThanOrEqual(30);
+    // A shadow turning with ω is reported where it is evaluated: ω at its nearest limit, not at zero.
+    const sh = await ok("configure_instrument", { instrument: "corelli", goniometer_limits: [{ axis: "omega", min: 30, max: 90 }], shadows: [{ kind: "sector", gamma: 90, half_width: 10, turns_with: 0 }] });
+    expect(sh.shadows_at).toMatch(/omega 30°/);
+    await ok("configure_instrument", { instrument: "corelli", clear: true });
+  });
+
+  it("keeps the usual scan inside the goniometer limits, and warns about plans outside them", async () => {
+    const grid = { binning: ["-6.1,0.2,6.1", "-6.1,0.2,6.1", "-0.05,0.05"] };
+    await ok("configure_instrument", { instrument: "corelli", goniometer_limits: [{ axis: "omega", min: 0, max: 90 }] });
+    const plan = await ok("simulate_plan", { structure_id: "si", instrument: "corelli" });
+    expect(plan.plan).toMatchObject({ kind: "rotation scan", start: 0, end: 90, step: 3, settings: 31 });
+    expect(plan.notes.join(" ")).toMatch(/usual scan.*0–357°.*omega limits 0–90°/);
+    const bins = await ok("suggest_binning", { structure_id: "si", instrument: "corelli" });
+    expect(bins.plan).toBe("scan of omega 0–90° in 3° steps");
+    expect((await ok("coverage_map", { structure_id: "si", instrument: "corelli", grid })).plan).toBe("scan of omega 0–90° in 3° steps");
+    // A plan given outside the limits is kept, with a warning, as simulate_plan does.
+    const scan = { start: 120, end: 180, step: 10 };
+    expect((await ok("suggest_binning", { structure_id: "si", instrument: "corelli", scan })).notes.join(" ")).toMatch(/omega = 120° is outside its range 0° to 90°/);
+    expect((await ok("coverage_map", { structure_id: "si", instrument: "corelli", scan, grid })).notes.join(" ")).toMatch(/outside its range/);
+    // A range through 0°: a full-turn scan takes the whole of it, on its own 3° grid.
+    await ok("configure_instrument", { instrument: "corelli", goniometer_limits: [{ axis: "omega", min: -30, max: 30 }] });
+    expect((await ok("simulate_plan", { structure_id: "si", instrument: "corelli" })).plan).toMatchObject({ start: -30, end: 30, settings: 21 });
+    // ω = 350° is ω = −10°, inside −30° to 30°.
+    expect(((await ok("simulate_setting", { structure_id: "si", instrument: "corelli", angles: [350] })).notes ?? []).join(" ")).not.toMatch(/outside its range/);
+    await ok("configure_instrument", { instrument: "corelli", clear: true });
+    // A partial scan (the chopper spectrometers' ψ, −90° to 90°) is cut to the limits, and refused when none of it is inside.
+    await ok("configure_instrument", { instrument: "sequoia", goniometer_limits: [{ axis: "psi", min: 0, max: 60 }] });
+    expect((await ok("simulate_plan", { structure_id: "si", instrument: "sequoia" })).plan).toMatchObject({ start: 0, end: 60, step: 1, settings: 61 });
+    await ok("configure_instrument", { instrument: "sequoia", goniometer_limits: [{ axis: "psi", min: 100, max: 200 }] });
+    expect(await fails("simulate_plan", { structure_id: "si", instrument: "sequoia" })).toMatch(/usual scan.*has no step inside the psi limits 100–200°/);
+    await ok("configure_instrument", { instrument: "sequoia", clear: true });
+  });
+
+  it("takes angles for the free axes only, and refuses a fixed axis set to another value", async () => {
+    // TOPAZ ambient: ω, χ fixed at 135°, φ. Two angles are the two free axes.
+    const at = async (angles: unknown) => (await ok("simulate_setting", { structure_id: "si", instrument: "topaz-ambient", angles, limit: 1 })).angles;
+    expect(await at([30, 60])).toEqual({ omega: 30, chi: 135, phi: 60 });
+    expect(await at([30, 135, 60])).toEqual({ omega: 30, chi: 135, phi: 60 });
+    expect(await at([30])).toEqual({ omega: 30, chi: 135, phi: 0 });
+    expect(await at({ omega: 10, chi: 135 })).toEqual({ omega: 10, chi: 135, phi: 0 });
+    expect(await fails("simulate_setting", { structure_id: "si", instrument: "topaz-ambient", angles: { chi: 90 } })).toMatch(/chi is fixed at 135° on TOPAZ ambient/);
+    expect(await fails("simulate_setting", { structure_id: "si", instrument: "topaz-ambient", angles: [30, 90, 60] })).toMatch(/chi is fixed at 135°/);
+    expect(await fails("simulate_setting", { structure_id: "si", instrument: "topaz-ambient", angles: [1, 2, 3, 4] })).toMatch(/4 angles given/);
+    // The same rule for orientation lists, the settings already measured and a scan's other axes.
+    expect(await fails("simulate_plan", { structure_id: "si", instrument: "topaz-ambient", settings: [[30, 60], { chi: 0 }] })).toMatch(/settings\[1\]: chi is fixed/);
+    expect(await fails("suggest_settings", { structure_id: "si", instrument: "topaz-ambient", existing: [[0, 90, 0]], n: 1 })).toMatch(/existing\[0\]: chi is fixed/);
+    expect(await fails("simulate_plan", { structure_id: "si", instrument: "topaz-ambient", angles: { chi: 0 }, scan: { axis: "phi", start: 0, end: 30, step: 10 } })).toMatch(/chi is fixed/);
+    const plan = await ok("simulate_plan", { structure_id: "si", instrument: "topaz-ambient", settings: [[30, 60]] });
+    expect(plan.steps[0].angles).toEqual({ omega: 30, chi: 135, phi: 60 });
+  });
+
   it("refuses arguments it does not know, rather than ignoring them", async () => {
     expect(await fails("simulate_setting", { structure_id: "si", instrument: "corelli", masks: { panels_off: [] } })).toMatch(/masks/);
     expect(await fails("simulate_setting", { structure_id: "si", instrument: "corelli", orientation: { ub_file: "x.mat" } })).toMatch(/ub_file/);
@@ -207,6 +276,17 @@ describe("single crystals", () => {
     expect(r.energy_transfer).toMatchObject({ min: -30, step: 0.6 });
     expect(r.mdnorm_call).toMatch(/Dimension3Name="DeltaE"/);
     for (const a of r.axes) expect(a.bins).toBeGreaterThanOrEqual(201);
+  });
+
+  it("refuses an energy-transfer range that is empty or reaches Ei", async () => {
+    const args = { structure_id: "si", instrument: "sequoia", ei_mev: 60, scan: { start: -30, end: 30, step: 2 } };
+    expect(await fails("suggest_binning", { ...args, e_min: 10, e_max: 5 })).toMatch(/e_min \(10 meV\) must be below e_max \(5 meV\)/);
+    // The default e_max is 0.99 Ei = 59.4 meV.
+    expect(await fails("suggest_binning", { ...args, e_min: 70 })).toMatch(/must be below e_max \(59\.4 meV, the default 0\.99 Ei\)/);
+    expect(await fails("suggest_binning", { ...args, e_max: 60 })).toMatch(/below Ei = 60 meV/);
+    // Rounded out to whole 0.6 meV steps (1 % of Ei).
+    const e = (await ok("suggest_binning", { ...args, e_min: -10, e_max: 50 })).energy_transfer;
+    expect([e.min, e.max, e.step]).toEqual([-10.2, 50.4, 0.6]);
   });
 });
 
@@ -238,6 +318,25 @@ describe("beams and materials", () => {
     const r = await ok("convert_units", { energy_mev: 25.3 });
     expect(r.wavelength).toBeCloseTo(1.798, 3);
     expect(r.velocity).toBeCloseTo(2200, 0);
+  });
+
+  it("checks λ = 2d sinθ when λ, d and 2θ are all given, and keeps X-rays X-rays", async () => {
+    // λ = 1 Å, d = 2 Å and 2θ = 60° disagree (2d sinθ = 2 Å): refused, not answered with a 2θ and a TOF from different rules.
+    expect(await fails("convert_units", { wavelength: 1, d: 2, two_theta: 60, flight_path: 20 })).toMatch(/λ = 2d sinθ/);
+    // Agreeing values: 2θ, DIFC and TOF all at 60°, and the TOF is the one λ gives over the flight path.
+    const r = await ok("convert_units", { wavelength: 1, d: 1, two_theta: 60, flight_path: 20 });
+    expect(r.two_theta).toBe(60);
+    expect(r.tof).toBeCloseTo(5055.6, 1);
+    expect(r.tof).toBeCloseTo(r.tof_per_metre_us * 20, 6);
+    // Values rounded as typed (Si 111 with Cu Kα1) still agree.
+    expect((await ok("convert_units", { wavelength: 1.5406, d: 3.1356, two_theta: 28.44 })).two_theta).toBe(28.44);
+    // radiation applies to a λ derived from d and 2θ, and refuses neutron quantities.
+    const x = await ok("convert_units", { radiation: "xray", d: 2, two_theta: 60 });
+    expect(x.wavelength).toBeCloseTo(2, 12);
+    expect(x.energy_kev).toBeCloseTo(6.1992, 4);
+    expect(x.energy_mev).toBeUndefined();
+    expect(await fails("convert_units", { radiation: "xray", energy_mev: 25.3 })).toMatch(/do not apply to X-rays/);
+    expect(await fails("convert_units", { radiation: "neutron", energy_kev: 8 })).toMatch(/X-ray energy/);
   });
 
   it("compares with vanadium: its incoherent and absorption Σ are both ≈ 0.367 cm⁻¹", async () => {
@@ -351,6 +450,30 @@ describe("tools for MATERIA, NEBULA3D and the NeXus Viewer", () => {
     const sat = await ok("bragg_positions", { structure_id: "si", grid, include: "present", propagation_vectors: [[0.5, 0, 0]], limit: 5000 });
     expect(sat.counts.satellite).toBeGreaterThan(0);
     expect(sat.counts["systematic absence"]).toBeUndefined();
+  });
+
+  it("put satellites at G ± m·k for reciprocal-lattice vectors G only, the origin included", async () => {
+    type Node = { hkl: number[]; class: string; of?: number[] };
+    const satellites = (r: { nodes: Node[] }) =>
+      r.nodes
+        .filter((n) => n.class === "satellite")
+        .map((n) => n.hkl.map((v) => Number(v.toFixed(4)) + 0).join(","))
+        .sort();
+    // Si is F-centred: of the integer nodes near this slice only (0,0,0), (±2,0,0), (0,±2,0) and (±2,±2,0) are lattice
+    // vectors, so k = (0.3,0,0) puts satellites at (±0.3,0,0) here, and none around the F-forbidden (±1,0,0) or (±1,±1,0).
+    const grid = { binning: ["-1.05,0.1,1.05", "-1.05,0.1,1.05", "-0.05,0.05"], q_convention: "crystallography" };
+    const si = await ok("bragg_positions", { structure_id: "si", grid, propagation_vectors: [[0.3, 0, 0]], limit: 5000 });
+    expect(satellites(si)).toEqual(["-0.3,0,0", "0.3,0,0"]);
+    expect(si.nodes.find((n: Node) => n.hkl.join() === "0.3,0,0").of).toEqual([0, 0, 0]);
+    // Quartz is primitive: (0,0,±1) is absent by the screw axis, not by centring, so it is still a parent.
+    await ok("load_structure", { bundled: "quartz" });
+    const line = { binning: ["-0.05,0.05", "-0.05,0.05", "-1.05,0.05,1.05"], q_convention: "crystallography" };
+    const qz = await ok("bragg_positions", { structure_id: "quartz", grid: line, propagation_vectors: [[0, 0, 1 / 3]], limit: 5000 });
+    expect(satellites(qz)).toEqual(["0,0,-0.3333", "0,0,-0.6667", "0,0,0.3333", "0,0,0.6667"]);
+    // Order 3 of a commensurate k reaches the origin from (0,0,±1): the origin is not a satellite.
+    const third = await ok("bragg_positions", { structure_id: "quartz", grid: line, propagation_vectors: [[0, 0, 1 / 3]], satellite_orders: 3, limit: 5000 });
+    expect(satellites(third)).toContain("0,0,0.3333");
+    expect(satellites(third)).not.toContain("0,0,0");
   });
 
   it("map what a CORELLI scan records on a slice as the exact simulation does, and write it as .npy", async () => {

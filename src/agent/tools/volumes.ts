@@ -17,7 +17,7 @@ import type { CalcSuccess } from "../../app/compute.ts";
 import { directionTable, recordedCounts } from "../../core/instrument/directionTable.ts";
 import { braggCrossings } from "../../core/instrument/simulate.ts";
 import { centringConditions, formatHklOp, laueClassName, laueGroupHkl, matchViewerPreset } from "../../core/symmetry/laue.ts";
-import { isSystematicallyAbsent, parseSymOp, type IntMat3, type SymOp } from "../../core/symmetry/ops.ts";
+import { centringVectors, isSystematicallyAbsent, parseSymOp, TDEN, type IntMat3, type SymOp } from "../../core/symmetry/ops.ts";
 import { findByHM, SETTINGS, settingOps } from "../../core/symmetry/spaceGroups.ts";
 import { npyBytes } from "../../io/npy.ts";
 import { axisName, beamSummary, resolveInstrument } from "../instrument.ts";
@@ -25,7 +25,7 @@ import { resolveOrientation } from "../orientation.ts";
 import { dMinField, instrumentFields, limitField, orientationField, outputPath, planFields, structureId, vec3, writeBinary, writeText } from "../shared.ts";
 import { defineTool, ToolError, type ToolContext } from "../tool.ts";
 import { DEFAULT_D_MIN, DEFAULT_WAVELENGTH } from "../workspace.ts";
-import { resolvePlan } from "./crystal.ts";
+import { planNotes, resolvePlan } from "./crystal.ts";
 
 const TWO_PI = 2 * Math.PI;
 
@@ -200,14 +200,14 @@ export const braggPositions = defineTool({
   name: "bragg_positions",
   title: "Bragg nodes on a volume's grid",
   description:
-    "Every integer reciprocal-lattice node of the structure inside a volume's grid, with its grid coordinates and voxel, d, |Q| (with 2π), |F|² and whether it is present, systematically absent (forbidden by the space group: intensity there is λ/2, multiple scattering, a lower symmetry or a superlattice) or accidentally absent (|F| ≈ 0); optionally the satellites at ±m·k of propagation vectors. " +
+    "Every integer reciprocal-lattice node of the structure inside a volume's grid, with its grid coordinates and voxel, d, |Q| (with 2π), |F|² and whether it is present, systematically absent (forbidden by the space group: intensity there is λ/2, multiple scattering, a lower symmetry or a superlattice) or accidentally absent (|F| ≈ 0); optionally the satellites G ± m·k of propagation vectors k, about every reciprocal-lattice vector G the centring allows (the origin included; a node absent only by a glide or screw is such a G). " +
     "For marking Bragg peaks on NeXus Viewer slices, as a node prior for NEBULA3D's Bragg punch, or to tell superlattice peaks from diffuse scattering. Writes the full list as CSV or JSON.",
   input: z.strictObject({
     structure_id: structureId,
     grid: gridField,
     d_min: dMinField,
     include: z.enum(["all", "present"]).optional().describe("all (default): absent nodes too, flagged; present: only present ones."),
-    propagation_vectors: z.array(vec3).optional().describe("Satellite positions h ± m·k (r.l.u.), e.g. [[0.5,0,0]] or [[0,0,0.333]]; no satellite intensity is computed."),
+    propagation_vectors: z.array(vec3).optional().describe("Propagation vectors k (r.l.u.), e.g. [[0.5,0,0]] or [[0,0,0.333]]: satellites at G ± m·k for the centring-allowed nodes G, the origin included; no satellite intensity is computed."),
     satellite_orders: z.number().int().min(1).max(4).optional().describe("Satellite orders m (default 1)."),
     limit: limitField(200, 20000),
     output_path: outputPath.describe("Write every node: CSV for a .csv path, otherwise JSON with the grid. Overwritten if it exists."),
@@ -239,14 +239,18 @@ export const braggPositions = defineTool({
     const nodes: Record<string, unknown>[] = [];
     const counts: Record<string, number> = {};
     const seen = new Set<string>();
+    // Satellites sit at G ± m·k for reciprocal-lattice vectors G: the integer nodes the centring allows (h·t integer for
+    // every centring vector t), the origin included. A node absent only by a glide or screw is still such a G.
+    const centring = centringVectors(ops).filter((t) => t.some((v) => v !== 0));
+    const latticeVector = (h: number, k: number, l: number) => centring.every((t) => (h * t[0] + k * t[1] + l * t[2]) % TDEN === 0);
     for (let h = lo[0]!; h <= hi[0]!; h++)
       for (let k = lo[1]!; k <= hi[1]!; k++)
         for (let l = lo[2]!; l <= hi[2]!; l++) {
-          if (!h && !k && !l) continue;
+          const origin = !h && !k && !l;
           const hkl = [h, k, l];
           const d = dSpacing(cell, h, k, l);
           const x = xOf(g, hkl);
-          if (inside(x)) {
+          if (!origin && inside(x)) {
             const i = at.get(`${h},${k},${l}`);
             const cls: string = i !== undefined ? CLASS[R.cls[i]!]! : isSystematicallyAbsent(ops, [h, k, l]) ? "systematic absence" : "beyond d_min";
             if (args.include !== "present" || cls === "present") {
@@ -254,10 +258,13 @@ export const braggPositions = defineTool({
               nodes.push({ hkl, grid: x, voxel: voxel(x), d, q: TWO_PI / d, ...(i !== undefined ? { f2: R.f2[i]!, relative: strongest > 0 ? (100 * R.f2[i]!) / strongest : 0 } : {}), class: cls });
             }
           }
+          if (!ks.length || !latticeVector(h, k, l)) continue;
           for (const kv of ks)
             for (let m = 1; m <= orders; m++)
               for (const s of [1, -1]) {
                 const p = [h + s * m * kv[0]!, k + s * m * kv[1]!, l + s * m * kv[2]!];
+                // A commensurate k can lead back to the origin (e.g. 3·(0,0,⅓) from (0,0,1)): not a satellite.
+                if (p.every((v) => Math.abs(v) < 1e-9)) continue;
                 const xs = xOf(g, p);
                 if (!inside(xs)) continue;
                 // A commensurate k reaches one position from several parents: list it once.
@@ -382,6 +389,7 @@ export const coverageMap = defineTool({
     const written = args.output_path ? await writeBinary(args.output_path, npyBytes(out, shape)) : undefined;
     let maxCount = 0;
     for (const c of counts) maxCount = Math.max(maxCount, c);
+    const notes = [...ins.notes, ...o.warnings, ...planNotes(model, plan)];
     return {
       instrument: ins.preset.label,
       beam: beamSummary(ins),
@@ -394,7 +402,7 @@ export const coverageMap = defineTool({
       most_recordings: maxCount,
       array: { values: mask ? "uint8, 1 = recorded" : "uint16, settings recording the voxel", order, shape },
       ...(written ? { written } : { note: "Give output_path to write the array." }),
-      ...([...ins.notes, ...o.warnings].length ? { notes: [...ins.notes, ...o.warnings] } : {}),
+      ...(notes.length ? { notes } : {}),
     };
   },
 });

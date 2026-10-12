@@ -86,9 +86,9 @@ export const convertUnits = defineTool({
   name: "convert_units",
   title: "Convert energy, wavelength, d, Q, 2θ and time of flight",
   description:
-    "Unit conversions with CODATA 2018 constants: a neutron energy (meV), velocity (m/s) or wavelength, or an X-ray energy (keV), to wavelength, energy, k and velocity; and a spacing (d, Q = 2π/d, or 2θ at the wavelength, or time of flight at a flight path and 2θ) to the others, with DIFC = (m_n/h)·L·2 sinθ. Give one beam quantity and/or one spacing quantity.",
+    "Unit conversions with CODATA 2018 constants: a neutron energy (meV), velocity (m/s) or wavelength, or an X-ray energy (keV), to wavelength, energy, k and velocity; and a spacing (d, Q = 2π/d, or 2θ at the wavelength, or time of flight at a flight path and 2θ) to the others, with DIFC = (m_n/h)·L·2 sinθ. Give one beam quantity and/or one spacing quantity; λ, d and 2θ given together must agree (λ = 2d sinθ to 0.1 %).",
   input: z.strictObject({
-    radiation: z.enum(["neutron", "xray"]).optional().describe("For a bare wavelength: which radiation (default neutron)."),
+    radiation: z.enum(["neutron", "xray"]).optional().describe("The radiation of a wavelength, given or from d and 2θ (default neutron; energy_kev means X-rays)."),
     wavelength: z.number().positive().optional().describe("Å"),
     energy_mev: z.number().positive().optional().describe("Neutron energy (meV)."),
     velocity: z.number().positive().optional().describe("Neutron velocity (m/s)."),
@@ -105,8 +105,9 @@ export const convertUnits = defineTool({
     if (beams > 1) throw new ToolError("Give one of wavelength, energy_mev, velocity, energy_kev.");
     const spacings = [args.d, args.q].filter((x) => x !== undefined).length;
     if (spacings > 1) throw new ToolError("Give d or q, not both.");
-    const xray = args.energy_kev !== undefined || (args.radiation === "xray" && args.wavelength !== undefined);
-    if (xray && (args.energy_mev !== undefined || args.velocity !== undefined || args.tof !== undefined)) throw new ToolError("Neutron quantities (meV, velocity, time of flight) do not apply to X-rays.");
+    if (args.radiation === "neutron" && args.energy_kev !== undefined) throw new ToolError("energy_kev is an X-ray energy, but radiation is neutron: give energy_mev for neutrons.");
+    const xray = args.energy_kev !== undefined || args.radiation === "xray";
+    if (xray && (args.energy_mev !== undefined || args.velocity !== undefined || args.tof !== undefined || args.flight_path !== undefined)) throw new ToolError("Neutron quantities (meV, velocity, flight path, time of flight) do not apply to X-rays.");
     let lambda = args.wavelength ?? (args.energy_mev !== undefined ? neutronWavelengthA(args.energy_mev) : args.velocity !== undefined ? 1e6 / (NEUTRON_MASS_OVER_H * args.velocity) : args.energy_kev !== undefined ? xrayWavelengthA(args.energy_kev) : undefined);
     let d = args.d ?? (args.q !== undefined ? (2 * Math.PI) / args.q : undefined);
     const out: Record<string, unknown> = {};
@@ -121,8 +122,14 @@ export const convertUnits = defineTool({
         d = tofD;
       }
     }
-    if (d === undefined && args.two_theta !== undefined && lambda !== undefined) d = lambda / (2 * Math.sin((args.two_theta * Math.PI) / 360));
-    if (lambda === undefined && d !== undefined && args.two_theta !== undefined) lambda = 2 * d * Math.sin((args.two_theta * Math.PI) / 360);
+    if (args.two_theta !== undefined) {
+      const sinTheta = Math.sin((args.two_theta * Math.PI) / 360);
+      if (d === undefined && lambda !== undefined) d = lambda / (2 * sinTheta);
+      else if (lambda === undefined && d !== undefined) lambda = 2 * d * sinTheta;
+      // All three given: Bragg's law must hold (to 0.1 %, for values rounded as typed), or 2θ, DIFC and TOF disagree.
+      else if (lambda !== undefined && d !== undefined && Math.abs(2 * d * sinTheta - lambda) > 1e-3 * lambda)
+        throw new ToolError(`λ = ${lambda} Å, d = ${d} Å and 2θ = ${args.two_theta}° do not satisfy λ = 2d sinθ (2d sinθ = ${Number((2 * d * sinTheta).toPrecision(7))} Å): give two of them.`);
+    }
     if (lambda !== undefined) {
       out.wavelength = lambda;
       out.k = (2 * Math.PI) / lambda;
@@ -142,7 +149,8 @@ export const convertUnits = defineTool({
         if (s > 1) out.note = `λ > 2d: no Bragg reflection at this wavelength.`;
       }
     }
-    if (args.two_theta !== undefined) out.two_theta ??= args.two_theta;
+    // 2θ as given, the one DIFC and TOF use.
+    if (args.two_theta !== undefined) out.two_theta = args.two_theta;
     if (args.flight_path !== undefined && args.two_theta !== undefined && !xray) {
       const difc = difcFromGeometry(args.flight_path, args.two_theta);
       out.difc = difc;

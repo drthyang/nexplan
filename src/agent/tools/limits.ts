@@ -25,7 +25,7 @@ import { resolveOrientation } from "../orientation.ts";
 import { hklField, instrumentFields, orientationField, planFields, structureId } from "../shared.ts";
 import { defineTool, ToolError } from "../tool.ts";
 import { DEFAULT_D_MIN, DEFAULT_WAVELENGTH } from "../workspace.ts";
-import { resolvePlan } from "./crystal.ts";
+import { planNotes, resolvePlan } from "./crystal.ts";
 
 const TWO_PI = 2 * Math.PI;
 const I3: Mat3 = [
@@ -290,6 +290,7 @@ export const reciprocalCoverage = defineTool({
     const base = resolveAngles(ins.model, args.angles);
     const r = reach(ins, { dMin, dMax, shells: args.shells ?? 6, directions: args.directions ?? 600, ...(plan ? { plan } : {}), maxSettings: 4000, base });
     const tt = coveredOf(ins);
+    const notes = [...ins.notes, ...(plan ? planNotes(ins.model, plan) : [])];
     return {
       instrument: ins.preset.label,
       beam: beamSummary(ins),
@@ -299,7 +300,7 @@ export const reciprocalCoverage = defineTool({
       shells: r.shells,
       shortest_d_recordable: reachOf(tt, ins.exp.lambdaMin, ins.exp.lambdaMax).d_min,
       units: { d: "Å", q: "1/Å, with 2π" },
-      ...(ins.notes.length ? { notes: ins.notes } : {}),
+      ...(notes.length ? { notes } : {}),
     };
   },
 });
@@ -418,7 +419,7 @@ export const compareInstruments = defineTool({
               const ax = model.axes[free[0]!]!;
               return braggCrossings(model, free[0]!, exp.angles, { start: ax.min, end: Math.min(ax.max, ax.min + 360) - 1e-9 }, o.UB, hs.map((x) => ({ h: x, family: 0 })), panels, (exp.lambdaMin + exp.lambdaMax) / 2, shadows).some((c) => c.hit);
             }
-            return reflectionCoverage(model, exp.angles, o.UB, hs.map((x) => ({ h: x })), panels, exp.lambdaMin, exp.lambdaMax, free.length > 1 ? 4 : 1, undefined, shadows).points.length > 0;
+            return reflectionCoverage(model, exp.angles, o.UB, hs.map((x) => ({ h: x })), panels, exp.lambdaMin, exp.lambdaMax, 1, undefined, shadows).points.length > 0;
           });
           row.wanted = { recordable: recordable.length, of: args.wanted.length, missed: args.wanted.filter((h) => !recordable.includes(h)).map((h) => `(${hklText(h)})`), orientation: o.description };
           met.wanted = recordable.length === args.wanted.length;

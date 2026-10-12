@@ -148,7 +148,7 @@ export const configureInstrument = defineTool({
       pixels_masked_percent: masked.total ? (100 * masked.pixels) / masked.total : 0,
       panels_off: masked.panelsOff,
       fraction_of_sphere: { now: now.fraction, without: before.fraction },
-      ...(ins.shadows ? { shadows_at: `zero goniometer angles (${ins.model.axes.map((ax) => axisName(ax.name)).join(", ") || "sample fixed"}); shadows that turn with an axis move with it` } : {}),
+      ...(ins.shadows ? { shadows_at: `the goniometer at ${ins.model.axes.map((ax, i) => `${axisName(ax.name)} ${ins.exp.angles[i]}°`).join(", ") || "no axes (sample fixed)"} (zero on each free axis, or its nearest limit); shadows that turn with an axis move with it` } : {}),
     };
   },
 });
