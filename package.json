@@ -1,6 +1,6 @@
 {
   "name": "nexplan",
-  "version": "0.1.0",
+  "version": "0.2.0-dev.0",
   "private": true,
   "type": "module",
   "description": "Personal toolkit for planning neutron experiments at the SNS, in the browser",
