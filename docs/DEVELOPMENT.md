@@ -29,6 +29,6 @@ docs/       guide, limitations, validation, conventions, MCP, plan, data-verific
 
 The gemmi references are committed; regenerate them with
 `uv run --no-project --with gemmi==0.7.3 python scripts/data/gen_space_groups.py` (and `gen_reference_sf.py`).
-`src/materia/` is copied from MATERIA (`drthyang/web-refinement`) at a pinned commit: fix it upstream, then
+`src/materia/` is copied from MATERIA (`drthyang/materia-platform`, formerly `web-refinement`) at a pinned commit: fix it upstream, then
 `npm run materia:sync`. CI fetches the pinned sources, runs the tests, checks the MATERIA copy and the generated
 tables (`npm run materia:check`, `npm run data:check`), and builds the site and the MCP server.

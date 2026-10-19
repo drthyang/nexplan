@@ -1,5 +1,5 @@
 /**
- * Copy the audited MATERIA (web-refinement) modules into src/materia/ from a
+ * Copy the audited MATERIA (materia-platform) modules into src/materia/ from a
  * pinned commit, rewriting only the `@/core/` import alias to `@materia/core/`.
  *
  *   node scripts/materia-sync.ts          verify copies are unmodified (CI)

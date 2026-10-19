@@ -26,9 +26,9 @@ jobs:
       # MATERIA_DIR makes a missing commit an error rather than a skipped check.
       - name: Fetch MATERIA at the pinned commit
         run: |
-          dir="$RUNNER_TEMP/web-refinement"
+          dir="$RUNNER_TEMP/materia-platform"
           git init -q "$dir"
-          git -C "$dir" fetch -q --depth 1 https://github.com/drthyang/web-refinement.git "$(jq -r .commit src/materia/UPSTREAM.json)"
+          git -C "$dir" fetch -q --depth 1 https://github.com/drthyang/materia-platform.git "$(jq -r .commit src/materia/UPSTREAM.json)"
           echo "MATERIA_DIR=$dir" >> "$GITHUB_ENV"
       # Copied MATERIA modules must be byte-identical to the pinned upstream commit.
       - run: npm run materia:check

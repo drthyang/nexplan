@@ -1,4 +1,4 @@
-// Copied from MATERIA (drthyang/web-refinement) src/core/diffraction/background.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
+// Copied from MATERIA (drthyang/materia-platform) src/core/diffraction/background.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
 /**
  * Powder background functions.
  *

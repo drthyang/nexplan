@@ -1,4 +1,4 @@
-// Copied from MATERIA (drthyang/web-refinement) src/app/ui/elementData.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
+// Copied from MATERIA (drthyang/materia-platform) src/app/ui/elementData.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
 /**
  * Element display data for the 3D structure viewer — CPK-style colours and
  * covalent radii (Å, Cordero et al. 2008). Ported from the rmc-phonon viewer so

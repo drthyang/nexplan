@@ -1,4 +1,4 @@
-// Copied from MATERIA (drthyang/web-refinement) src/core/math/complex.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
+// Copied from MATERIA (drthyang/materia-platform) src/core/math/complex.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
 import type { Complex } from "@materia/core/math/types";
 
 export const ZERO: Complex = { re: 0, im: 0 };

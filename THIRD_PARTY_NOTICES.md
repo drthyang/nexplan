@@ -30,7 +30,7 @@ after R. I. Bewley.
 
 ### MATERIA (AGPL-3.0-only)
 
-`src/materia/` is copied from MATERIA ([drthyang/web-refinement](https://github.com/drthyang/web-refinement),
+`src/materia/` is copied from MATERIA ([drthyang/materia-platform](https://github.com/drthyang/materia-platform), formerly `web-refinement`,
 same author, same licence) at the commit pinned in `src/materia/UPSTREAM.json`, unchanged apart from a provenance header
 and the `@/core/` import alias, rewritten to `@materia/core/`.
 

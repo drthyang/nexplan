@@ -1,5 +1,5 @@
 /**
- * MATERIA (web-refinement) at the commit pinned in src/materia/UPSTREAM.json, read from a clone's git objects and
+ * MATERIA (materia-platform) at the commit pinned in src/materia/UPSTREAM.json, read from a clone's git objects and
  * never from its working tree. MATERIA_DIR names the clone (default ../web-refinement). When MATERIA_DIR is set
  * explicitly, as in CI, a missing commit is an error; otherwise the MATERIA checks are skipped with a warning.
  */
@@ -34,7 +34,7 @@ export function materiaAvailable(): boolean {
       console.error(`${missing}.`);
       process.exit(1);
     }
-    console.warn(`${missing}; skipping the MATERIA checks (set MATERIA_DIR to a web-refinement clone).`);
+    console.warn(`${missing}; skipping the MATERIA checks (set MATERIA_DIR to a materia-platform clone).`);
     return false;
   }
 }

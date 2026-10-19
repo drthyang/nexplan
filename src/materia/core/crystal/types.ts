@@ -1,4 +1,4 @@
-// Copied from MATERIA (drthyang/web-refinement) src/core/crystal/types.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
+// Copied from MATERIA (drthyang/materia-platform) src/core/crystal/types.ts @ 93eac17. Do not edit; see scripts/materia-sync.ts.
 /**
  * Crystallographic structure model: unit cell, symmetry, and atom sites.
  *
